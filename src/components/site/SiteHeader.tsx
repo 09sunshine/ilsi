@@ -166,6 +166,9 @@ export function SiteHeader() {
                 </Link>
               ))}
             </nav>
+          </motion.div>
+
+          <motion.div variants={itemVariants} className="flex items-center gap-1.5">
             <LanguageToggle className="hidden sm:inline-flex" />
             <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
               <Link to="/login">{t("nav.login")}</Link>
