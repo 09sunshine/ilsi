@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useState } from "react";
 import { Loader2, MailCheck } from "lucide-react";
-import { PublicShell } from "@/components/site/PublicShell";
+import { AuthLayout } from "@/components/site/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,8 @@ export const Route = createFileRoute("/forgot-password")({
       { name: "description", content: "Request a password reset link for your ILSI account." },
       { property: "og:title", content: "Reset your password — ILSI" },
       { property: "og:description", content: "Request a password reset link for your ILSI account." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: ForgotPasswordPage,
@@ -34,51 +36,56 @@ function ForgotPasswordPage() {
   } = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema) });
 
   return (
-    <PublicShell>
-      <section className="hero-wash">
-        <div className="mx-auto max-w-md px-4 py-16 sm:px-6 lg:py-24">
-          <div className="panel p-7 sm:p-8">
-            {sent ? (
-              <div className="text-center">
-                <div className="mx-auto grid size-11 place-items-center rounded-full bg-success/10 text-success">
-                  <MailCheck className="size-5" />
-                </div>
-                <p className="mt-4 text-sm text-muted-foreground">{t("forgot.sent")}</p>
-              </div>
-            ) : (
-              <>
-                <h1 className="font-display text-2xl font-semibold">{t("forgot.title")}</h1>
-                <p className="mt-1.5 text-sm text-muted-foreground">{t("forgot.subtitle")}</p>
-                <form
-                  onSubmit={handleSubmit(async () => {
-                    await new Promise((r) => setTimeout(r, 600));
-                    setSent(true);
-                  })}
-                  className="mt-6 space-y-4"
-                  noValidate
-                >
-                  <div className="space-y-1.5">
-                    <Label htmlFor="email">{t("login.email")}</Label>
-                    <Input id="email" type="email" aria-invalid={!!errors.email} {...register("email")} />
-                    {errors.email ? (
-                      <p className="text-xs text-destructive">{t("common.invalidEmail")}</p>
-                    ) : null}
-                  </div>
-                  <Button type="submit" className="w-full" disabled={isSubmitting}>
-                    {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
-                    {t("forgot.submit")}
-                  </Button>
-                </form>
-              </>
-            )}
-            <div className="mt-6 text-center">
-              <Link to="/login" className="text-sm text-primary hover:underline">
-                {t("forgot.back")}
-              </Link>
-            </div>
+    <AuthLayout
+      title={t("forgot.title")}
+      subtitle={t("forgot.subtitle")}
+      footer={
+        <Link to="/login" className="font-medium text-primary hover:underline">
+          {t("forgot.back")}
+        </Link>
+      }
+    >
+      {sent ? (
+        <div className="rounded-3xl border border-border bg-card p-6 text-center">
+          <div className="mx-auto grid size-11 place-items-center rounded-full bg-primary/10 text-primary">
+            <MailCheck className="size-5" />
           </div>
+          <p className="mt-4 text-sm text-muted-foreground">{t("forgot.sent")}</p>
         </div>
-      </section>
-    </PublicShell>
+      ) : (
+        <form
+          onSubmit={handleSubmit(async () => {
+            await new Promise((r) => setTimeout(r, 600));
+            setSent(true);
+          })}
+          className="space-y-3"
+          noValidate
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="sr-only">
+              {t("login.email")}
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder={t("login.email")}
+              className="h-12 rounded-full px-5"
+              aria-invalid={!!errors.email}
+              {...register("email")}
+            />
+            {errors.email ? <p className="px-4 text-xs text-destructive">{t("common.invalidEmail")}</p> : null}
+          </div>
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="h-12 w-full rounded-full bg-foreground text-background hover:bg-foreground/90"
+          >
+            {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
+            {t("forgot.submit")}
+          </Button>
+        </form>
+      )}
+    </AuthLayout>
   );
 }

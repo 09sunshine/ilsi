@@ -21,6 +21,7 @@ import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ResultsRouteImport } from './routes/results'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminApplicationsRouteImport } from './routes/admin.applications'
 import { Route as AdminCohortsRouteImport } from './routes/admin.cohorts'
@@ -93,6 +94,11 @@ const ResultsRoute = ResultsRouteImport.update({
   path: '/results',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/admin/',
   path: '/admin/',
@@ -162,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/signup': typeof SignupRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/cohorts': typeof AdminCohortsRoute
   '/admin/participants': typeof AdminParticipantsRoute
@@ -187,6 +194,7 @@ export interface FileRoutesByTo {
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/signup': typeof SignupRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/cohorts': typeof AdminCohortsRoute
   '/admin/participants': typeof AdminParticipantsRoute
@@ -213,6 +221,7 @@ export interface FileRoutesById {
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/signup': typeof SignupRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/cohorts': typeof AdminCohortsRoute
   '/admin/participants': typeof AdminParticipantsRoute
@@ -240,6 +249,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/reset-password'
     | '/results'
+    | '/signup'
     | '/admin/applications'
     | '/admin/cohorts'
     | '/admin/participants'
@@ -265,6 +275,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/reset-password'
     | '/results'
+    | '/signup'
     | '/admin/applications'
     | '/admin/cohorts'
     | '/admin/participants'
@@ -290,6 +301,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/reset-password'
     | '/results'
+    | '/signup'
     | '/admin/applications'
     | '/admin/cohorts'
     | '/admin/participants'
@@ -316,6 +328,7 @@ export interface RootRouteChildren {
   ProfileRoute: typeof ProfileRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ResultsRoute: typeof ResultsRoute
+  SignupRoute: typeof SignupRoute
   AdminApplicationsRoute: typeof AdminApplicationsRoute
   AdminCohortsRoute: typeof AdminCohortsRoute
   AdminParticipantsRoute: typeof AdminParticipantsRoute
@@ -415,6 +428,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResultsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/': {
       id: '/admin/'
       path: '/admin'
@@ -508,6 +528,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ResultsRoute: ResultsRoute,
+  SignupRoute: SignupRoute,
   AdminApplicationsRoute: AdminApplicationsRoute,
   AdminCohortsRoute: AdminCohortsRoute,
   AdminParticipantsRoute: AdminParticipantsRoute,
