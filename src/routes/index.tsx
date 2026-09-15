@@ -260,21 +260,32 @@ function HomePage() {
       <section className="hero-dark hero-grid-lines relative isolate text-hero-foreground">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
           <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-semibold sm:text-4xl">{t("home.howTitle")}</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hero-lime">
+              {t("home.howTag")}
+            </p>
+            <h2 className="mt-3 text-3xl font-semibold sm:text-4xl">{t("home.howTitle")}</h2>
             <p className="mt-4 text-sm leading-relaxed opacity-70 sm:text-base">{t("home.howBody")}</p>
           </div>
           <ol className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {steps.map((s) => (
+            {steps.map((s, index) => (
               <li
                 key={s.title}
-                className="group flex min-h-56 flex-col rounded-lg border border-primary-foreground/5 bg-primary-foreground/5 p-6 transition-colors hover:bg-primary-foreground/10 sm:p-7"
+                className="group flex min-h-56 flex-col rounded-lg border border-primary-foreground/5 bg-primary-foreground/5 p-6 transition-colors hover:border-hero-lime/25 hover:bg-primary-foreground/10 sm:p-7"
               >
                 <div className="flex items-start justify-between">
-                  <s.icon className="size-8 stroke-[1.5] opacity-90" aria-hidden />
-                  <ArrowUpRight className="size-5 opacity-90 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden />
+                  <span className="grid size-11 place-items-center rounded-lg bg-hero-lime/10 text-hero-lime ring-1 ring-hero-lime/25 transition-colors group-hover:bg-hero-lime/15">
+                    <s.icon className="size-5 stroke-[1.5]" aria-hidden />
+                  </span>
+                  <ArrowUpRight
+                    className="size-5 text-hero-lime opacity-70 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100"
+                    aria-hidden
+                  />
                 </div>
                 <div className="mt-auto pt-10">
-                  <h3 className="text-lg font-semibold">{s.title}</h3>
+                  <span className="font-mono text-xs font-semibold tracking-widest text-hero-lime">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <h3 className="mt-1.5 text-lg font-semibold">{s.title}</h3>
                   <p className="mt-2 max-w-sm text-sm leading-relaxed opacity-70">{s.body}</p>
                 </div>
               </li>
@@ -358,12 +369,24 @@ function HomePage() {
       {/* CTA */}
       <section className="mx-auto w-full max-w-6xl px-4 pb-20 pt-4 sm:px-6 lg:px-8">
         <div className="hero-dark hero-grid-lines relative isolate overflow-hidden rounded-3xl text-hero-foreground shadow-lift">
+          <div
+            className="pointer-events-none absolute left-1/2 top-0 size-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-hero-lime/25 blur-[110px]"
+            aria-hidden
+          />
           <div className="relative z-10 flex min-h-72 flex-col items-center justify-center px-6 py-16 text-center lg:min-h-80">
-            <h2 className="max-w-2xl text-3xl font-semibold sm:text-4xl">{t("home.ctaTitle")}</h2>
+            <p className="inline-flex items-center gap-2 rounded-full bg-hero-lime/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-hero-lime ring-1 ring-hero-lime/30">
+              <span className="size-1.5 rounded-full bg-hero-lime" aria-hidden />
+              {t("home.ctaTag")}
+            </p>
+            <h2 className="mt-5 max-w-2xl text-3xl font-semibold sm:text-4xl">{t("home.ctaTitle")}</h2>
             <p className="mt-4 max-w-lg text-sm leading-relaxed opacity-70">{t("home.ctaBody")}</p>
-            <Button asChild size="lg" variant="secondary" className="mt-7 rounded-full px-7">
-              <Link to="/apply">{t("nav.apply")}</Link>
-            </Button>
+            <Link
+              to="/apply"
+              className="mt-7 inline-flex h-12 items-center gap-2 rounded-full bg-hero-lime px-7 text-sm font-semibold text-hero-lime-foreground shadow-[0_0_32px_-6px_var(--hero-lime)] transition-transform hover:-translate-y-0.5"
+            >
+              {t("nav.apply")}
+              <ArrowRight className="size-4" aria-hidden />
+            </Link>
           </div>
         </div>
       </section>
