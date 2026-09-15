@@ -61,8 +61,9 @@ function ProgramsPage() {
   const cards = useMemo(() => {
     const enriched = programs.map((p) => {
       const cohortList = cohortsForProgram(p.id).filter((c) => c.status !== "ARCHIVED");
+      const cohortIds = new Set(cohortList.map((c) => c.id));
       const lessonCount = modules
-        .filter((m) => m.programId === p.id)
+        .filter((m) => cohortIds.has(m.cohortId))
         .reduce((sum, m) => sum + m.lessons.length, 0);
       const learners = cohortList.reduce((sum, c) => sum + c.enrolled, 0);
       const nextStart = cohortList
