@@ -291,13 +291,15 @@ function HomePage() {
       </section>
 
       {/* CTA */}
-      <section className="cohort-cta-grid relative isolate overflow-hidden bg-primary text-primary-foreground">
-        <div className="relative z-10 mx-auto flex min-h-80 max-w-6xl flex-col items-center justify-center px-4 py-16 text-center sm:px-6 lg:min-h-96 lg:py-20">
-          <h2 className="max-w-2xl text-3xl font-semibold sm:text-4xl">{t("home.ctaTitle")}</h2>
-          <p className="mt-4 max-w-lg text-sm leading-relaxed opacity-70">{t("home.ctaBody")}</p>
-          <Button asChild size="lg" variant="secondary" className="mt-7 rounded-full px-7">
-            <Link to="/apply">{t("nav.apply")}</Link>
-          </Button>
+      <section className="mx-auto w-full max-w-6xl px-4 pb-20 pt-4 sm:px-6 lg:px-8">
+        <div className="cohort-cta-grid relative isolate overflow-hidden rounded-3xl bg-primary text-primary-foreground shadow-lift">
+          <div className="relative z-10 flex min-h-72 flex-col items-center justify-center px-6 py-16 text-center lg:min-h-80">
+            <h2 className="max-w-2xl text-3xl font-semibold sm:text-4xl">{t("home.ctaTitle")}</h2>
+            <p className="mt-4 max-w-lg text-sm leading-relaxed opacity-70">{t("home.ctaBody")}</p>
+            <Button asChild size="lg" variant="secondary" className="mt-7 rounded-full px-7">
+              <Link to="/apply">{t("nav.apply")}</Link>
+            </Button>
+          </div>
         </div>
       </section>
     </PublicShell>

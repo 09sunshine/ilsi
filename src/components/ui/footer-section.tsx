@@ -4,6 +4,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import {
   FacebookIcon,
+  FrameIcon,
   InstagramIcon,
   LinkedinIcon,
   YoutubeIcon,
@@ -65,38 +66,29 @@ export function Footer() {
   ];
 
   return (
-    <footer className="relative w-full bg-primary text-primary-foreground">
-      <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
-        <div className="grid gap-10 md:grid-cols-[1.4fr_2fr]">
+    <footer className="footer-glow relative w-full overflow-hidden bg-footer text-footer-foreground">
+      <div className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-12 pt-20 sm:px-6 lg:px-8 lg:pb-14 lg:pt-24">
+        <div className="grid gap-12 md:grid-cols-[1.3fr_2.2fr]">
           <AnimatedContainer className="relative max-w-sm">
-            <div className="flex items-center gap-2.5">
-              <span className="grid size-8 place-items-center rounded-lg bg-primary-foreground text-sm font-bold text-primary">
-                I
-              </span>
-              <span className="font-display text-lg font-semibold">ILSI</span>
-            </div>
-            <p className="mt-4 text-sm leading-relaxed text-primary-foreground/75">
-              {t("about.lead")}
-            </p>
-            <p className="mt-6 text-xs text-primary-foreground/60">
-              © {new Date().getFullYear()} ILSI — Institute for Leadership &amp;
-              Skills Initiative. All rights reserved.
+            <FrameIcon className="size-8 text-footer-foreground" strokeWidth={1.6} />
+            <p className="mt-6 text-sm text-footer-foreground/55">
+              © {new Date().getFullYear()} ILSI. All rights reserved.
             </p>
           </AnimatedContainer>
 
-          <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-10 sm:grid-cols-4">
             {footerLinks.map((section, index) => (
-              <AnimatedContainer key={section.label} delay={0.1 + index * 0.1}>
+              <AnimatedContainer key={section.label} delay={0.1 + index * 0.08}>
                 <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-primary-foreground/60">
+                  <h3 className="text-sm font-medium text-footer-foreground">
                     {section.label}
                   </h3>
-                  <ul className="mt-4 space-y-2.5">
+                  <ul className="mt-5 space-y-3">
                     {section.links.map((link) => (
                       <li key={link.title}>
                         <Link
                           to={link.href}
-                          className="inline-flex items-center gap-2 text-sm text-primary-foreground/75 transition-colors duration-200 hover:text-primary-foreground"
+                          className="inline-flex items-center gap-2 text-sm text-footer-foreground/55 transition-colors duration-200 hover:text-footer-foreground"
                         >
                           {link.icon && <link.icon className="size-4" />}
                           {link.title}
