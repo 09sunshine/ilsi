@@ -257,7 +257,7 @@ function HomePage() {
       </section>
 
       {/* How it works */}
-      <section className="bg-primary text-primary-foreground">
+      <section className="hero-dark hero-grid-lines relative isolate text-hero-foreground">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-semibold sm:text-4xl">{t("home.howTitle")}</h2>
