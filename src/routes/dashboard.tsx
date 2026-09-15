@@ -150,11 +150,14 @@ function DashboardPage() {
     };
   });
 
-  const paceData = modules.map((m, i) => ({
-    name: `M${m.order}`,
-    you: perModule[i]!.completion,
-    plan: Math.max(0, Math.min(100, (i + 1) * 22)),
-  }));
+  const paceData = modules.map((m, i) => {
+    const sofar = perModule.slice(0, i + 1).reduce((a, b) => a + b.completion, 0);
+    return {
+      name: `M${m.order}`,
+      you: Math.round(sofar / modules.length),
+      plan: Math.round(((i + 1) / modules.length) * 100),
+    };
+  });
 
   const fmtDate = (d: string) =>
     new Date(d).toLocaleDateString(fr ? "fr-FR" : "en-GB", {
