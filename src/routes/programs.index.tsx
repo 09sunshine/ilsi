@@ -87,7 +87,8 @@ function ProgramsPage() {
 
   return (
     <PublicShell>
-      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
+      <section className="hero-wash border-b border-border">
+        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -217,6 +218,7 @@ function ProgramsPage() {
             ))}
           </div>
         )}
+        </div>
       </section>
     </PublicShell>
   );
