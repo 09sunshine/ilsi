@@ -47,10 +47,23 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
 }
 
+/** Fallback used if the context is momentarily unavailable (e.g. dev hot-reload). */
+const fallbackI18n: LocaleContextValue = {
+  locale: "en",
+  setLocale: () => {},
+  t: (key, vars) => {
+    let value = (dictionaries.en as Record<string, string>)[key] ?? key;
+    if (vars) {
+      for (const [name, replacement] of Object.entries(vars)) {
+        value = value.replaceAll(`{${name}}`, String(replacement));
+      }
+    }
+    return value;
+  },
+};
+
 export function useI18n() {
-  const ctx = useContext(LocaleContext);
-  if (!ctx) throw new Error("useI18n must be used inside LocaleProvider");
-  return ctx;
+  return useContext(LocaleContext) ?? fallbackI18n;
 }
 
 /** Picks the right language variant from a bilingual content field. */
