@@ -58,16 +58,17 @@ function LoginPage() {
           </Link>
         </span>
       }
+      top={
+        <button
+          type="button"
+          onClick={() => (router.history.canGoBack() ? router.history.back() : navigate({ to: "/" }))}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          {t("common.back")}
+        </button>
+      }
     >
-      <button
-        type="button"
-        onClick={() => (router.history.canGoBack() ? router.history.back() : navigate({ to: "/" }))}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" />
-        {t("common.back")}
-      </button>
-
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-3" noValidate>
         <div className="space-y-1.5">
           <Label htmlFor="email" className="sr-only">
