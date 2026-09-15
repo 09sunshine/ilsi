@@ -173,7 +173,11 @@ export function SiteHeader() {
             <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
               <Link to="/login">{t("nav.login")}</Link>
             </Button>
-            <Button asChild size="sm" className="hidden sm:inline-flex">
+            <Button
+              asChild
+              size="sm"
+              className="hidden bg-hero-lime text-hero-lime-foreground shadow-[var(--shadow-soft)] hover:bg-hero-lime/90 hover:text-hero-lime-foreground sm:inline-flex"
+            >
               <Link to="/apply">{t("nav.apply")}</Link>
             </Button>
             <Button
@@ -215,7 +219,11 @@ export function SiteHeader() {
                   {t("nav.login")}
                 </Link>
               </Button>
-              <Button asChild size="sm" className="flex-1">
+              <Button
+                asChild
+                size="sm"
+                className="flex-1 bg-hero-lime text-hero-lime-foreground hover:bg-hero-lime/90 hover:text-hero-lime-foreground"
+              >
                 <Link to="/apply" onClick={() => setOpen(false)}>
                   {t("nav.apply")}
                 </Link>

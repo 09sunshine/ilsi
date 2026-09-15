@@ -21,7 +21,7 @@ export function LanguageToggle({ className }: { className?: string }) {
           className={cn(
             "rounded-full px-2.5 py-1 uppercase tracking-wide transition-colors",
             locale === code
-              ? "bg-primary text-primary-foreground"
+              ? "bg-hero-lime text-hero-lime-foreground font-semibold"
               : "text-muted-foreground hover:text-foreground",
           )}
         >
