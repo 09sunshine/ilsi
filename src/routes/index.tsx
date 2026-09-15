@@ -32,12 +32,6 @@ const programImage: Record<string, string> = {
   "project-management-essentials": projectManagementImg,
 };
 
-const programCategory: Record<string, string> = {
-  "young-leaders": "leadership",
-  "public-communication": "communication",
-  "project-management-essentials": "project",
-};
-
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
