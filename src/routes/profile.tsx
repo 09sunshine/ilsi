@@ -35,7 +35,7 @@ function ProfilePage() {
 
   const [firstName, setFirstName] = useState(currentParticipant.firstName);
   const [lastName, setLastName] = useState(currentParticipant.lastName);
-  const [phone, setPhone] = useState(currentParticipant.phone ?? "");
+  const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
 
   return (
