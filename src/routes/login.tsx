@@ -3,11 +3,16 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
-import { AuthLayout, SocialRow } from "@/components/site/AuthLayout";
+import { ArrowLeft, Eye, EyeOff, Loader2, Mail } from "lucide-react";
+import {
+  AuthLayout,
+  FieldLabel,
+  SocialRow,
+  authInputClass,
+  authSubmitClass,
+} from "@/components/site/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n/LocaleProvider";
 
 export const Route = createFileRoute("/login")({
@@ -48,12 +53,13 @@ function LoginPage() {
 
   return (
     <AuthLayout
-      title={t("login.title")}
+      eyebrow={t("auth.welcome")}
+      title={t("login.heading")}
       subtitle={t("login.subtitle")}
       footer={
-        <span className="text-white/60">
+        <span>
           {t("login.registerPrompt")}{" "}
-          <Link to="/signup" className="font-medium text-hero-lime hover:underline">
+          <Link to="/signup" className="font-semibold text-neutral-900 underline underline-offset-2">
             {t("login.registerLink")}
           </Link>
         </span>
@@ -62,41 +68,45 @@ function LoginPage() {
         <button
           type="button"
           onClick={() => (router.history.canGoBack() ? router.history.back() : navigate({ to: "/" }))}
-          className="inline-flex items-center gap-1.5 text-sm text-white/60 transition-colors hover:text-white"
+          className="inline-flex items-center gap-1.5 text-sm text-neutral-500 transition-colors hover:text-neutral-900"
         >
           <ArrowLeft className="size-4" />
           {t("common.back")}
         </button>
       }
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3" noValidate>
-        <div className="space-y-1.5">
-          <Label htmlFor="email" className="sr-only">
-            {t("login.email")}
-          </Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder={t("login.email")}
-            className="h-12 rounded-full px-5"
-            aria-invalid={!!errors.email}
-            {...register("email")}
-          />
-          {errors.email ? <p className="px-4 text-xs text-red-300">{t("common.invalidEmail")}</p> : null}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+        <div className="space-y-2">
+          <FieldLabel htmlFor="email">{t("login.email")}</FieldLabel>
+          <div className="relative">
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@company.com"
+              className={`${authInputClass} pr-11`}
+              aria-invalid={!!errors.email}
+              {...register("email")}
+            />
+            <Mail className="pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+          </div>
+          {errors.email ? <p className="text-xs text-red-600">{t("common.invalidEmail")}</p> : null}
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="password" className="sr-only">
-            {t("login.password")}
-          </Label>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <FieldLabel htmlFor="password">{t("login.password")}</FieldLabel>
+            <Link to="/forgot-password" className="text-xs text-neutral-500 hover:text-neutral-900 hover:underline">
+              {t("login.forgot")}
+            </Link>
+          </div>
           <div className="relative">
             <Input
               id="password"
               type={show ? "text" : "password"}
               autoComplete="current-password"
               placeholder={t("login.password")}
-              className="h-12 rounded-full px-5 pr-12"
+              className={`${authInputClass} pr-11`}
               aria-invalid={!!errors.password}
               {...register("password")}
             />
@@ -104,25 +114,15 @@ function LoginPage() {
               type="button"
               onClick={() => setShow((v) => !v)}
               aria-label={t("auth.showPassword")}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-900"
             >
               {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
           </div>
-          {errors.password ? <p className="px-4 text-xs text-red-300">{t("common.tooShort")}</p> : null}
+          {errors.password ? <p className="text-xs text-red-600">{t("common.tooShort")}</p> : null}
         </div>
 
-        <div className="flex justify-end">
-          <Link to="/forgot-password" className="text-xs text-white/50 hover:text-hero-lime hover:underline">
-            {t("login.forgot")}
-          </Link>
-        </div>
-
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-          className="h-12 w-full rounded-full bg-hero-lime text-hero-lime-foreground hover:bg-hero-lime/90"
-        >
+        <Button type="submit" disabled={isSubmitting} className={authSubmitClass}>
           {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
           {t("login.submit")}
         </Button>
@@ -130,13 +130,13 @@ function LoginPage() {
 
       <SocialRow />
 
-      <p className="mt-8 text-center text-xs text-white/60">{t("login.demoHint")}</p>
+      <p className="mt-7 text-center text-xs text-neutral-400">{t("login.demoHint")}</p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         <Button
           asChild
           variant="outline"
           size="sm"
-          className="rounded-full border-white/20 bg-transparent text-white/85 hover:bg-white/10 hover:text-white"
+          className="rounded-xl border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
         >
           <Link to="/dashboard">{t("login.asParticipant")}</Link>
         </Button>
@@ -144,7 +144,7 @@ function LoginPage() {
           asChild
           variant="outline"
           size="sm"
-          className="rounded-full border-white/20 bg-transparent text-white/85 hover:bg-white/10 hover:text-white"
+          className="rounded-xl border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50"
         >
           <Link to="/admin">{t("login.asAdmin")}</Link>
         </Button>
