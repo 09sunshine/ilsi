@@ -255,3 +255,25 @@
     mask-image: linear-gradient(to bottom, black, transparent);
   }
 }
+
+/* Program category pills */
+.cat-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.cat-pill-leadership {
+  background: oklch(0.93 0.045 350);
+  color: oklch(0.52 0.14 350);
+}
+.cat-pill-communication {
+  background: oklch(0.93 0.04 230);
+  color: oklch(0.5 0.12 240);
+}
+.cat-pill-project {
+  background: oklch(0.93 0.05 160);
+  color: oklch(0.48 0.11 160);
+}

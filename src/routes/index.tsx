@@ -16,10 +16,25 @@ import {
   Video,
 } from "lucide-react";
 import heroImage from "@/assets/hero-cohort.jpg";
+import youngLeadersImg from "@/assets/program-young-leaders.jpg";
+import publicCommunicationImg from "@/assets/program-public-communication.jpg";
+import projectManagementImg from "@/assets/program-project-management.jpg";
 import { PublicShell } from "@/components/site/PublicShell";
 import { Button } from "@/components/ui/button";
 import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
 import { programs } from "@/data/demo";
+
+const programImage: Record<string, string> = {
+  "young-leaders": youngLeadersImg,
+  "public-communication": publicCommunicationImg,
+  "project-management-essentials": projectManagementImg,
+};
+
+const programCategory: Record<string, string> = {
+  "young-leaders": "leadership",
+  "public-communication": "communication",
+  "project-management-essentials": "project",
+};
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -266,27 +281,57 @@ function HomePage() {
             </Link>
           </Button>
         </div>
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
-          {programs.map((p) => (
-            <Link
-              key={p.id}
-              to="/programs/$slug"
-              params={{ slug: p.slug }}
-              className="panel group flex flex-col p-6 transition-shadow hover:shadow-[var(--shadow-lift)]"
-            >
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {p.durationWeeks} {t("programs.weeks")} · {p.moduleCount} {t("programs.modules")}
-              </p>
-              <h3 className="mt-3 font-display text-xl font-semibold">{L(p.title)}</h3>
-              <p className="mt-2 flex-1 text-sm leading-relaxed text-muted-foreground">
-                {L(p.tagline)}
-              </p>
-              <span className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-primary">
-                {t("programs.view")}
-                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </span>
-            </Link>
-          ))}
+        <div className="mt-10 grid gap-5 md:grid-cols-3">
+          {programs.map((p) => {
+            const cat = programCategory[p.slug] ?? "leadership";
+            const catLabel =
+              cat === "communication"
+                ? t("programs.filterCommunication")
+                : cat === "project"
+                  ? t("programs.filterProject")
+                  : t("programs.filterLeadership");
+            return (
+              <Link
+                key={p.id}
+                to="/programs/$slug"
+                params={{ slug: p.slug }}
+                className="panel group flex flex-col overflow-hidden !p-0 transition-shadow hover:shadow-[var(--shadow-lift)]"
+              >
+                <div className="aspect-[3/2] overflow-hidden">
+                  <img
+                    src={programImage[p.slug]}
+                    alt={L(p.title)}
+                    loading="lazy"
+                    className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                </div>
+                <div className="flex flex-1 flex-col px-5 pb-5 pt-4">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-0.5 text-amber-400">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star key={i} className="size-3.5 fill-current" />
+                      ))}
+                    </span>
+                    <span className="ml-1 font-medium">
+                      {p.moduleCount * 5}x {t("programs.lessons")}
+                    </span>
+                  </div>
+                  <h3 className="mt-2.5 font-display text-lg font-semibold leading-snug">
+                    {L(p.title)}
+                  </h3>
+                  <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+                    <span className="flex items-center gap-2.5">
+                      <span className="flex size-8 items-center justify-center rounded-full bg-muted">
+                        <GraduationCap className="size-4 text-muted-foreground" />
+                      </span>
+                      <span className="text-sm font-medium">ILSI</span>
+                    </span>
+                    <span className={`cat-pill cat-pill-${cat}`}>{catLabel}</span>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </section>
 
