@@ -22,16 +22,18 @@ export function PageHeader({
   subtitle?: string;
 }) {
   return (
-    <div className="hero-wash border-b border-border">
+    <div className="hero-dark hero-grid-lines relative isolate text-hero-foreground">
       <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:py-20">
         {eyebrow ? (
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hero-foreground/60">
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="mt-3 max-w-3xl text-3xl font-semibold sm:text-4xl lg:text-5xl">{title}</h1>
+        <h1 className="mt-3 max-w-3xl font-display text-3xl font-semibold sm:text-4xl lg:text-5xl">
+          {title}
+        </h1>
         {subtitle ? (
-          <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground">
+          <p className="mt-4 max-w-2xl text-base leading-relaxed text-hero-foreground/70">
             {subtitle}
           </p>
         ) : null}

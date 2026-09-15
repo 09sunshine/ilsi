@@ -72,7 +72,9 @@ export function SiteHeader() {
   const [isExpanded, setExpanded] = useState(true);
   const [atTop, setAtTop] = useState(true);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const onDarkHero = pathname === "/";
+  const darkHeroRoutes = ["/about", "/contact", "/apply", "/programs"];
+  const onDarkHero =
+    pathname === "/" || darkHeroRoutes.some((r) => pathname === r || pathname.startsWith(r + "/"));
 
   const { scrollY } = useScroll();
   const lastScrollY = useRef(0);

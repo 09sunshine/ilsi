@@ -87,17 +87,17 @@ function ProgramsPage() {
 
   return (
     <PublicShell>
-      <section className="hero-wash border-b border-border">
+      <section className="hero-dark hero-grid-lines relative isolate text-hero-foreground">
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hero-foreground/60">
               {t("home.programsTag")}
             </p>
             <h1 className="mt-3 max-w-2xl font-display text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">
               {t("programs.heading")}
             </h1>
-            <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground">
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-hero-foreground/70">
               {t("programs.subtitle")}
             </p>
           </div>
@@ -105,14 +105,14 @@ function ProgramsPage() {
             <button
               type="button"
               aria-label="previous"
-              className="grid size-10 place-items-center rounded-full border border-border text-muted-foreground transition hover:bg-surface"
+              className="grid size-10 place-items-center rounded-full border border-hero-foreground/20 text-hero-foreground/70 transition hover:bg-hero-foreground/10"
             >
               <ArrowLeft className="size-4" />
             </button>
             <button
               type="button"
               aria-label="next"
-              className="grid size-10 place-items-center rounded-full border border-border bg-card text-foreground shadow-sm transition hover:bg-surface"
+              className="grid size-10 place-items-center rounded-full border border-hero-foreground/20 bg-hero-foreground/10 text-hero-foreground transition hover:bg-hero-foreground/15"
             >
               <ArrowRight className="size-4" />
             </button>
@@ -130,8 +130,8 @@ function ProgramsPage() {
                 className={
                   "rounded-full px-4 py-2 text-sm font-medium transition " +
                   (active
-                    ? "bg-primary/10 text-primary"
-                    : "bg-surface text-muted-foreground hover:text-foreground")
+                    ? "bg-hero-lime text-hero-lime-foreground"
+                    : "bg-hero-foreground/10 text-hero-foreground/70 hover:bg-hero-foreground/15 hover:text-hero-foreground")
                 }
               >
                 {f.label}
@@ -144,13 +144,13 @@ function ProgramsPage() {
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as SortKey)}
-            className="rounded-full bg-surface px-4 py-2 text-sm font-medium text-foreground outline-none"
+            className="rounded-full bg-hero-foreground/10 px-4 py-2 text-sm font-medium text-hero-foreground outline-none [&>option]:text-foreground"
           >
             <option value="soonest">{t("programs.sortSoonest")}</option>
             <option value="priceLow">{t("programs.sortPriceLow")}</option>
             <option value="priceHigh">{t("programs.sortPriceHigh")}</option>
           </select>
-          <span className="inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-sm font-medium text-muted-foreground">
+          <span className="inline-flex items-center gap-2 rounded-full bg-hero-foreground/10 px-4 py-2 text-sm font-medium text-hero-foreground/70">
             <SlidersHorizontal className="size-4" />
             {t("programs.filter")}
           </span>
@@ -172,7 +172,7 @@ function ProgramsPage() {
             {cards.map(({ program: p, lessonCount, learners, cohortList }) => (
               <article
                 key={p.id}
-                className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:shadow-md"
+                className="flex flex-col rounded-2xl border border-border bg-card p-4 text-foreground shadow-sm transition hover:shadow-md"
               >
                 <img
                   src={programImage[p.slug]}
