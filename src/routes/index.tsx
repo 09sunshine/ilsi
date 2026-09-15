@@ -328,7 +328,16 @@ function HomePage() {
                       </span>
                       <span className="text-sm font-medium">ILSI</span>
                     </span>
-                    <span className={`cat-pill cat-pill-${cat}`}>{catLabel}</span>
+                    <span className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="size-4 text-primary" aria-hidden />
+                        {p.durationWeeks} {t("programs.weeks")}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Layers className="size-4 text-primary" aria-hidden />
+                        {p.moduleCount} {t("programs.modules")}
+                      </span>
+                    </span>
                   </div>
                 </div>
               </Link>
