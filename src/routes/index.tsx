@@ -357,7 +357,7 @@ function HomePage() {
 
       {/* CTA */}
       <section className="mx-auto w-full max-w-6xl px-4 pb-20 pt-4 sm:px-6 lg:px-8">
-        <div className="cohort-cta-grid relative isolate overflow-hidden rounded-3xl bg-primary text-primary-foreground shadow-lift">
+        <div className="hero-dark hero-grid-lines relative isolate overflow-hidden rounded-3xl text-hero-foreground shadow-lift">
           <div className="relative z-10 flex min-h-72 flex-col items-center justify-center px-6 py-16 text-center lg:min-h-80">
             <h2 className="max-w-2xl text-3xl font-semibold sm:text-4xl">{t("home.ctaTitle")}</h2>
             <p className="mt-4 max-w-lg text-sm leading-relaxed opacity-70">{t("home.ctaBody")}</p>
