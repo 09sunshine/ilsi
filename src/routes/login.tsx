@@ -1,9 +1,9 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import { AuthLayout, SocialRow } from "@/components/site/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,7 @@ type Values = z.infer<typeof schema>;
 function LoginPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const router = useRouter();
   const [show, setShow] = useState(false);
   const {
     register,
@@ -58,6 +59,15 @@ function LoginPage() {
         </span>
       }
     >
+      <button
+        type="button"
+        onClick={() => (router.history.canGoBack() ? router.history.back() : navigate({ to: "/" }))}
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" />
+        {t("common.back")}
+      </button>
+
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-3" noValidate>
         <div className="space-y-1.5">
           <Label htmlFor="email" className="sr-only">
