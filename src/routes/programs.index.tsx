@@ -194,7 +194,9 @@ function ProgramsPage() {
                   </span>
                   <span className="inline-flex items-center gap-2">
                     <Users className="size-4" />
-                    {t("programs.learners")}: {learners}
+                    {learners > 0
+                      ? `${t("programs.learners")}: ${learners}`
+                      : `${p.durationWeeks} ${t("programs.weeks")}`}
                   </span>
                 </div>
                 <div className="mt-4 flex items-end justify-between gap-3 border-t border-border pt-4">
