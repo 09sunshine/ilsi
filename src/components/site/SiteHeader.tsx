@@ -1,6 +1,9 @@
+"use client";
+
 import { Link } from "@tanstack/react-router";
-import { Menu, X } from "lucide-react";
-import { useState } from "react";
+import { Menu, Navigation, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { motion, useMotionValueEvent, useScroll } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { useI18n } from "@/i18n/LocaleProvider";
@@ -13,22 +16,128 @@ const links = [
   { to: "/contact", key: "nav.contact" },
 ] as const;
 
+const EXPAND_SCROLL_THRESHOLD = 80;
+
+const containerVariants = {
+  expanded: {
+    width: "auto",
+    transition: {
+      type: "spring" as const,
+      damping: 20,
+      stiffness: 300,
+      staggerChildren: 0.06,
+      delayChildren: 0.12,
+    },
+  },
+  collapsed: {
+    width: "3.25rem",
+    transition: {
+      type: "spring" as const,
+      damping: 22,
+      stiffness: 300,
+      when: "afterChildren" as const,
+      staggerChildren: 0.04,
+      staggerDirection: -1,
+    },
+  },
+};
+
+const itemVariants = {
+  expanded: {
+    opacity: 1,
+    x: 0,
+    scale: 1,
+    transition: { type: "spring" as const, damping: 15 },
+  },
+  collapsed: {
+    opacity: 0,
+    x: -16,
+    scale: 0.95,
+    transition: { duration: 0.18 },
+  },
+};
+
+const collapsedIconVariants = {
+  expanded: { opacity: 0, scale: 0.8, transition: { duration: 0.15 } },
+  collapsed: {
+    opacity: 1,
+    scale: 1,
+    transition: { type: "spring" as const, damping: 15, stiffness: 300, delay: 0.15 },
+  },
+};
+
 export function SiteHeader() {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [isExpanded, setExpanded] = useState(true);
+
+  const { scrollY } = useScroll();
+  const lastScrollY = useRef(0);
+  const collapsedAt = useRef(0);
+
+  useMotionValueEvent(scrollY, "change", (latest) => {
+    const previous = lastScrollY.current;
+
+    if (isExpanded && latest > previous && latest > 150) {
+      setExpanded(false);
+      setOpen(false);
+      collapsedAt.current = latest;
+    } else if (
+      !isExpanded &&
+      latest < previous &&
+      collapsedAt.current - latest > EXPAND_SCROLL_THRESHOLD
+    ) {
+      setExpanded(true);
+    }
+
+    lastScrollY.current = latest;
+  });
+
+  const expandIfCollapsed = (e: React.MouseEvent) => {
+    if (!isExpanded) {
+      e.preventDefault();
+      setExpanded(true);
+    }
+  };
 
   return (
-    <header className="sticky top-0 z-40 px-3 pt-3 sm:px-5 sm:pt-4">
-      <div className="mx-auto max-w-6xl overflow-hidden rounded-xl border border-border/80 bg-card/90 shadow-[var(--shadow-lift)] backdrop-blur-xl">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-3 py-2.5 sm:px-4">
-          <Link to="/" className="group flex min-w-0 items-center gap-2.5 rounded-lg pr-2">
-            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary font-display text-sm font-bold text-primary-foreground transition-transform group-hover:-rotate-3">
-              I
-            </span>
-            <span className="truncate font-display text-lg font-semibold">ILSI</span>
-          </Link>
+    <header className="sticky top-0 z-40 flex justify-center px-3 pt-3 sm:px-5 sm:pt-4">
+      <motion.div
+        initial={false}
+        animate={isExpanded ? "expanded" : "collapsed"}
+        variants={containerVariants}
+        onClick={expandIfCollapsed}
+        role={isExpanded ? undefined : "button"}
+        aria-label={isExpanded ? undefined : "Open navigation"}
+        className={cn(
+          "relative w-full max-w-6xl overflow-hidden rounded-2xl border border-border/80 bg-card/90 shadow-[var(--shadow-lift)] backdrop-blur-xl",
+          !isExpanded && "cursor-pointer",
+        )}
+      >
+        <motion.span
+          variants={collapsedIconVariants}
+          className="pointer-events-none absolute inset-0 grid place-items-center"
+          aria-hidden={isExpanded}
+        >
+          <Navigation className="size-4 text-foreground" />
+        </motion.span>
 
-          <div className="flex items-center gap-1.5">
+        <div
+          className={cn(
+            "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-3 py-2.5 sm:px-4",
+            !isExpanded && "pointer-events-none",
+          )}
+        >
+          <motion.div variants={itemVariants} className="min-w-0">
+            <Link to="/" className="group flex min-w-0 items-center gap-2.5 rounded-lg pr-2">
+              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary font-display text-sm font-bold text-primary-foreground transition-transform group-hover:-rotate-3">
+                I
+              </span>
+              <span className="truncate font-display text-lg font-semibold">ILSI</span>
+            </Link>
+          </motion.div>
+
+          <motion.div variants={itemVariants} className="flex items-center gap-1.5">
             <nav className="mr-1 hidden items-center rounded-lg bg-surface p-1 lg:flex" aria-label="Main">
               {links.map((link) => (
                 <Link
@@ -60,10 +169,15 @@ export function SiteHeader() {
             >
               {open ? <X className="size-4" /> : <Menu className="size-4" />}
             </Button>
-          </div>
+          </motion.div>
         </div>
 
-        <div className={cn("border-t border-border bg-card lg:hidden", open ? "block" : "hidden")}>
+        <div
+          className={cn(
+            "border-t border-border bg-card lg:hidden",
+            open && isExpanded ? "block" : "hidden",
+          )}
+        >
           <nav className="flex flex-col gap-1 p-3" aria-label="Mobile">
             {links.map((link) => (
               <Link
@@ -92,7 +206,7 @@ export function SiteHeader() {
             <LanguageToggle className="mt-2 self-start sm:hidden" />
           </nav>
         </div>
-      </div>
+      </motion.div>
     </header>
   );
 }
