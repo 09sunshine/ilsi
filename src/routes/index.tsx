@@ -369,12 +369,24 @@ function HomePage() {
       {/* CTA */}
       <section className="mx-auto w-full max-w-6xl px-4 pb-20 pt-4 sm:px-6 lg:px-8">
         <div className="hero-dark hero-grid-lines relative isolate overflow-hidden rounded-3xl text-hero-foreground shadow-lift">
+          <div
+            className="pointer-events-none absolute left-1/2 top-0 size-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-hero-lime/25 blur-[110px]"
+            aria-hidden
+          />
           <div className="relative z-10 flex min-h-72 flex-col items-center justify-center px-6 py-16 text-center lg:min-h-80">
-            <h2 className="max-w-2xl text-3xl font-semibold sm:text-4xl">{t("home.ctaTitle")}</h2>
+            <p className="inline-flex items-center gap-2 rounded-full bg-hero-lime/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-hero-lime ring-1 ring-hero-lime/30">
+              <span className="size-1.5 rounded-full bg-hero-lime" aria-hidden />
+              {t("home.ctaTag")}
+            </p>
+            <h2 className="mt-5 max-w-2xl text-3xl font-semibold sm:text-4xl">{t("home.ctaTitle")}</h2>
             <p className="mt-4 max-w-lg text-sm leading-relaxed opacity-70">{t("home.ctaBody")}</p>
-            <Button asChild size="lg" variant="secondary" className="mt-7 rounded-full px-7">
-              <Link to="/apply">{t("nav.apply")}</Link>
-            </Button>
+            <Link
+              to="/apply"
+              className="mt-7 inline-flex h-12 items-center gap-2 rounded-full bg-hero-lime px-7 text-sm font-semibold text-hero-lime-foreground shadow-[0_0_32px_-6px_var(--hero-lime)] transition-transform hover:-translate-y-0.5"
+            >
+              {t("nav.apply")}
+              <ArrowRight className="size-4" aria-hidden />
+            </Link>
           </div>
         </div>
       </section>
