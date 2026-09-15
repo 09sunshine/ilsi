@@ -150,7 +150,7 @@ function ProgramsPage() {
             <option value="priceLow">{t("programs.sortPriceLow")}</option>
             <option value="priceHigh">{t("programs.sortPriceHigh")}</option>
           </select>
-          <span className="inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-sm font-medium text-muted-foreground">
+          <span className="inline-flex items-center gap-2 rounded-full bg-hero-foreground/10 px-4 py-2 text-sm font-medium text-hero-foreground/70">
             <SlidersHorizontal className="size-4" />
             {t("programs.filter")}
           </span>

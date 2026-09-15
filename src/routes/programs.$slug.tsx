@@ -59,18 +59,18 @@ function ProgramDetail() {
 
   return (
     <PublicShell>
-      <div className="hero-wash border-b border-border">
+      <div className="hero-dark hero-grid-lines relative isolate text-hero-foreground">
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
           <Link
             to="/programs"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center gap-1.5 text-sm text-hero-foreground/70 transition hover:text-hero-foreground"
           >
             <ArrowLeft className="size-4" /> {t("programs.title")}
           </Link>
           <div className="mt-6 grid gap-8 lg:grid-cols-[1.4fr_1fr]">
             <div>
-              <h1 className="text-3xl font-semibold sm:text-4xl lg:text-5xl">{L(program.title)}</h1>
-              <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground">
+              <h1 className="font-display text-3xl font-semibold sm:text-4xl lg:text-5xl">{L(program.title)}</h1>
+              <p className="mt-4 max-w-2xl text-base leading-relaxed text-hero-foreground/70">
                 {L(program.tagline)}
               </p>
               <div className="mt-6 flex flex-wrap gap-2">
