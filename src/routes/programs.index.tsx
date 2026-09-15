@@ -87,17 +87,17 @@ function ProgramsPage() {
 
   return (
     <PublicShell>
-      <section className="hero-wash border-b border-border">
+      <section className="hero-dark hero-grid-lines relative isolate text-hero-foreground">
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hero-foreground/60">
               {t("home.programsTag")}
             </p>
             <h1 className="mt-3 max-w-2xl font-display text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">
               {t("programs.heading")}
             </h1>
-            <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground">
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-hero-foreground/70">
               {t("programs.subtitle")}
             </p>
           </div>
@@ -105,14 +105,14 @@ function ProgramsPage() {
             <button
               type="button"
               aria-label="previous"
-              className="grid size-10 place-items-center rounded-full border border-border text-muted-foreground transition hover:bg-surface"
+              className="grid size-10 place-items-center rounded-full border border-hero-foreground/20 text-hero-foreground/70 transition hover:bg-hero-foreground/10"
             >
               <ArrowLeft className="size-4" />
             </button>
             <button
               type="button"
               aria-label="next"
-              className="grid size-10 place-items-center rounded-full border border-border bg-card text-foreground shadow-sm transition hover:bg-surface"
+              className="grid size-10 place-items-center rounded-full border border-hero-foreground/20 bg-hero-foreground/10 text-hero-foreground transition hover:bg-hero-foreground/15"
             >
               <ArrowRight className="size-4" />
             </button>
