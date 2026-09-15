@@ -130,8 +130,8 @@ function ProgramsPage() {
                 className={
                   "rounded-full px-4 py-2 text-sm font-medium transition " +
                   (active
-                    ? "bg-primary/10 text-primary"
-                    : "bg-surface text-muted-foreground hover:text-foreground")
+                    ? "bg-hero-lime text-hero-lime-foreground"
+                    : "bg-hero-foreground/10 text-hero-foreground/70 hover:bg-hero-foreground/15 hover:text-hero-foreground")
                 }
               >
                 {f.label}
@@ -144,7 +144,7 @@ function ProgramsPage() {
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as SortKey)}
-            className="rounded-full bg-surface px-4 py-2 text-sm font-medium text-foreground outline-none"
+            className="rounded-full bg-hero-foreground/10 px-4 py-2 text-sm font-medium text-hero-foreground outline-none [&>option]:text-foreground"
           >
             <option value="soonest">{t("programs.sortSoonest")}</option>
             <option value="priceLow">{t("programs.sortPriceLow")}</option>
