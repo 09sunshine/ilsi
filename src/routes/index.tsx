@@ -24,6 +24,18 @@ import { Button } from "@/components/ui/button";
 import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
 import { programs } from "@/data/demo";
 
+const programImage: Record<string, string> = {
+  "young-leaders": youngLeadersImg,
+  "public-communication": publicCommunicationImg,
+  "project-management-essentials": projectManagementImg,
+};
+
+const programCategory: Record<string, string> = {
+  "young-leaders": "leadership",
+  "public-communication": "communication",
+  "project-management-essentials": "project",
+};
+
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
