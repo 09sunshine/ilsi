@@ -70,6 +70,7 @@ export function SiteHeader() {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [isExpanded, setExpanded] = useState(true);
+  const [atTop, setAtTop] = useState(true);
 
   const { scrollY } = useScroll();
   const lastScrollY = useRef(0);
@@ -77,6 +78,8 @@ export function SiteHeader() {
 
   useMotionValueEvent(scrollY, "change", (latest) => {
     const previous = lastScrollY.current;
+
+    setAtTop(latest < 24);
 
     if (isExpanded && latest > previous && latest > 150) {
       setExpanded(false);
