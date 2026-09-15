@@ -4,10 +4,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { AuthLayout } from "@/components/site/AuthLayout";
+import { AuthLayout, FieldLabel, authInputClass, authSubmitClass } from "@/components/site/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n/LocaleProvider";
 
 export const Route = createFileRoute("/reset-password")({
@@ -42,10 +41,11 @@ function ResetPasswordPage() {
 
   return (
     <AuthLayout
+      eyebrow={t("auth.resetEyebrow")}
       title={t("reset.title")}
       subtitle={t("reset.subtitle")}
       footer={
-        <Link to="/login" className="font-medium text-hero-lime hover:underline">
+        <Link to="/login" className="font-semibold text-neutral-900 underline underline-offset-2">
           {t("forgot.back")}
         </Link>
       }
@@ -56,44 +56,36 @@ function ResetPasswordPage() {
           toast.success(t("common.saved"));
           navigate({ to: "/login" });
         })}
-        className="space-y-3"
+        className="space-y-4"
         noValidate
       >
-        <div className="space-y-1.5">
-          <Label htmlFor="password" className="sr-only">
-            {t("reset.password")}
-          </Label>
+        <div className="space-y-2">
+          <FieldLabel htmlFor="password">{t("reset.password")}</FieldLabel>
           <Input
             id="password"
             type="password"
             autoComplete="new-password"
             placeholder={t("reset.password")}
-            className="h-12 rounded-full px-5"
+            className={authInputClass}
             aria-invalid={!!errors.password}
             {...register("password")}
           />
-          {errors.password ? <p className="px-4 text-xs text-red-300">{t("common.tooShort")}</p> : null}
+          {errors.password ? <p className="text-xs text-red-600">{t("common.tooShort")}</p> : null}
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="confirm" className="sr-only">
-            {t("reset.confirm")}
-          </Label>
+        <div className="space-y-2">
+          <FieldLabel htmlFor="confirm">{t("reset.confirm")}</FieldLabel>
           <Input
             id="confirm"
             type="password"
             autoComplete="new-password"
             placeholder={t("reset.confirm")}
-            className="h-12 rounded-full px-5"
+            className={authInputClass}
             aria-invalid={!!errors.confirm}
             {...register("confirm")}
           />
-          {errors.confirm ? <p className="px-4 text-xs text-red-300">{t("common.tooShort")}</p> : null}
+          {errors.confirm ? <p className="text-xs text-red-600">{t("common.tooShort")}</p> : null}
         </div>
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-          className="h-12 w-full rounded-full bg-hero-lime text-hero-lime-foreground hover:bg-hero-lime/90"
-        >
+        <Button type="submit" disabled={isSubmitting} className={authSubmitClass}>
           {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
           {t("reset.submit")}
         </Button>
