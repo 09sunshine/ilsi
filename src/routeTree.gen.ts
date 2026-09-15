@@ -23,7 +23,10 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ResultsRouteImport } from './routes/results'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminApplicationsRouteImport } from './routes/admin.applications'
+import { Route as AdminCohortsRouteImport } from './routes/admin.cohorts'
 import { Route as AdminParticipantsRouteImport } from './routes/admin.participants'
+import { Route as AdminPaymentsRouteImport } from './routes/admin.payments'
+import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as LearnIndexRouteImport } from './routes/learn.index'
 import { Route as ProgramsIndexRouteImport } from './routes/programs.index'
 import { Route as ProgramsSlugRouteImport } from './routes/programs.$slug'
@@ -100,9 +103,24 @@ const AdminApplicationsRoute = AdminApplicationsRouteImport.update({
   path: '/admin/applications',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminCohortsRoute = AdminCohortsRouteImport.update({
+  id: '/admin/cohorts',
+  path: '/admin/cohorts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminParticipantsRoute = AdminParticipantsRouteImport.update({
   id: '/admin/participants',
   path: '/admin/participants',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPaymentsRoute = AdminPaymentsRouteImport.update({
+  id: '/admin/payments',
+  path: '/admin/payments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/admin/settings',
+  path: '/admin/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LearnIndexRoute = LearnIndexRouteImport.update({
@@ -145,7 +163,10 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
   '/admin/applications': typeof AdminApplicationsRoute
+  '/admin/cohorts': typeof AdminCohortsRoute
   '/admin/participants': typeof AdminParticipantsRoute
+  '/admin/payments': typeof AdminPaymentsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/programs/$slug': typeof ProgramsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/learn/': typeof LearnIndexRoute
@@ -167,7 +188,10 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
   '/admin/applications': typeof AdminApplicationsRoute
+  '/admin/cohorts': typeof AdminCohortsRoute
   '/admin/participants': typeof AdminParticipantsRoute
+  '/admin/payments': typeof AdminPaymentsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/programs/$slug': typeof ProgramsSlugRoute
   '/admin': typeof AdminIndexRoute
   '/learn': typeof LearnIndexRoute
@@ -190,7 +214,10 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
   '/admin/applications': typeof AdminApplicationsRoute
+  '/admin/cohorts': typeof AdminCohortsRoute
   '/admin/participants': typeof AdminParticipantsRoute
+  '/admin/payments': typeof AdminPaymentsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/programs/$slug': typeof ProgramsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/learn/': typeof LearnIndexRoute
@@ -214,7 +241,10 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/results'
     | '/admin/applications'
+    | '/admin/cohorts'
     | '/admin/participants'
+    | '/admin/payments'
+    | '/admin/settings'
     | '/programs/$slug'
     | '/admin/'
     | '/learn/'
@@ -236,7 +266,10 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/results'
     | '/admin/applications'
+    | '/admin/cohorts'
     | '/admin/participants'
+    | '/admin/payments'
+    | '/admin/settings'
     | '/programs/$slug'
     | '/admin'
     | '/learn'
@@ -258,7 +291,10 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/results'
     | '/admin/applications'
+    | '/admin/cohorts'
     | '/admin/participants'
+    | '/admin/payments'
+    | '/admin/settings'
     | '/programs/$slug'
     | '/admin/'
     | '/learn/'
@@ -281,7 +317,10 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   ResultsRoute: typeof ResultsRoute
   AdminApplicationsRoute: typeof AdminApplicationsRoute
+  AdminCohortsRoute: typeof AdminCohortsRoute
   AdminParticipantsRoute: typeof AdminParticipantsRoute
+  AdminPaymentsRoute: typeof AdminPaymentsRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
   ProgramsSlugRoute: typeof ProgramsSlugRoute
   AdminIndexRoute: typeof AdminIndexRoute
   LearnIndexRoute: typeof LearnIndexRoute
@@ -390,11 +429,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminApplicationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/cohorts': {
+      id: '/admin/cohorts'
+      path: '/admin/cohorts'
+      fullPath: '/admin/cohorts'
+      preLoaderRoute: typeof AdminCohortsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/participants': {
       id: '/admin/participants'
       path: '/admin/participants'
       fullPath: '/admin/participants'
       preLoaderRoute: typeof AdminParticipantsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/payments': {
+      id: '/admin/payments'
+      path: '/admin/payments'
+      fullPath: '/admin/payments'
+      preLoaderRoute: typeof AdminPaymentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/admin/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/learn/': {
@@ -449,7 +509,10 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   ResultsRoute: ResultsRoute,
   AdminApplicationsRoute: AdminApplicationsRoute,
+  AdminCohortsRoute: AdminCohortsRoute,
   AdminParticipantsRoute: AdminParticipantsRoute,
+  AdminPaymentsRoute: AdminPaymentsRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
   ProgramsSlugRoute: ProgramsSlugRoute,
   AdminIndexRoute: AdminIndexRoute,
   LearnIndexRoute: LearnIndexRoute,
