@@ -172,7 +172,7 @@ function ProgramsPage() {
             {cards.map(({ program: p, lessonCount, learners, cohortList }) => (
               <article
                 key={p.id}
-                className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:shadow-md"
+                className="flex flex-col rounded-2xl border border-border bg-card p-4 text-foreground shadow-sm transition hover:shadow-md"
               >
                 <img
                   src={programImage[p.slug]}
