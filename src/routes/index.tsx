@@ -7,8 +7,10 @@ import {
   BookOpenCheck,
   CalendarClock,
   CheckCircle2,
+  Clock,
   FileCheck2,
   GraduationCap,
+  Layers,
   Lock,
   MessagesSquare,
   Star,
@@ -28,12 +30,6 @@ const programImage: Record<string, string> = {
   "young-leaders": youngLeadersImg,
   "public-communication": publicCommunicationImg,
   "project-management-essentials": projectManagementImg,
-};
-
-const programCategory: Record<string, string> = {
-  "young-leaders": "leadership",
-  "public-communication": "communication",
-  "project-management-essentials": "project",
 };
 
 export const Route = createFileRoute("/")({
@@ -283,13 +279,6 @@ function HomePage() {
         </div>
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           {programs.map((p) => {
-            const cat = programCategory[p.slug] ?? "leadership";
-            const catLabel =
-              cat === "communication"
-                ? t("programs.filterCommunication")
-                : cat === "project"
-                  ? t("programs.filterProject")
-                  : t("programs.filterLeadership");
             return (
               <Link
                 key={p.id}
@@ -326,7 +315,16 @@ function HomePage() {
                       </span>
                       <span className="text-sm font-medium">ILSI</span>
                     </span>
-                    <span className={`cat-pill cat-pill-${cat}`}>{catLabel}</span>
+                    <span className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="size-4 text-primary" aria-hidden />
+                        {p.durationWeeks} {t("programs.weeks")}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Layers className="size-4 text-primary" aria-hidden />
+                        {p.moduleCount} {t("programs.modules")}
+                      </span>
+                    </span>
                   </div>
                 </div>
               </Link>
