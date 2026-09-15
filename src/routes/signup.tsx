@@ -4,33 +4,37 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { AuthLayout, SocialRow } from "@/components/site/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/i18n/LocaleProvider";
 
-export const Route = createFileRoute("/login")({
+export const Route = createFileRoute("/signup")({
   head: () => ({
     meta: [
-      { title: "Log in — ILSI" },
-      { name: "description", content: "Log in to your ILSI participant or administrator account." },
-      { property: "og:title", content: "Log in — ILSI" },
-      { property: "og:description", content: "Access your ILSI training dashboard." },
+      { title: "Create your ILSI account" },
+      { name: "description", content: "Create an ILSI account to join a cohort and track your training progress." },
+      { property: "og:title", content: "Create your ILSI account" },
+      { property: "og:description", content: "Join an ILSI cohort and follow your program from one dashboard." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: LoginPage,
+  component: SignupPage,
 });
 
-const schema = z.object({
-  email: z.string().trim().email().max(255),
-  password: z.string().min(8).max(128),
-});
-type Values = z.infer<typeof schema>;
+const schema = z
+  .object({
+    name: z.string().trim().min(2).max(120),
+    email: z.string().trim().email().max(255),
+    password: z.string().min(8).max(128),
+    confirm: z.string().min(8).max(128),
+  })
+  .refine((v) => v.password === v.confirm, { path: ["confirm"], message: "mismatch" });
 
-function LoginPage() {
+function SignupPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [show, setShow] = useState(false);
@@ -38,27 +42,45 @@ function LoginPage() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<Values>({ resolver: zodResolver(schema) });
-
-  const onSubmit = async () => {
-    await new Promise((r) => setTimeout(r, 600));
-    navigate({ to: "/dashboard" });
-  };
+  } = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema) });
 
   return (
     <AuthLayout
-      title={t("login.title")}
-      subtitle={t("login.subtitle")}
+      title={t("signup.title")}
+      subtitle={t("signup.subtitle")}
       footer={
         <span className="text-muted-foreground">
-          {t("login.registerPrompt")}{" "}
-          <Link to="/signup" className="font-medium text-primary hover:underline">
-            {t("login.registerLink")}
+          {t("signup.haveAccount")}{" "}
+          <Link to="/login" className="font-medium text-primary hover:underline">
+            {t("signup.loginLink")}
           </Link>
         </span>
       }
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3" noValidate>
+      <form
+        onSubmit={handleSubmit(async () => {
+          await new Promise((r) => setTimeout(r, 600));
+          toast.success(t("signup.submit"));
+          navigate({ to: "/dashboard" });
+        })}
+        className="space-y-3"
+        noValidate
+      >
+        <div className="space-y-1.5">
+          <Label htmlFor="name" className="sr-only">
+            {t("signup.name")}
+          </Label>
+          <Input
+            id="name"
+            autoComplete="name"
+            placeholder={t("signup.name")}
+            className="h-12 rounded-full px-5"
+            aria-invalid={!!errors.name}
+            {...register("name")}
+          />
+          {errors.name ? <p className="px-4 text-xs text-destructive">{t("common.tooShort")}</p> : null}
+        </div>
+
         <div className="space-y-1.5">
           <Label htmlFor="email" className="sr-only">
             {t("login.email")}
@@ -83,7 +105,7 @@ function LoginPage() {
             <Input
               id="password"
               type={show ? "text" : "password"}
-              autoComplete="current-password"
+              autoComplete="new-password"
               placeholder={t("login.password")}
               className="h-12 rounded-full px-5 pr-12"
               aria-invalid={!!errors.password}
@@ -101,10 +123,20 @@ function LoginPage() {
           {errors.password ? <p className="px-4 text-xs text-destructive">{t("common.tooShort")}</p> : null}
         </div>
 
-        <div className="flex justify-end">
-          <Link to="/forgot-password" className="text-xs text-muted-foreground hover:text-primary hover:underline">
-            {t("login.forgot")}
-          </Link>
+        <div className="space-y-1.5">
+          <Label htmlFor="confirm" className="sr-only">
+            {t("signup.confirm")}
+          </Label>
+          <Input
+            id="confirm"
+            type="password"
+            autoComplete="new-password"
+            placeholder={t("signup.confirm")}
+            className="h-12 rounded-full px-5"
+            aria-invalid={!!errors.confirm}
+            {...register("confirm")}
+          />
+          {errors.confirm ? <p className="px-4 text-xs text-destructive">{t("common.tooShort")}</p> : null}
         </div>
 
         <Button
@@ -113,21 +145,11 @@ function LoginPage() {
           className="h-12 w-full rounded-full bg-foreground text-background hover:bg-foreground/90"
         >
           {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
-          {t("login.submit")}
+          {t("signup.submit")}
         </Button>
       </form>
 
       <SocialRow />
-
-      <p className="mt-8 text-center text-xs text-muted-foreground">{t("login.demoHint")}</p>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <Button asChild variant="outline" size="sm" className="rounded-full">
-          <Link to="/dashboard">{t("login.asParticipant")}</Link>
-        </Button>
-        <Button asChild variant="outline" size="sm" className="rounded-full">
-          <Link to="/admin">{t("login.asAdmin")}</Link>
-        </Button>
-      </div>
     </AuthLayout>
   );
 }
