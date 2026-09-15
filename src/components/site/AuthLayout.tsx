@@ -12,11 +12,13 @@ export function AuthLayout({
   subtitle,
   children,
   footer,
+  top,
 }: {
   title: string;
   subtitle?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  top?: ReactNode;
 }) {
   const { t } = useI18n();
 
@@ -26,6 +28,7 @@ export function AuthLayout({
         {/* Form column */}
         <div className="flex flex-col justify-center px-2 py-10 sm:px-10">
           <div className="mx-auto w-full max-w-sm">
+            {top ? <div className="mb-6">{top}</div> : null}
             <Link
               to="/"
               className="mb-10 inline-flex items-center gap-2 text-sm font-semibold tracking-tight"
