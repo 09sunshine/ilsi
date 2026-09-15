@@ -415,6 +415,8 @@ export const dictionaries = {
     "nav.content": "Contenus",
     "nav.payments": "Paiements",
     "nav.overview": "Vue d'ensemble",
+    "notif.unlockEmail": "Prévenir les participants par e-mail à l'ouverture d'un module",
+    "notif.deadlineEmail": "Envoyer un rappel 3 jours avant l'échéance",
 
     "course.lessonOf": "Leçon {current} sur {total}",
     "course.prev": "Précédent",
