@@ -17,6 +17,8 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LiveRouteImport } from './routes/live'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as NotificationsRouteImport } from './routes/notifications'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ResultsRouteImport } from './routes/results'
 import { Route as LearnIndexRouteImport } from './routes/learn.index'
@@ -65,6 +67,16 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NotificationsRoute = NotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -110,6 +122,8 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/live': typeof LiveRoute
   '/login': typeof LoginRoute
+  '/notifications': typeof NotificationsRoute
+  '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
   '/programs/$slug': typeof ProgramsSlugRoute
@@ -127,6 +141,8 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/live': typeof LiveRoute
   '/login': typeof LoginRoute
+  '/notifications': typeof NotificationsRoute
+  '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
   '/programs/$slug': typeof ProgramsSlugRoute
@@ -145,6 +161,8 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/live': typeof LiveRoute
   '/login': typeof LoginRoute
+  '/notifications': typeof NotificationsRoute
+  '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
   '/programs/$slug': typeof ProgramsSlugRoute
@@ -164,6 +182,8 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/live'
     | '/login'
+    | '/notifications'
+    | '/profile'
     | '/reset-password'
     | '/results'
     | '/programs/$slug'
@@ -181,6 +201,8 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/live'
     | '/login'
+    | '/notifications'
+    | '/profile'
     | '/reset-password'
     | '/results'
     | '/programs/$slug'
@@ -198,6 +220,8 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/live'
     | '/login'
+    | '/notifications'
+    | '/profile'
     | '/reset-password'
     | '/results'
     | '/programs/$slug'
@@ -216,6 +240,8 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LiveRoute: typeof LiveRoute
   LoginRoute: typeof LoginRoute
+  NotificationsRoute: typeof NotificationsRoute
+  ProfileRoute: typeof ProfileRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ResultsRoute: typeof ResultsRoute
   ProgramsSlugRoute: typeof ProgramsSlugRoute
@@ -283,6 +309,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/notifications': {
+      id: '/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof NotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -344,6 +384,8 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   LiveRoute: LiveRoute,
   LoginRoute: LoginRoute,
+  NotificationsRoute: NotificationsRoute,
+  ProfileRoute: ProfileRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ResultsRoute: ResultsRoute,
   ProgramsSlugRoute: ProgramsSlugRoute,
