@@ -172,6 +172,8 @@ export const dictionaries = {
     "nav.content": "Content",
     "nav.payments": "Payments",
     "nav.overview": "Overview",
+    "notif.unlockEmail": "Email participants when a module unlocks",
+    "notif.deadlineEmail": "Email a reminder 3 days before a deadline",
 
     "course.lessonOf": "Lesson {current} of {total}",
     "course.prev": "Previous",
