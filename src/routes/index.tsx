@@ -46,10 +46,10 @@ function HomePage() {
   const { t } = useI18n();
   const L = useLocalized();
 
-  const problems = [
-    { icon: CalendarClock, title: t("home.p1Title"), body: t("home.p1Body") },
-    { icon: FileCheck2, title: t("home.p2Title"), body: t("home.p2Body") },
-    { icon: Users, title: t("home.p3Title"), body: t("home.p3Body") },
+  const cohortBenefits = [
+    { title: t("home.p1Title"), body: t("home.p1Body") },
+    { title: t("home.p2Title"), body: t("home.p2Body") },
+    { title: t("home.p3Title"), body: t("home.p3Body") },
   ];
 
   const steps = [
@@ -151,27 +151,75 @@ function HomePage() {
         </div>
       </section>
 
-      {/* Problem */}
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          {t("home.problemTag")}
-        </p>
-        <div className="mt-3 grid gap-6 lg:grid-cols-[1.3fr_1fr] lg:gap-14">
-          <h2 className="text-3xl font-semibold leading-tight sm:text-4xl">
-            {t("home.problemTitle")}
-          </h2>
-          <p className="self-end text-sm leading-relaxed text-muted-foreground">
-            {t("home.problemBody")}
-          </p>
-        </div>
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
-          {problems.map((p) => (
-            <div key={p.title} className="panel p-6">
-              <p.icon className="size-5 text-primary" aria-hidden />
-              <h3 className="mt-4 text-base font-semibold">{p.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{p.body}</p>
+      {/* Why cohorts */}
+      <section className="border-y border-border bg-card">
+        <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[0.95fr_1.05fr] lg:gap-16 lg:py-24">
+          <div className="relative mx-auto w-full max-w-lg rounded-lg bg-surface px-5 py-9 sm:px-10 sm:py-12" aria-label={t("home.cohortVisualLabel")}>
+            <div className="w-[78%] rounded-lg border border-border bg-card p-5 shadow-[var(--shadow-soft)] sm:p-6">
+              <p className="text-xs text-muted-foreground">{t("home.cohortProgress")}</p>
+              <div className="mt-1 flex items-end gap-2">
+                <p className="font-display text-2xl font-semibold">87%</p>
+                <span className="mb-1 text-xs font-medium text-success">+12%</span>
+              </div>
+              <div className="mt-5 border-t border-border pt-4">
+                <div className="space-y-3 text-[11px] text-muted-foreground">
+                  <div className="grid grid-cols-[72px_1fr_28px] items-center gap-2">
+                    <span>{t("home.cohortCompleted")}</span>
+                    <span className="h-2 rounded-sm bg-muted"><span className="block h-full w-[87%] rounded-sm bg-primary" /></span>
+                    <span className="text-right text-foreground">87%</span>
+                  </div>
+                  <div className="grid grid-cols-[72px_1fr_28px] items-center gap-2">
+                    <span>{t("home.cohortActive")}</span>
+                    <span className="h-2 rounded-sm bg-muted"><span className="block h-full w-[64%] rounded-sm bg-success" /></span>
+                    <span className="text-right text-foreground">64%</span>
+                  </div>
+                  <div className="grid grid-cols-[72px_1fr_28px] items-center gap-2">
+                    <span>{t("home.cohortSupport")}</span>
+                    <span className="h-2 rounded-sm bg-muted"><span className="block h-full w-[94%] rounded-sm bg-accent-foreground" /></span>
+                    <span className="text-right text-foreground">94%</span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-7 flex h-24 items-end gap-3 border-b border-border px-1">
+                {[48, 68, 57, 82, 74].map((height, index) => (
+                  <span
+                    key={height}
+                    className={index % 2 === 0 ? "w-full rounded-t-sm bg-primary" : "w-full rounded-t-sm bg-success"}
+                    style={{ height: `${height}%` }}
+                  />
+                ))}
+              </div>
             </div>
-          ))}
+
+            <div className="absolute bottom-5 right-2 w-[48%] rounded-lg border border-border bg-card p-4 shadow-[var(--shadow-lift)] sm:bottom-8 sm:right-5 sm:p-5">
+              <div className="flex items-center justify-between">
+                <span className="grid size-8 place-items-center rounded-md bg-accent text-accent-foreground">
+                  <Users className="size-4" aria-hidden />
+                </span>
+                <span className="text-xs font-medium text-success">+8%</span>
+              </div>
+              <p className="mt-4 text-xs text-muted-foreground">{t("home.cohortLearners")}</p>
+              <p className="mt-1 font-display text-2xl font-semibold sm:text-3xl">1,240+</p>
+              <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{t("home.cohortLearnersNote")}</p>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{t("home.problemTag")}</p>
+            <h2 className="mt-4 max-w-xl text-3xl font-semibold leading-tight sm:text-4xl">{t("home.problemTitle")}</h2>
+            <p className="mt-5 max-w-xl text-sm leading-relaxed text-muted-foreground">{t("home.problemBody")}</p>
+            <ul className="mt-8 space-y-7">
+              {cohortBenefits.map((benefit) => (
+                <li key={benefit.title} className="grid grid-cols-[auto_1fr] gap-4">
+                  <CheckCircle2 className="mt-0.5 size-5 fill-primary text-primary-foreground" aria-hidden />
+                  <div>
+                    <h3 className="text-base font-semibold">{benefit.title}</h3>
+                    <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">{benefit.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </section>
 
