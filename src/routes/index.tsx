@@ -75,88 +75,110 @@ function HomePage() {
   return (
     <PublicShell>
       {/* Hero */}
-      <section className="hero-wash border-b border-border">
-        <div className="mx-auto max-w-6xl px-4 pb-14 pt-16 sm:px-6 lg:pb-20 lg:pt-20">
-          <div className="relative mx-auto max-w-4xl text-center">
-            <div className="absolute -left-4 top-28 hidden size-12 place-items-center rounded-full border border-primary text-primary lg:grid">
-              <ArrowUpRight className="size-5" aria-hidden />
-            </div>
-            <div className="absolute -right-1 top-28 hidden size-10 place-items-center rounded-full border border-primary text-primary lg:grid">
-              <BookOpenCheck className="size-4" aria-hidden />
-            </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              {t("home.badge")}
-            </p>
-            <h1 className="mx-auto mt-4 max-w-3xl text-4xl font-semibold leading-[1.08] sm:text-5xl lg:text-6xl">
-              {t("home.heroLead")} {" "}
-              <span className="text-primary">{t("home.heroAccent")}</span>
-            </h1>
-            <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground">
-              {t("home.subtitle")}
-            </p>
-            <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-              <Button asChild size="lg">
-                <Link to="/apply">
+      <section className="hero-dark hero-grid-lines relative isolate text-hero-foreground">
+        <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-12 sm:px-6 lg:pb-24 lg:pt-16">
+          <div className="grid items-center gap-10 lg:grid-cols-[1.02fr_0.98fr] lg:gap-12">
+            {/* Left column */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-hero-foreground/60">
+                {t("home.badge")}
+              </p>
+              <h1 className="mt-5 max-w-xl font-display text-4xl font-extrabold uppercase leading-[0.98] tracking-tight sm:text-5xl lg:text-6xl">
+                {t("home.heroLead")}{" "}
+                <span className="text-hero-lime">{t("home.heroAccent")}</span>
+              </h1>
+              <p className="mt-5 max-w-md text-sm leading-relaxed text-hero-foreground/70 sm:text-base">
+                {t("home.subtitle")}
+              </p>
+
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <Link
+                  to="/apply"
+                  className="inline-flex h-12 items-center gap-2 rounded-full bg-hero-lime px-6 text-sm font-semibold text-hero-lime-foreground transition-transform hover:-translate-y-0.5"
+                >
                   {t("home.ctaPrimary")}
-                  <ArrowRight className="size-4" />
+                  <ArrowRight className="size-4" aria-hidden />
                 </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <Link to="/programs">{t("home.ctaSecondary")}</Link>
-              </Button>
-            </div>
-            <div className="mt-7 flex items-center justify-center gap-2 text-sm">
-              <span className="flex text-warning" aria-label="Rated five out of five">
-                {Array.from({ length: 5 }).map((_, index) => (
-                  <Star key={index} className="size-4 fill-current" aria-hidden />
-                ))}
-              </span>
-              <span className="font-semibold">4.9</span>
-              <span className="text-muted-foreground">{t("home.heroRating")}</span>
-            </div>
-          </div>
-
-          <div className="mt-12 grid auto-rows-[176px] grid-cols-2 gap-3 sm:grid-cols-6 lg:mt-14 lg:grid-cols-12 lg:items-end">
-            <div className="relative col-span-2 overflow-hidden rounded-lg border border-border sm:col-span-3 lg:col-span-3 lg:h-[232px]">
-              <img
-                src={heroImage}
-                width={1408}
-                height={1008}
-                alt="Participants collaborating during an ILSI cohort session"
-                className="h-full w-full object-cover"
-              />
-              <span className="absolute left-3 top-3 grid size-8 place-items-center rounded-full bg-card text-primary shadow-[var(--shadow-soft)]">
-                <GraduationCap className="size-4" aria-hidden />
-              </span>
-            </div>
-
-            <div className="col-span-2 flex flex-col justify-center rounded-lg bg-primary p-5 text-primary-foreground sm:col-span-3 lg:col-span-2 lg:h-[176px]">
-              <Users className="size-5 opacity-80" aria-hidden />
-              <p className="mt-4 font-display text-3xl font-semibold">1,240+</p>
-              <p className="mt-1 text-sm opacity-80">{t("home.heroLearners")}</p>
-            </div>
-
-            <div className="col-span-2 flex flex-col justify-center rounded-lg border border-border bg-card p-5 shadow-[var(--shadow-soft)] sm:col-span-3 lg:col-span-3 lg:h-[150px]">
-              <div className="flex items-center justify-between">
-                <span className="grid size-8 place-items-center rounded-md bg-accent text-accent-foreground">
-                  <BarChart3 className="size-4" aria-hidden />
-                </span>
-                <span className="text-xs font-medium text-success">+12%</span>
+                <Link
+                  to="/programs"
+                  className="inline-flex h-12 items-center gap-2 rounded-full bg-hero-foreground/10 py-1 pl-1.5 pr-5 text-sm font-semibold text-hero-foreground ring-1 ring-hero-foreground/15 transition-colors hover:bg-hero-foreground/15"
+                >
+                  <span className="grid size-9 place-items-center rounded-full bg-hero-foreground text-hero">
+                    <ArrowUpRight className="size-4" aria-hidden />
+                  </span>
+                  {t("home.ctaSecondary")}
+                </Link>
               </div>
-              <p className="mt-3 text-xs text-muted-foreground">{t("home.statsCompletion")}</p>
-              <p className="mt-1 font-display text-3xl font-semibold">87%</p>
+
+              <div className="mt-10">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-hero-foreground/50">
+                  {t("home.heroRhythm")}
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3 text-hero-foreground/80">
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold">
+                    <BookOpenCheck className="size-4" aria-hidden />6 {t("home.statsPrograms")}
+                  </span>
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold">
+                    <BarChart3 className="size-4" aria-hidden />
+                    87% {t("home.statsCompletion")}
+                  </span>
+                  <span className="inline-flex items-center gap-2 text-sm font-semibold">
+                    <CalendarClock className="size-4" aria-hidden />
+                    {t("home.heroPath")}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="col-span-2 flex flex-col items-center justify-center rounded-lg bg-accent p-5 text-center text-accent-foreground sm:col-span-3 lg:col-span-2 lg:h-[176px]">
-              <Award className="size-5" aria-hidden />
-              <p className="mt-3 font-display text-3xl font-semibold">6</p>
-              <p className="mt-1 text-sm">{t("home.statsPrograms")}</p>
-            </div>
+            {/* Right column cards */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded-3xl bg-hero-foreground/95 p-5 text-foreground">
+                <div className="flex items-center gap-2">
+                  <p className="font-display text-4xl font-bold">4.9</p>
+                  <span className="grid size-5 place-items-center rounded-full bg-hero-lime">
+                    <Star className="size-3 fill-current text-hero-lime-foreground" aria-hidden />
+                  </span>
+                </div>
+                <p className="mt-3 text-sm font-medium text-muted-foreground">
+                  {t("home.heroRating")}
+                </p>
+              </div>
 
-            <div className="col-span-2 flex flex-col justify-end rounded-lg bg-foreground p-5 text-background sm:col-span-6 lg:col-span-2 lg:h-[232px]">
-              <CalendarClock className="size-6" aria-hidden />
-              <p className="mt-5 font-display text-xl font-semibold">{t("home.heroRhythm")}</p>
-              <p className="mt-2 text-sm opacity-75">{t("home.heroPath")}</p>
+              <div className="rounded-3xl bg-hero-panel p-5 text-hero-foreground">
+                <p className="text-sm font-medium text-hero-foreground/70">
+                  {t("home.heroLearners")}
+                </p>
+                <p className="mt-2 font-display text-4xl font-bold text-hero-lime">1,240+</p>
+                <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-hero-lime/90">
+                  <Users className="size-3.5" aria-hidden />
+                  +12%
+                </span>
+              </div>
+
+              <div className="relative col-span-2 overflow-hidden rounded-3xl">
+                <img
+                  src={heroImage}
+                  width={1408}
+                  height={1008}
+                  alt="Participants collaborating during an ILSI cohort session"
+                  className="h-64 w-full object-cover sm:h-80"
+                />
+                <span className="absolute left-4 top-4 grid size-9 place-items-center rounded-full bg-card text-primary shadow-[var(--shadow-soft)]">
+                  <GraduationCap className="size-4" aria-hidden />
+                </span>
+                <div className="absolute bottom-4 right-4 w-40 rounded-2xl bg-card p-3 text-card-foreground shadow-[var(--shadow-lift)]">
+                  <div className="flex items-center justify-between">
+                    <span className="grid size-7 place-items-center rounded-md bg-accent text-accent-foreground">
+                      <BarChart3 className="size-3.5" aria-hidden />
+                    </span>
+                    <span className="text-[11px] font-semibold text-success">+12%</span>
+                  </div>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    {t("home.statsCompletion")}
+                  </p>
+                  <p className="font-display text-xl font-bold">87%</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
