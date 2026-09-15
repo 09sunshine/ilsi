@@ -1,11 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowRight,
+  ArrowUpRight,
+  Award,
+  BarChart3,
+  BookOpenCheck,
   CalendarClock,
   CheckCircle2,
   FileCheck2,
+  GraduationCap,
   Lock,
   MessagesSquare,
+  Star,
   Users,
   Video,
 } from "lucide-react";
@@ -29,6 +35,8 @@ export const Route = createFileRoute("/")({
         property: "og:description",
         content: "Scheduled modules, merit-based unlocking and live debriefs with a trainer.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: HomePage,
@@ -62,19 +70,26 @@ function HomePage() {
   return (
     <PublicShell>
       {/* Hero */}
-      <section className="hero-wash border-b border-border">
-        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:py-24">
-          <div>
-            <span className="inline-flex items-center rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <section className="border-b border-border bg-surface">
+        <div className="mx-auto max-w-6xl px-4 pb-14 pt-16 sm:px-6 lg:pb-20 lg:pt-20">
+          <div className="relative mx-auto max-w-4xl text-center">
+            <div className="absolute -left-4 top-28 hidden size-12 place-items-center rounded-full border border-primary text-primary lg:grid">
+              <ArrowUpRight className="size-5" aria-hidden />
+            </div>
+            <div className="absolute -right-1 top-28 hidden size-10 place-items-center rounded-full border border-primary text-primary lg:grid">
+              <BookOpenCheck className="size-4" aria-hidden />
+            </div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               {t("home.badge")}
-            </span>
-            <h1 className="mt-5 text-4xl font-semibold leading-[1.08] sm:text-5xl lg:text-6xl">
-              {t("home.title")}
+            </p>
+            <h1 className="mx-auto mt-4 max-w-3xl text-4xl font-semibold leading-[1.08] sm:text-5xl lg:text-6xl">
+              Structured learning that turns{" "}
+              <span className="text-primary">progress into achievement</span>
             </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+            <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground">
               {t("home.subtitle")}
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
               <Button asChild size="lg">
                 <Link to="/apply">
                   {t("home.ctaPrimary")}
@@ -85,36 +100,61 @@ function HomePage() {
                 <Link to="/programs">{t("home.ctaSecondary")}</Link>
               </Button>
             </div>
+            <div className="mt-7 flex items-center justify-center gap-2 text-sm">
+              <span className="flex text-warning" aria-label="Rated five out of five">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <Star key={index} className="size-4 fill-current" aria-hidden />
+                ))}
+              </span>
+              <span className="font-semibold">4.9</span>
+              <span className="text-muted-foreground">from 1,240 learners</span>
+            </div>
           </div>
-          <div className="relative">
-            <img
-              src={heroImage}
-              width={1408}
-              height={1008}
-              alt="Participants working together during an ILSI training session"
-              className="aspect-[7/5] w-full rounded-2xl border border-border object-cover shadow-[var(--shadow-lift)]"
-            />
-            <div className="panel absolute -bottom-6 left-4 hidden w-64 p-4 sm:block">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {t("dash.nextLive")}
-              </p>
-              <p className="mt-1 font-display text-sm font-semibold">Module 1 debrief</p>
-              <p className="text-sm text-muted-foreground">15 Oct · 18:00</p>
+
+          <div className="mt-12 grid auto-rows-[176px] grid-cols-2 gap-3 sm:grid-cols-6 lg:mt-14 lg:grid-cols-12 lg:items-end">
+            <div className="relative col-span-2 overflow-hidden rounded-lg border border-border sm:col-span-3 lg:col-span-3 lg:h-[232px]">
+              <img
+                src={heroImage}
+                width={1408}
+                height={1008}
+                alt="Participants collaborating during an ILSI cohort session"
+                className="h-full w-full object-cover"
+              />
+              <span className="absolute left-3 top-3 grid size-8 place-items-center rounded-full bg-card text-primary shadow-[var(--shadow-soft)]">
+                <GraduationCap className="size-4" aria-hidden />
+              </span>
+            </div>
+
+            <div className="col-span-2 flex flex-col justify-center rounded-lg bg-primary p-5 text-primary-foreground sm:col-span-3 lg:col-span-2 lg:h-[176px]">
+              <Users className="size-5 opacity-80" aria-hidden />
+              <p className="mt-4 font-display text-3xl font-semibold">1,240+</p>
+              <p className="mt-1 text-sm opacity-80">Learners growing together</p>
+            </div>
+
+            <div className="col-span-2 flex flex-col justify-center rounded-lg border border-border bg-card p-5 shadow-[var(--shadow-soft)] sm:col-span-3 lg:col-span-3 lg:h-[150px]">
+              <div className="flex items-center justify-between">
+                <span className="grid size-8 place-items-center rounded-md bg-accent text-accent-foreground">
+                  <BarChart3 className="size-4" aria-hidden />
+                </span>
+                <span className="text-xs font-medium text-success">+12%</span>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">Cohort completion</p>
+              <p className="mt-1 font-display text-3xl font-semibold">87%</p>
+            </div>
+
+            <div className="col-span-2 flex flex-col items-center justify-center rounded-lg bg-accent p-5 text-center text-accent-foreground sm:col-span-3 lg:col-span-2 lg:h-[176px]">
+              <Award className="size-5" aria-hidden />
+              <p className="mt-3 font-display text-3xl font-semibold">6</p>
+              <p className="mt-1 text-sm">Active learning programs</p>
+            </div>
+
+            <div className="col-span-2 flex flex-col justify-end rounded-lg bg-foreground p-5 text-background sm:col-span-6 lg:col-span-2 lg:h-[232px]">
+              <CalendarClock className="size-6" aria-hidden />
+              <p className="mt-5 font-display text-xl font-semibold">Learn. Apply. Debrief.</p>
+              <p className="mt-2 text-sm opacity-75">A clear path from every module to mastery.</p>
             </div>
           </div>
         </div>
-      </section>
-
-      {/* Stats */}
-      <section className="border-b border-border bg-card">
-        <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-4 py-10 sm:px-6 lg:grid-cols-4">
-          {stats.map((s) => (
-            <div key={s.label}>
-              <dt className="text-sm text-muted-foreground">{s.label}</dt>
-              <dd className="font-display text-3xl font-semibold">{s.value}</dd>
-            </div>
-          ))}
-        </dl>
       </section>
 
       {/* Problem */}
