@@ -21,6 +21,9 @@ import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ResultsRouteImport } from './routes/results'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminApplicationsRouteImport } from './routes/admin.applications'
+import { Route as AdminParticipantsRouteImport } from './routes/admin.participants'
 import { Route as LearnIndexRouteImport } from './routes/learn.index'
 import { Route as ProgramsIndexRouteImport } from './routes/programs.index'
 import { Route as ProgramsSlugRouteImport } from './routes/programs.$slug'
@@ -87,6 +90,21 @@ const ResultsRoute = ResultsRouteImport.update({
   path: '/results',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminApplicationsRoute = AdminApplicationsRouteImport.update({
+  id: '/admin/applications',
+  path: '/admin/applications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminParticipantsRoute = AdminParticipantsRouteImport.update({
+  id: '/admin/participants',
+  path: '/admin/participants',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LearnIndexRoute = LearnIndexRouteImport.update({
   id: '/learn/',
   path: '/learn/',
@@ -126,7 +144,10 @@ export interface FileRoutesByFullPath {
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/admin/applications': typeof AdminApplicationsRoute
+  '/admin/participants': typeof AdminParticipantsRoute
   '/programs/$slug': typeof ProgramsSlugRoute
+  '/admin/': typeof AdminIndexRoute
   '/learn/': typeof LearnIndexRoute
   '/programs/': typeof ProgramsIndexRoute
   '/learn/$moduleId/$lessonId': typeof LearnModuleIdLessonIdRoute
@@ -145,7 +166,10 @@ export interface FileRoutesByTo {
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/admin/applications': typeof AdminApplicationsRoute
+  '/admin/participants': typeof AdminParticipantsRoute
   '/programs/$slug': typeof ProgramsSlugRoute
+  '/admin': typeof AdminIndexRoute
   '/learn': typeof LearnIndexRoute
   '/programs': typeof ProgramsIndexRoute
   '/learn/$moduleId/$lessonId': typeof LearnModuleIdLessonIdRoute
@@ -165,7 +189,10 @@ export interface FileRoutesById {
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/admin/applications': typeof AdminApplicationsRoute
+  '/admin/participants': typeof AdminParticipantsRoute
   '/programs/$slug': typeof ProgramsSlugRoute
+  '/admin/': typeof AdminIndexRoute
   '/learn/': typeof LearnIndexRoute
   '/programs/': typeof ProgramsIndexRoute
   '/learn/$moduleId/$lessonId': typeof LearnModuleIdLessonIdRoute
@@ -186,7 +213,10 @@ export interface FileRouteTypes {
     | '/profile'
     | '/reset-password'
     | '/results'
+    | '/admin/applications'
+    | '/admin/participants'
     | '/programs/$slug'
+    | '/admin/'
     | '/learn/'
     | '/programs/'
     | '/learn/$moduleId/$lessonId'
@@ -205,7 +235,10 @@ export interface FileRouteTypes {
     | '/profile'
     | '/reset-password'
     | '/results'
+    | '/admin/applications'
+    | '/admin/participants'
     | '/programs/$slug'
+    | '/admin'
     | '/learn'
     | '/programs'
     | '/learn/$moduleId/$lessonId'
@@ -224,7 +257,10 @@ export interface FileRouteTypes {
     | '/profile'
     | '/reset-password'
     | '/results'
+    | '/admin/applications'
+    | '/admin/participants'
     | '/programs/$slug'
+    | '/admin/'
     | '/learn/'
     | '/programs/'
     | '/learn/$moduleId/$lessonId'
@@ -244,7 +280,10 @@ export interface RootRouteChildren {
   ProfileRoute: typeof ProfileRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ResultsRoute: typeof ResultsRoute
+  AdminApplicationsRoute: typeof AdminApplicationsRoute
+  AdminParticipantsRoute: typeof AdminParticipantsRoute
   ProgramsSlugRoute: typeof ProgramsSlugRoute
+  AdminIndexRoute: typeof AdminIndexRoute
   LearnIndexRoute: typeof LearnIndexRoute
   ProgramsIndexRoute: typeof ProgramsIndexRoute
   LearnModuleIdLessonIdRoute: typeof LearnModuleIdLessonIdRoute
@@ -337,6 +376,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResultsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/applications': {
+      id: '/admin/applications'
+      path: '/admin/applications'
+      fullPath: '/admin/applications'
+      preLoaderRoute: typeof AdminApplicationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/participants': {
+      id: '/admin/participants'
+      path: '/admin/participants'
+      fullPath: '/admin/participants'
+      preLoaderRoute: typeof AdminParticipantsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/learn/': {
       id: '/learn/'
       path: '/learn'
@@ -388,7 +448,10 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ResultsRoute: ResultsRoute,
+  AdminApplicationsRoute: AdminApplicationsRoute,
+  AdminParticipantsRoute: AdminParticipantsRoute,
   ProgramsSlugRoute: ProgramsSlugRoute,
+  AdminIndexRoute: AdminIndexRoute,
   LearnIndexRoute: LearnIndexRoute,
   ProgramsIndexRoute: ProgramsIndexRoute,
   LearnModuleIdLessonIdRoute: LearnModuleIdLessonIdRoute,
