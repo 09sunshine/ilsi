@@ -136,7 +136,7 @@ export function SiteHeader() {
 
         <div
           className={cn(
-            "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-3 py-2.5 sm:px-4",
+            "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 px-3 py-2.5 sm:px-4",
             !isExpanded && "pointer-events-none",
           )}
         >
@@ -149,15 +149,18 @@ export function SiteHeader() {
             </Link>
           </motion.div>
 
-          <motion.div variants={itemVariants} className="flex items-center gap-1.5">
-            <nav className="mr-1 hidden items-center rounded-lg bg-surface p-1 lg:flex" aria-label="Main">
+          <motion.div variants={itemVariants} className="flex min-w-0 items-center justify-center gap-3">
+            <nav className="hidden items-center gap-7 lg:flex" aria-label="Main">
               {links.map((link) => (
                 <Link
                   key={link.to}
                   to={link.to}
                   activeOptions={{ exact: link.to === "/" }}
-                  activeProps={{ className: "text-foreground bg-card shadow-[var(--shadow-soft)]" }}
-                  className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  activeProps={{
+                    className:
+                      "rounded-full bg-hero-lime px-5 py-2 font-semibold text-hero-lime-foreground shadow-[var(--shadow-soft)]",
+                  }}
+                  className="rounded-full px-1 py-2 text-sm font-medium text-foreground/70 transition-colors hover:text-foreground"
                 >
                   {t(link.key)}
                 </Link>
