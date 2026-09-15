@@ -33,6 +33,7 @@ type Values = z.infer<typeof schema>;
 function LoginPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const router = useRouter();
   const [show, setShow] = useState(false);
   const {
     register,
