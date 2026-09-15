@@ -1,7 +1,7 @@
 "use client";
 
 import { Link } from "@tanstack/react-router";
-import { Menu, Navigation, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { motion, useMotionValueEvent, useScroll } from "motion/react";
 import { Button } from "@/components/ui/button";
@@ -119,7 +119,7 @@ export function SiteHeader() {
           className="pointer-events-none absolute inset-0 grid place-items-center"
           aria-hidden={isExpanded}
         >
-          <Navigation className="size-4 text-foreground" />
+          <Menu className="size-4 text-foreground" />
         </motion.span>
 
         <div
