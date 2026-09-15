@@ -1,11 +1,14 @@
+import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, GraduationCap } from "lucide-react";
-import { PageHeader, PublicShell } from "@/components/site/PublicShell";
+import { ArrowLeft, ArrowRight, BookOpen, GraduationCap, SlidersHorizontal, Users } from "lucide-react";
+import { PublicShell } from "@/components/site/PublicShell";
 import { EmptyState } from "@/components/states";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
-import { cohortsForProgram, programs } from "@/data/demo";
+import { cohortsForProgram, modules, programs } from "@/data/demo";
+import youngLeadersImg from "@/assets/program-young-leaders.jpg";
+import publicCommunicationImg from "@/assets/program-public-communication.jpg";
+import projectManagementImg from "@/assets/program-project-management.jpg";
 
 export const Route = createFileRoute("/programs/")({
   head: () => ({
@@ -21,84 +24,197 @@ export const Route = createFileRoute("/programs/")({
         property: "og:description",
         content: "Cohort-based leadership, communication and project management training.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: ProgramsPage,
 });
 
+const programImage: Record<string, string> = {
+  "young-leaders": youngLeadersImg,
+  "public-communication": publicCommunicationImg,
+  "project-management-essentials": projectManagementImg,
+};
+
+const programCategory: Record<string, string> = {
+  "young-leaders": "leadership",
+  "public-communication": "communication",
+  "project-management-essentials": "project",
+};
+
+type SortKey = "soonest" | "priceLow" | "priceHigh";
+
 function ProgramsPage() {
   const { t } = useI18n();
   const L = useLocalized();
+  const [category, setCategory] = useState("trending");
+  const [sort, setSort] = useState<SortKey>("soonest");
+
+  const filters = [
+    { id: "trending", label: t("programs.filterTrending") },
+    { id: "leadership", label: t("programs.filterLeadership") },
+    { id: "communication", label: t("programs.filterCommunication") },
+    { id: "project", label: t("programs.filterProject") },
+  ];
+
+  const cards = useMemo(() => {
+    const enriched = programs.map((p) => {
+      const cohortList = cohortsForProgram(p.id).filter((c) => c.status !== "ARCHIVED");
+      const cohortIds = new Set(cohortList.map((c) => c.id));
+      const lessonCount = modules
+        .filter((m) => cohortIds.has(m.cohortId))
+        .reduce((sum, m) => sum + m.lessons.length, 0);
+      const learners = cohortList.reduce((sum, c) => sum + c.enrolled, 0);
+      const nextStart = cohortList
+        .map((c) => c.startDate)
+        .sort()
+        .at(0);
+      return { program: p, lessonCount, learners, nextStart, cohortList };
+    });
+
+    const filtered =
+      category === "trending"
+        ? enriched
+        : enriched.filter((e) => programCategory[e.program.slug] === category);
+
+    return [...filtered].sort((a, b) => {
+      if (sort === "priceLow") return a.program.price - b.program.price;
+      if (sort === "priceHigh") return b.program.price - a.program.price;
+      return (a.nextStart ?? "9999").localeCompare(b.nextStart ?? "9999");
+    });
+  }, [category, sort]);
 
   return (
     <PublicShell>
-      <PageHeader
-        eyebrow={t("home.programsTag")}
-        title={t("programs.title")}
-        subtitle={t("programs.subtitle")}
-      />
-      <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
-        {programs.length === 0 ? (
-          <EmptyState
-            icon={<GraduationCap className="size-5" />}
-            title={t("programs.empty")}
-            body={t("programs.emptyBody")}
-            action={
-              <Button asChild>
-                <Link to="/contact">{t("nav.contact")}</Link>
-              </Button>
-            }
-          />
+      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
+        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              {t("home.programsTag")}
+            </p>
+            <h1 className="mt-3 max-w-2xl font-display text-3xl font-semibold leading-tight sm:text-4xl lg:text-5xl">
+              {t("programs.heading")}
+            </h1>
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground">
+              {t("programs.subtitle")}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              aria-label="previous"
+              className="grid size-10 place-items-center rounded-full border border-border text-muted-foreground transition hover:bg-surface"
+            >
+              <ArrowLeft className="size-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="next"
+              className="grid size-10 place-items-center rounded-full border border-border bg-card text-foreground shadow-sm transition hover:bg-surface"
+            >
+              <ArrowRight className="size-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-8 flex flex-wrap gap-2">
+          {filters.map((f) => {
+            const active = f.id === category;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setCategory(f.id)}
+                className={
+                  "rounded-full px-4 py-2 text-sm font-medium transition " +
+                  (active
+                    ? "bg-primary/10 text-primary"
+                    : "bg-surface text-muted-foreground hover:text-foreground")
+                }
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+            className="rounded-full bg-surface px-4 py-2 text-sm font-medium text-foreground outline-none"
+          >
+            <option value="soonest">{t("programs.sortSoonest")}</option>
+            <option value="priceLow">{t("programs.sortPriceLow")}</option>
+            <option value="priceHigh">{t("programs.sortPriceHigh")}</option>
+          </select>
+          <span className="inline-flex items-center gap-2 rounded-full bg-surface px-4 py-2 text-sm font-medium text-muted-foreground">
+            <SlidersHorizontal className="size-4" />
+            {t("programs.filter")}
+          </span>
+        </div>
+
+        {cards.length === 0 ? (
+          <div className="mt-10">
+            <EmptyState
+              icon={<GraduationCap className="size-5" />}
+              title={t("programs.noMatch")}
+              body={t("programs.noMatchBody")}
+              action={
+                <Button onClick={() => setCategory("trending")}>{t("programs.clearFilter")}</Button>
+              }
+            />
+          </div>
         ) : (
-          <div className="grid gap-5 md:grid-cols-2">
-            {programs.map((p) => {
-              const openCohorts = cohortsForProgram(p.id).filter((c) => c.status !== "ARCHIVED");
-              return (
-                <article key={p.id} className="panel flex flex-col p-6 sm:p-7">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">
-                      {p.durationWeeks} {t("programs.weeks")}
-                    </Badge>
-                    <Badge variant="secondary">
-                      {p.moduleCount} {t("programs.modules")}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">{L(p.format)}</span>
-                  </div>
-                  <h2 className="mt-4 font-display text-2xl font-semibold">{L(p.title)}</h2>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                    {L(p.description)}
-                  </p>
-                  <div className="mt-5 rounded-lg border border-border bg-surface p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {t("programs.cohorts")}
+          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {cards.map(({ program: p, lessonCount, learners, cohortList }) => (
+              <article
+                key={p.id}
+                className="flex flex-col rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:shadow-md"
+              >
+                <img
+                  src={programImage[p.slug]}
+                  alt={L(p.title)}
+                  loading="lazy"
+                  width={1008}
+                  height={656}
+                  className="h-44 w-full rounded-xl object-cover"
+                />
+                <p className="mt-4 truncate text-xs text-muted-foreground">
+                  {cohortList.length > 0 ? L(cohortList[0]!.name) : L(p.format)}
+                </p>
+                <h2 className="mt-1 font-display text-lg font-semibold leading-snug">
+                  {L(p.title)}
+                </h2>
+                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                  <span className="inline-flex items-center gap-2">
+                    <BookOpen className="size-4" />
+                    {t("programs.lessons")}: {lessonCount || p.moduleCount}
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <Users className="size-4" />
+                    {learners > 0
+                      ? `${t("programs.learners")}: ${learners}`
+                      : `${p.durationWeeks} ${t("programs.weeks")}`}
+                  </span>
+                </div>
+                <div className="mt-4 flex items-end justify-between gap-3 border-t border-border pt-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("programs.price")}</p>
+                    <p className="font-display text-xl font-semibold">
+                      ${p.price}
                     </p>
-                    <ul className="mt-2 space-y-1.5 text-sm">
-                      {openCohorts.map((c) => (
-                        <li key={c.id} className="flex items-center justify-between gap-3">
-                          <span className="truncate">{L(c.name)}</span>
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            {c.enrolled}/{c.capacity}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
                   </div>
-                  <div className="mt-6 flex flex-wrap gap-2">
-                    <Button asChild>
-                      <Link to="/programs/$slug" params={{ slug: p.slug }}>
-                        {t("programs.view")}
-                        <ArrowRight className="size-4" />
-                      </Link>
-                    </Button>
-                    <Button asChild variant="outline">
-                      <Link to="/apply" search={{ program: p.slug }}>
-                        {t("nav.apply")}
-                      </Link>
-                    </Button>
-                  </div>
-                </article>
-              );
-            })}
+                  <Button asChild className="rounded-lg">
+                    <Link to="/programs/$slug" params={{ slug: p.slug }}>
+                      <ArrowRight className="size-4" />
+                      {t("programs.start")}
+                    </Link>
+                  </Button>
+                </div>
+              </article>
+            ))}
           </div>
         )}
       </section>
