@@ -87,7 +87,7 @@ export interface Lesson {
   title: Bilingual;
   description: Bilingual;
   body: Bilingual;
-  videoUrl?: string;
+  videoUrl?: string | undefined;
   durationMinutes: number;
   mandatory: boolean;
   resources: Resource[];
@@ -132,8 +132,8 @@ export interface LiveSession {
   date: string;
   startTime: string;
   endTime: string;
-  meetingUrl?: string;
-  recordingUrl?: string;
+  meetingUrl?: string | undefined;
+  recordingUrl?: string | undefined;
   instructor: string;
   status: "SCHEDULED" | "LIVE" | "ENDED" | "CANCELLED";
 }
