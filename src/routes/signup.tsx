@@ -49,9 +49,9 @@ function SignupPage() {
       title={t("signup.title")}
       subtitle={t("signup.subtitle")}
       footer={
-        <span className="text-muted-foreground">
+        <span className="text-white/60">
           {t("signup.haveAccount")}{" "}
-          <Link to="/login" className="font-medium text-primary hover:underline">
+          <Link to="/login" className="font-medium text-hero-lime hover:underline">
             {t("signup.loginLink")}
           </Link>
         </span>
@@ -78,7 +78,7 @@ function SignupPage() {
             aria-invalid={!!errors.name}
             {...register("name")}
           />
-          {errors.name ? <p className="px-4 text-xs text-destructive">{t("common.tooShort")}</p> : null}
+          {errors.name ? <p className="px-4 text-xs text-red-300">{t("common.tooShort")}</p> : null}
         </div>
 
         <div className="space-y-1.5">
@@ -94,7 +94,7 @@ function SignupPage() {
             aria-invalid={!!errors.email}
             {...register("email")}
           />
-          {errors.email ? <p className="px-4 text-xs text-destructive">{t("common.invalidEmail")}</p> : null}
+          {errors.email ? <p className="px-4 text-xs text-red-300">{t("common.invalidEmail")}</p> : null}
         </div>
 
         <div className="space-y-1.5">
@@ -115,12 +115,12 @@ function SignupPage() {
               type="button"
               onClick={() => setShow((v) => !v)}
               aria-label={t("auth.showPassword")}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white"
             >
               {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
           </div>
-          {errors.password ? <p className="px-4 text-xs text-destructive">{t("common.tooShort")}</p> : null}
+          {errors.password ? <p className="px-4 text-xs text-red-300">{t("common.tooShort")}</p> : null}
         </div>
 
         <div className="space-y-1.5">
@@ -136,13 +136,13 @@ function SignupPage() {
             aria-invalid={!!errors.confirm}
             {...register("confirm")}
           />
-          {errors.confirm ? <p className="px-4 text-xs text-destructive">{t("common.tooShort")}</p> : null}
+          {errors.confirm ? <p className="px-4 text-xs text-red-300">{t("common.tooShort")}</p> : null}
         </div>
 
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="h-12 w-full rounded-full bg-foreground text-background hover:bg-foreground/90"
+          className="h-12 w-full rounded-full bg-hero-lime text-hero-lime-foreground hover:bg-hero-lime/90"
         >
           {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
           {t("signup.submit")}

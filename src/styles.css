@@ -245,6 +245,21 @@
   }
 }
 
+/* Dark auth surface: keeps the rounded inputs readable on the hero background. */
+@utility auth-dark {
+  & input {
+    border-color: oklch(1 0 0 / 0.16);
+    background-color: oklch(1 0 0 / 0.08);
+    color: oklch(0.99 0.005 95);
+  }
+  & input::placeholder {
+    color: oklch(1 0 0 / 0.5);
+  }
+  & input:focus-visible {
+    border-color: var(--hero-lime);
+  }
+}
+
 @utility panel {
   background-color: var(--color-card);
   border: 1px solid var(--color-border);
