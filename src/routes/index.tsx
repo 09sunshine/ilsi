@@ -16,6 +16,9 @@ import {
   Video,
 } from "lucide-react";
 import heroImage from "@/assets/hero-cohort.jpg";
+import youngLeadersImg from "@/assets/program-young-leaders.jpg";
+import publicCommunicationImg from "@/assets/program-public-communication.jpg";
+import projectManagementImg from "@/assets/program-project-management.jpg";
 import { PublicShell } from "@/components/site/PublicShell";
 import { Button } from "@/components/ui/button";
 import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
