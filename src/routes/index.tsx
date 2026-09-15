@@ -285,13 +285,6 @@ function HomePage() {
         </div>
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           {programs.map((p) => {
-            const cat = programCategory[p.slug] ?? "leadership";
-            const catLabel =
-              cat === "communication"
-                ? t("programs.filterCommunication")
-                : cat === "project"
-                  ? t("programs.filterProject")
-                  : t("programs.filterLeadership");
             return (
               <Link
                 key={p.id}
