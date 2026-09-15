@@ -107,7 +107,7 @@ export function SiteHeader() {
     <header
       className={cn(
         "sticky top-0 z-40 flex justify-center px-3 pt-3 transition-colors duration-300 sm:px-5 sm:pt-4",
-        atTop && "hero-wash",
+        atTop && "hero-top",
       )}
     >
       <motion.div
