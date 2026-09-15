@@ -1,6 +1,6 @@
 "use client";
 
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { Menu, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { motion, useMotionValueEvent, useScroll } from "motion/react";
@@ -71,6 +71,8 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const [isExpanded, setExpanded] = useState(true);
   const [atTop, setAtTop] = useState(true);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const onDarkHero = pathname === "/";
 
   const { scrollY } = useScroll();
   const lastScrollY = useRef(0);
@@ -107,7 +109,7 @@ export function SiteHeader() {
     <header
       className={cn(
         "sticky top-0 z-40 flex justify-center px-3 pt-3 transition-colors duration-300 sm:px-5 sm:pt-4",
-        atTop && "hero-top",
+        atTop && (onDarkHero ? "hero-dark-top" : "hero-top"),
       )}
     >
       <motion.div

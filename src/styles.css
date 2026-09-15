@@ -125,6 +125,19 @@
   --sidebar-ring: oklch(0.36 0.07 163);
   --footer: oklch(0.13 0 0);
   --footer-foreground: oklch(0.97 0 0);
+  --hero: oklch(0.2 0.035 162);
+  --hero-foreground: oklch(0.97 0.01 95);
+  --hero-panel: oklch(0.27 0.045 162);
+  --hero-lime: oklch(0.88 0.2 118);
+  --hero-lime-foreground: oklch(0.26 0.06 150);
+}
+
+@theme inline {
+  --color-hero: var(--hero);
+  --color-hero-foreground: var(--hero-foreground);
+  --color-hero-panel: var(--hero-panel);
+  --color-hero-lime: var(--hero-lime);
+  --color-hero-lime-foreground: var(--hero-lime-foreground);
 }
 
 .dark {
@@ -204,6 +217,32 @@
    blends seamlessly into the hero instead of showing a white seam. */
 @utility hero-top {
   background-color: oklch(0.972 0.022 95);
+}
+
+/* Dark hero band used on the landing page (and behind the navbar at the top). */
+@utility hero-dark {
+  background-color: var(--hero);
+  background-image:
+    radial-gradient(60% 70% at 78% 18%, oklch(0.42 0.1 155 / 0.55), transparent 70%),
+    radial-gradient(55% 60% at 8% 88%, oklch(0.34 0.08 150 / 0.45), transparent 72%);
+}
+
+@utility hero-dark-top {
+  background-color: var(--hero);
+}
+
+@utility hero-grid-lines {
+  &::before {
+    position: absolute;
+    inset: 0;
+    content: "";
+    pointer-events: none;
+    background-image:
+      linear-gradient(oklch(0.97 0.01 95 / 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, oklch(0.97 0.01 95 / 0.05) 1px, transparent 1px);
+    background-size: 72px 72px;
+    mask-image: radial-gradient(70% 70% at 50% 40%, black, transparent 85%);
+  }
 }
 
 @utility panel {
