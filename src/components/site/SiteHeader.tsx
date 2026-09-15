@@ -111,7 +111,7 @@ export function SiteHeader() {
         aria-label={isExpanded ? undefined : "Open navigation"}
         className={cn(
           "relative w-full max-w-6xl overflow-hidden rounded-2xl border border-border/80 bg-card/90 shadow-[var(--shadow-lift)] backdrop-blur-xl",
-          !isExpanded && "cursor-pointer",
+          !isExpanded && "cursor-pointer rounded-full",
         )}
       >
         <motion.span
