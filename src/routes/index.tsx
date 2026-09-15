@@ -46,13 +46,6 @@ function HomePage() {
   const { t } = useI18n();
   const L = useLocalized();
 
-  const stats = [
-    { value: "1,240", label: t("home.statsCohort") },
-    { value: "87%", label: t("home.statsCompletion") },
-    { value: "6", label: t("home.statsPrograms") },
-    { value: "48", label: t("home.statsSessions") },
-  ];
-
   const problems = [
     { icon: CalendarClock, title: t("home.p1Title"), body: t("home.p1Body") },
     { icon: FileCheck2, title: t("home.p2Title"), body: t("home.p2Body") },
@@ -83,8 +76,8 @@ function HomePage() {
               {t("home.badge")}
             </p>
             <h1 className="mx-auto mt-4 max-w-3xl text-4xl font-semibold leading-[1.08] sm:text-5xl lg:text-6xl">
-              Structured learning that turns{" "}
-              <span className="text-primary">progress into achievement</span>
+              {t("home.heroLead")} {" "}
+              <span className="text-primary">{t("home.heroAccent")}</span>
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground">
               {t("home.subtitle")}
@@ -107,7 +100,7 @@ function HomePage() {
                 ))}
               </span>
               <span className="font-semibold">4.9</span>
-              <span className="text-muted-foreground">from 1,240 learners</span>
+              <span className="text-muted-foreground">{t("home.heroRating")}</span>
             </div>
           </div>
 
@@ -128,7 +121,7 @@ function HomePage() {
             <div className="col-span-2 flex flex-col justify-center rounded-lg bg-primary p-5 text-primary-foreground sm:col-span-3 lg:col-span-2 lg:h-[176px]">
               <Users className="size-5 opacity-80" aria-hidden />
               <p className="mt-4 font-display text-3xl font-semibold">1,240+</p>
-              <p className="mt-1 text-sm opacity-80">Learners growing together</p>
+              <p className="mt-1 text-sm opacity-80">{t("home.heroLearners")}</p>
             </div>
 
             <div className="col-span-2 flex flex-col justify-center rounded-lg border border-border bg-card p-5 shadow-[var(--shadow-soft)] sm:col-span-3 lg:col-span-3 lg:h-[150px]">
@@ -138,20 +131,20 @@ function HomePage() {
                 </span>
                 <span className="text-xs font-medium text-success">+12%</span>
               </div>
-              <p className="mt-3 text-xs text-muted-foreground">Cohort completion</p>
+              <p className="mt-3 text-xs text-muted-foreground">{t("home.statsCompletion")}</p>
               <p className="mt-1 font-display text-3xl font-semibold">87%</p>
             </div>
 
             <div className="col-span-2 flex flex-col items-center justify-center rounded-lg bg-accent p-5 text-center text-accent-foreground sm:col-span-3 lg:col-span-2 lg:h-[176px]">
               <Award className="size-5" aria-hidden />
               <p className="mt-3 font-display text-3xl font-semibold">6</p>
-              <p className="mt-1 text-sm">Active learning programs</p>
+              <p className="mt-1 text-sm">{t("home.statsPrograms")}</p>
             </div>
 
             <div className="col-span-2 flex flex-col justify-end rounded-lg bg-foreground p-5 text-background sm:col-span-6 lg:col-span-2 lg:h-[232px]">
               <CalendarClock className="size-6" aria-hidden />
-              <p className="mt-5 font-display text-xl font-semibold">Learn. Apply. Debrief.</p>
-              <p className="mt-2 text-sm opacity-75">A clear path from every module to mastery.</p>
+              <p className="mt-5 font-display text-xl font-semibold">{t("home.heroRhythm")}</p>
+              <p className="mt-2 text-sm opacity-75">{t("home.heroPath")}</p>
             </div>
           </div>
         </div>
