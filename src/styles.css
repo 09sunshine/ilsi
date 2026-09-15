@@ -200,3 +200,27 @@
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-soft);
 }
+
+@utility cohort-cta-grid {
+  &::before {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    content: "";
+    background-image:
+      linear-gradient(color-mix(in oklab, var(--primary-foreground) 7%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in oklab, var(--primary-foreground) 7%, transparent) 1px, transparent 1px);
+    background-size: 88px 44px;
+    transform: perspective(520px) rotateX(58deg) scale(1.7) translateY(18%);
+    transform-origin: center center;
+    mask-image: linear-gradient(to bottom, transparent 2%, black 28%, black 88%, transparent 100%);
+  }
+
+  &::after {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    content: "";
+    background: linear-gradient(to bottom, color-mix(in oklab, var(--primary) 92%, transparent), transparent 42%, color-mix(in oklab, var(--primary) 30%, transparent));
+  }
+}

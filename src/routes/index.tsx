@@ -291,17 +291,12 @@ function HomePage() {
       </section>
 
       {/* CTA */}
-      <section className="border-t border-border bg-primary text-primary-foreground">
-        <div className="mx-auto grid max-w-6xl gap-6 px-4 py-14 sm:px-6 md:grid-cols-[1fr_auto] md:items-center lg:py-20">
-          <div>
-            <h2 className="text-3xl font-semibold sm:text-4xl">{t("home.ctaTitle")}</h2>
-            <p className="mt-3 max-w-xl text-sm opacity-90">{t("home.ctaBody")}</p>
-          </div>
-          <Button asChild size="lg" variant="secondary">
-            <Link to="/apply">
-              {t("nav.apply")}
-              <ArrowRight className="size-4" />
-            </Link>
+      <section className="cohort-cta-grid relative isolate overflow-hidden bg-primary text-primary-foreground">
+        <div className="relative z-10 mx-auto flex min-h-80 max-w-6xl flex-col items-center justify-center px-4 py-16 text-center sm:px-6 lg:min-h-96 lg:py-20">
+          <h2 className="max-w-2xl text-3xl font-semibold sm:text-4xl">{t("home.ctaTitle")}</h2>
+          <p className="mt-4 max-w-lg text-sm leading-relaxed opacity-70">{t("home.ctaBody")}</p>
+          <Button asChild size="lg" variant="secondary" className="mt-7 rounded-full px-7">
+            <Link to="/apply">{t("nav.apply")}</Link>
           </Button>
         </div>
       </section>
