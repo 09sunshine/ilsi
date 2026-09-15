@@ -129,7 +129,6 @@ export const dictionaries = {
     "contact.send": "Send message",
     "contact.sent": "Message sent. We reply within two working days.",
 
-    "common.back": "Back",
     "login.title": "Welcome back",
     "login.subtitle": "Log in to continue your program.",
     "login.email": "Email",
@@ -415,7 +414,6 @@ export const dictionaries = {
     "contact.send": "Envoyer",
     "contact.sent": "Message envoyé. Nous répondons sous deux jours ouvrés.",
 
-    "common.back": "Retour",
     "login.title": "Bon retour",
     "login.subtitle": "Connectez-vous pour continuer votre programme.",
     "login.email": "E-mail",
