@@ -17,8 +17,10 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as LearnIndexRouteImport } from './routes/learn.index'
 import { Route as ProgramsIndexRouteImport } from './routes/programs.index'
 import { Route as ProgramsSlugRouteImport } from './routes/programs.$slug'
+import { Route as LearnModuleIdLessonIdRouteImport } from './routes/learn.$moduleId.$lessonId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -60,6 +62,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LearnIndexRoute = LearnIndexRouteImport.update({
+  id: '/learn/',
+  path: '/learn/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProgramsIndexRoute = ProgramsIndexRouteImport.update({
   id: '/programs/',
   path: '/programs/',
@@ -68,6 +75,11 @@ const ProgramsIndexRoute = ProgramsIndexRouteImport.update({
 const ProgramsSlugRoute = ProgramsSlugRouteImport.update({
   id: '/programs/$slug',
   path: '/programs/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LearnModuleIdLessonIdRoute = LearnModuleIdLessonIdRouteImport.update({
+  id: '/learn/$moduleId/$lessonId',
+  path: '/learn/$moduleId/$lessonId',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -81,7 +93,9 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/programs/$slug': typeof ProgramsSlugRoute
+  '/learn/': typeof LearnIndexRoute
   '/programs/': typeof ProgramsIndexRoute
+  '/learn/$moduleId/$lessonId': typeof LearnModuleIdLessonIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -93,7 +107,9 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/programs/$slug': typeof ProgramsSlugRoute
+  '/learn': typeof LearnIndexRoute
   '/programs': typeof ProgramsIndexRoute
+  '/learn/$moduleId/$lessonId': typeof LearnModuleIdLessonIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -106,7 +122,9 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/programs/$slug': typeof ProgramsSlugRoute
+  '/learn/': typeof LearnIndexRoute
   '/programs/': typeof ProgramsIndexRoute
+  '/learn/$moduleId/$lessonId': typeof LearnModuleIdLessonIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -120,7 +138,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/programs/$slug'
+    | '/learn/'
     | '/programs/'
+    | '/learn/$moduleId/$lessonId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -132,7 +152,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/programs/$slug'
+    | '/learn'
     | '/programs'
+    | '/learn/$moduleId/$lessonId'
   id:
     | '__root__'
     | '/'
@@ -144,7 +166,9 @@ export interface FileRouteTypes {
     | '/login'
     | '/reset-password'
     | '/programs/$slug'
+    | '/learn/'
     | '/programs/'
+    | '/learn/$moduleId/$lessonId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -157,7 +181,9 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ProgramsSlugRoute: typeof ProgramsSlugRoute
+  LearnIndexRoute: typeof LearnIndexRoute
   ProgramsIndexRoute: typeof ProgramsIndexRoute
+  LearnModuleIdLessonIdRoute: typeof LearnModuleIdLessonIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -218,6 +244,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/learn/': {
+      id: '/learn/'
+      path: '/learn'
+      fullPath: '/learn/'
+      preLoaderRoute: typeof LearnIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/programs/': {
       id: '/programs/'
       path: '/programs'
@@ -230,6 +263,13 @@ declare module '@tanstack/react-router' {
       path: '/programs/$slug'
       fullPath: '/programs/$slug'
       preLoaderRoute: typeof ProgramsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/learn/$moduleId/$lessonId': {
+      id: '/learn/$moduleId/$lessonId'
+      path: '/learn/$moduleId/$lessonId'
+      fullPath: '/learn/$moduleId/$lessonId'
+      preLoaderRoute: typeof LearnModuleIdLessonIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -245,7 +285,9 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ProgramsSlugRoute: ProgramsSlugRoute,
+  LearnIndexRoute: LearnIndexRoute,
   ProgramsIndexRoute: ProgramsIndexRoute,
+  LearnModuleIdLessonIdRoute: LearnModuleIdLessonIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
