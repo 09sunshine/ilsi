@@ -1,7 +1,7 @@
 "use client";
 
 import { Link } from "@tanstack/react-router";
-import { Menu, Navigation, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { motion, useMotionValueEvent, useScroll } from "motion/react";
 import { Button } from "@/components/ui/button";
