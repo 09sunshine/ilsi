@@ -12,6 +12,12 @@ export const dictionaries = {
 
     "home.badge": "Cohort-based training",
     "home.title": "Structured training that actually finishes",
+    "home.heroLead": "Structured learning that turns",
+    "home.heroAccent": "progress into achievement",
+    "home.heroRating": "from 1,240 learners",
+    "home.heroLearners": "Learners growing together",
+    "home.heroRhythm": "Learn. Apply. Debrief.",
+    "home.heroPath": "A clear path from every module to mastery.",
     "home.subtitle":
       "ILSI runs guided, time-bound cohorts. Modules open on schedule, unlock on merit, and end with a live debrief led by a trainer.",
     "home.ctaPrimary": "Apply for a cohort",
@@ -255,6 +261,12 @@ export const dictionaries = {
 
     "home.badge": "Formation en cohortes",
     "home.title": "Une formation structurée que l'on termine vraiment",
+    "home.heroLead": "Un apprentissage structuré qui transforme",
+    "home.heroAccent": "les progrès en réussite",
+    "home.heroRating": "par 1 240 apprenants",
+    "home.heroLearners": "Des apprenants qui progressent ensemble",
+    "home.heroRhythm": "Apprendre. Appliquer. Échanger.",
+    "home.heroPath": "Un parcours clair, du premier module à la maîtrise.",
     "home.subtitle":
       "ILSI anime des cohortes encadrées et limitées dans le temps. Les modules s'ouvrent selon le calendrier, se débloquent au mérite et se terminent par un débrief en direct.",
     "home.ctaPrimary": "Postuler à une cohorte",
