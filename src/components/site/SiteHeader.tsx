@@ -119,7 +119,7 @@ export function SiteHeader() {
           className="pointer-events-none absolute inset-0 grid place-items-center"
           aria-hidden={isExpanded}
         >
-          <Navigation className="size-4 text-foreground" />
+          <Menu className="size-4 text-foreground" />
         </motion.span>
 
         <div
