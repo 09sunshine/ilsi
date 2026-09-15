@@ -64,7 +64,7 @@ function HomePage() {
   return (
     <PublicShell>
       {/* Hero */}
-      <section className="border-b border-border bg-surface">
+      <section className="hero-wash border-b border-border">
         <div className="mx-auto max-w-6xl px-4 pb-14 pt-16 sm:px-6 lg:pb-20 lg:pt-20">
           <div className="relative mx-auto max-w-4xl text-center">
             <div className="absolute -left-4 top-28 hidden size-12 place-items-center rounded-full border border-primary text-primary lg:grid">
