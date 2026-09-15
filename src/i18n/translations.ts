@@ -67,6 +67,7 @@ export const dictionaries = {
     "home.programsTag": "Programs",
     "home.programsTitle": "Training built around a calendar",
     "home.programsBody": "Each program runs in cohorts with a fixed start and a fixed finish.",
+    "home.ctaTag": "Limited seats",
     "home.ctaTitle": "The next cohort opens soon",
     "home.ctaBody": "Applications are reviewed on a rolling basis. Places are limited.",
 
@@ -368,6 +369,7 @@ export const dictionaries = {
     "home.programsTag": "Programmes",
     "home.programsTitle": "Des formations construites autour d'un calendrier",
     "home.programsBody": "Chaque programme se déroule en cohortes avec un début et une fin fixes.",
+    "home.ctaTag": "Places limitées",
     "home.ctaTitle": "La prochaine cohorte ouvre bientôt",
     "home.ctaBody": "Les candidatures sont étudiées au fil de l'eau. Les places sont limitées.",
 
