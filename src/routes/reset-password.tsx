@@ -45,7 +45,7 @@ function ResetPasswordPage() {
       title={t("reset.title")}
       subtitle={t("reset.subtitle")}
       footer={
-        <Link to="/login" className="font-medium text-primary hover:underline">
+        <Link to="/login" className="font-medium text-hero-lime hover:underline">
           {t("forgot.back")}
         </Link>
       }
@@ -72,7 +72,7 @@ function ResetPasswordPage() {
             aria-invalid={!!errors.password}
             {...register("password")}
           />
-          {errors.password ? <p className="px-4 text-xs text-destructive">{t("common.tooShort")}</p> : null}
+          {errors.password ? <p className="px-4 text-xs text-red-300">{t("common.tooShort")}</p> : null}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="confirm" className="sr-only">
@@ -87,12 +87,12 @@ function ResetPasswordPage() {
             aria-invalid={!!errors.confirm}
             {...register("confirm")}
           />
-          {errors.confirm ? <p className="px-4 text-xs text-destructive">{t("common.tooShort")}</p> : null}
+          {errors.confirm ? <p className="px-4 text-xs text-red-300">{t("common.tooShort")}</p> : null}
         </div>
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="h-12 w-full rounded-full bg-foreground text-background hover:bg-foreground/90"
+          className="h-12 w-full rounded-full bg-hero-lime text-hero-lime-foreground hover:bg-hero-lime/90"
         >
           {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
           {t("reset.submit")}

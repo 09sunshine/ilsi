@@ -40,17 +40,17 @@ function ForgotPasswordPage() {
       title={t("forgot.title")}
       subtitle={t("forgot.subtitle")}
       footer={
-        <Link to="/login" className="font-medium text-primary hover:underline">
+        <Link to="/login" className="font-medium text-hero-lime hover:underline">
           {t("forgot.back")}
         </Link>
       }
     >
       {sent ? (
-        <div className="rounded-3xl border border-border bg-card p-6 text-center">
-          <div className="mx-auto grid size-11 place-items-center rounded-full bg-primary/10 text-primary">
+        <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-6 text-center backdrop-blur">
+          <div className="mx-auto grid size-11 place-items-center rounded-full bg-hero-lime/15 text-hero-lime">
             <MailCheck className="size-5" />
           </div>
-          <p className="mt-4 text-sm text-muted-foreground">{t("forgot.sent")}</p>
+          <p className="mt-4 text-sm text-white/70">{t("forgot.sent")}</p>
         </div>
       ) : (
         <form
@@ -74,12 +74,12 @@ function ForgotPasswordPage() {
               aria-invalid={!!errors.email}
               {...register("email")}
             />
-            {errors.email ? <p className="px-4 text-xs text-destructive">{t("common.invalidEmail")}</p> : null}
+            {errors.email ? <p className="px-4 text-xs text-red-300">{t("common.invalidEmail")}</p> : null}
           </div>
           <Button
             type="submit"
             disabled={isSubmitting}
-            className="h-12 w-full rounded-full bg-foreground text-background hover:bg-foreground/90"
+            className="h-12 w-full rounded-full bg-hero-lime text-hero-lime-foreground hover:bg-hero-lime/90"
           >
             {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
             {t("forgot.submit")}

@@ -51,9 +51,9 @@ function LoginPage() {
       title={t("login.title")}
       subtitle={t("login.subtitle")}
       footer={
-        <span className="text-muted-foreground">
+        <span className="text-white/60">
           {t("login.registerPrompt")}{" "}
-          <Link to="/signup" className="font-medium text-primary hover:underline">
+          <Link to="/signup" className="font-medium text-hero-lime hover:underline">
             {t("login.registerLink")}
           </Link>
         </span>
@@ -62,7 +62,7 @@ function LoginPage() {
         <button
           type="button"
           onClick={() => (router.history.canGoBack() ? router.history.back() : navigate({ to: "/" }))}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex items-center gap-1.5 text-sm text-white/60 transition-colors hover:text-white"
         >
           <ArrowLeft className="size-4" />
           {t("common.back")}
@@ -83,7 +83,7 @@ function LoginPage() {
             aria-invalid={!!errors.email}
             {...register("email")}
           />
-          {errors.email ? <p className="px-4 text-xs text-destructive">{t("common.invalidEmail")}</p> : null}
+          {errors.email ? <p className="px-4 text-xs text-red-300">{t("common.invalidEmail")}</p> : null}
         </div>
 
         <div className="space-y-1.5">
@@ -104,16 +104,16 @@ function LoginPage() {
               type="button"
               onClick={() => setShow((v) => !v)}
               aria-label={t("auth.showPassword")}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white"
             >
               {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
           </div>
-          {errors.password ? <p className="px-4 text-xs text-destructive">{t("common.tooShort")}</p> : null}
+          {errors.password ? <p className="px-4 text-xs text-red-300">{t("common.tooShort")}</p> : null}
         </div>
 
         <div className="flex justify-end">
-          <Link to="/forgot-password" className="text-xs text-muted-foreground hover:text-primary hover:underline">
+          <Link to="/forgot-password" className="text-xs text-white/50 hover:text-hero-lime hover:underline">
             {t("login.forgot")}
           </Link>
         </div>
@@ -121,7 +121,7 @@ function LoginPage() {
         <Button
           type="submit"
           disabled={isSubmitting}
-          className="h-12 w-full rounded-full bg-foreground text-background hover:bg-foreground/90"
+          className="h-12 w-full rounded-full bg-hero-lime text-hero-lime-foreground hover:bg-hero-lime/90"
         >
           {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : null}
           {t("login.submit")}
@@ -130,12 +130,22 @@ function LoginPage() {
 
       <SocialRow />
 
-      <p className="mt-8 text-center text-xs text-muted-foreground">{t("login.demoHint")}</p>
+      <p className="mt-8 text-center text-xs text-white/60">{t("login.demoHint")}</p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <Button asChild variant="outline" size="sm" className="rounded-full">
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className="rounded-full border-white/20 bg-transparent text-white/85 hover:bg-white/10 hover:text-white"
+        >
           <Link to="/dashboard">{t("login.asParticipant")}</Link>
         </Button>
-        <Button asChild variant="outline" size="sm" className="rounded-full">
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className="rounded-full border-white/20 bg-transparent text-white/85 hover:bg-white/10 hover:text-white"
+        >
           <Link to="/admin">{t("login.asAdmin")}</Link>
         </Button>
       </div>
