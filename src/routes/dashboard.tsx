@@ -58,7 +58,7 @@ function Spark({ data, color }: { data: number[]; color: string }) {
   return (
     <ResponsiveContainer width="100%" height={44}>
       <LineChart data={series} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-        <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} dot={false} />
+        <Line isAnimationActive={false} type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} dot={false} />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -234,7 +234,7 @@ function DashboardPage() {
             chart={
               <ResponsiveContainer width="100%" height={44}>
                 <BarChart data={perModule} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-                  <Bar dataKey="completion" radius={2} fill="var(--chart-2)" />
+                  <Bar isAnimationActive={false} dataKey="completion" radius={2} fill="var(--chart-2)" />
                 </BarChart>
               </ResponsiveContainer>
             }
@@ -286,6 +286,7 @@ function DashboardPage() {
                     tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                   />
                   <Area
+                    isAnimationActive={false}
                     type="monotone"
                     dataKey="you"
                     stroke="var(--chart-1)"
@@ -293,6 +294,7 @@ function DashboardPage() {
                     fill="url(#youFill)"
                   />
                   <Line
+                    isAnimationActive={false}
                     type="monotone"
                     dataKey="plan"
                     stroke="var(--chart-2)"
@@ -383,7 +385,7 @@ function DashboardPage() {
                     tickLine={false}
                     tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                   />
-                  <Bar dataKey="completion" radius={[6, 6, 6, 6]} barSize={38}>
+                  <Bar isAnimationActive={false} dataKey="completion" radius={[6, 6, 6, 6]} barSize={38}>
                     {perModule.map((p) => (
                       <Cell
                         key={p.name}
@@ -433,6 +435,7 @@ function DashboardPage() {
                   margin={{ top: 6, right: 0, bottom: 0, left: 0 }}
                 >
                   <Line
+                    isAnimationActive={false}
                     type="monotone"
                     dataKey="v"
                     stroke="var(--chart-1)"
