@@ -58,6 +58,7 @@ function HomePage() {
     { icon: Lock, title: t("home.s3Title"), body: t("home.s3Body") },
     { icon: MessagesSquare, title: t("home.s4Title"), body: t("home.s4Body") },
     { icon: Video, title: t("home.s5Title"), body: t("home.s5Body") },
+    { icon: Award, title: t("home.s6Title"), body: t("home.s6Body") },
   ];
 
   return (
@@ -175,23 +176,26 @@ function HomePage() {
       </section>
 
       {/* How it works */}
-      <section className="border-y border-border bg-surface">
+      <section className="bg-primary text-primary-foreground">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            {t("home.howTag")}
-          </p>
-          <h2 className="mt-3 max-w-2xl text-3xl font-semibold sm:text-4xl">{t("home.howTitle")}</h2>
-          <ol className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {steps.map((s, i) => (
-              <li key={s.title} className="panel flex h-full flex-col p-5">
-                <div className="flex items-center gap-2">
-                  <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                    {i + 1}
-                  </span>
-                  <s.icon className="size-4 text-muted-foreground" aria-hidden />
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-semibold sm:text-4xl">{t("home.howTitle")}</h2>
+            <p className="mt-4 text-sm leading-relaxed opacity-70 sm:text-base">{t("home.howBody")}</p>
+          </div>
+          <ol className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {steps.map((s) => (
+              <li
+                key={s.title}
+                className="group flex min-h-56 flex-col rounded-lg border border-primary-foreground/5 bg-primary-foreground/5 p-6 transition-colors hover:bg-primary-foreground/10 sm:p-7"
+              >
+                <div className="flex items-start justify-between">
+                  <s.icon className="size-8 stroke-[1.5] opacity-90" aria-hidden />
+                  <ArrowUpRight className="size-5 opacity-90 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden />
                 </div>
-                <h3 className="mt-4 text-sm font-semibold">{s.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
+                <div className="mt-auto pt-10">
+                  <h3 className="text-lg font-semibold">{s.title}</h3>
+                  <p className="mt-2 max-w-sm text-sm leading-relaxed opacity-70">{s.body}</p>
+                </div>
               </li>
             ))}
           </ol>
