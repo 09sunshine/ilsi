@@ -4,12 +4,12 @@ import type { ComponentProps, ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import {
   FacebookIcon,
-  FrameIcon,
   InstagramIcon,
   LinkedinIcon,
   YoutubeIcon,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import ilsiMark from "@/assets/ilsi-mark.png.asset.json";
 import { useI18n } from "@/i18n/LocaleProvider";
 
 interface FooterLink {
