@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { useI18n } from "@/i18n/LocaleProvider";
 import { cn } from "@/lib/utils";
+import ilsiMark from "@/assets/ilsi-mark.png.asset.json";
 
 const links = [
   { to: "/", key: "nav.home" },
