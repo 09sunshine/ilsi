@@ -4,12 +4,12 @@ import type { ComponentProps, ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import {
   FacebookIcon,
-  FrameIcon,
   InstagramIcon,
   LinkedinIcon,
   YoutubeIcon,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import ilsiMark from "@/assets/ilsi-mark.png.asset.json";
 import { useI18n } from "@/i18n/LocaleProvider";
 
 interface FooterLink {
@@ -70,10 +70,13 @@ export function Footer() {
       <div className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-12 pt-20 sm:px-6 lg:px-8 lg:pb-14 lg:pt-24">
         <div className="grid gap-12 md:grid-cols-[1.3fr_2.2fr]">
           <AnimatedContainer className="relative max-w-sm">
-            <div className="flex items-center gap-2" aria-label="ILSI">
-              <FrameIcon className="size-8 text-hero-lime" strokeWidth={1.6} />
-              <span className="size-2 rounded-full bg-brand-orange" aria-hidden />
-              <span className="size-2 rounded-full bg-brand-blue" aria-hidden />
+            <div className="flex items-center gap-3" aria-label="ILSI">
+              <span className="grid size-11 place-items-center rounded-xl bg-white/95 p-1.5 shadow-sm">
+                <img src={ilsiMark.url} alt="ILSI logo" className="size-full object-contain" />
+              </span>
+              <span className="font-display text-lg font-semibold tracking-tight text-footer-foreground">
+                ILSI
+              </span>
             </div>
             <p className="mt-6 text-sm text-footer-foreground/55">
               © {new Date().getFullYear()} ILSI. All rights reserved.
