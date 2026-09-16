@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Compass, HeartHandshake, ShieldCheck, Sparkles } from "lucide-react";
 import { PageHeader, PublicShell } from "@/components/site/PublicShell";
+import { SupportSection } from "@/components/site/SupportSection";
 import { useI18n } from "@/i18n/LocaleProvider";
 
 export const Route = createFileRoute("/about")({
@@ -115,6 +116,7 @@ function AboutPage() {
           ))}
         </div>
       </section>
+      <SupportSection />
     </PublicShell>
   );
 }
