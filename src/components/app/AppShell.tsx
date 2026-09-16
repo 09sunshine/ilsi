@@ -23,6 +23,7 @@ import { useI18n } from "@/i18n/LocaleProvider";
 import { notifications, currentParticipant } from "@/data/demo";
 import type { TranslationKey } from "@/i18n/translations";
 import { cn } from "@/lib/utils";
+import ilsiMark from "@/assets/ilsi-mark.png.asset.json";
 
 type NavItem = { to: string; key: TranslationKey; icon: ComponentType<{ className?: string }> };
 type NavGroup = { label: string; labelFr: string; items: NavItem[] };
