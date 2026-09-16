@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowUpRight, Check, GraduationCap, Lock } from "lucide-react";
+import { ArrowUpRight, Check, Lock } from "lucide-react";
 import { useI18n } from "@/i18n/LocaleProvider";
+import ilsiMark from "@/assets/ilsi-mark.png.asset.json";
 
 /**
  * Authentication layout: soft light page with a top brand bar, a dark
