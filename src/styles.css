@@ -65,6 +65,10 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-footer: var(--footer);
   --color-footer-foreground: var(--footer-foreground);
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-orange-foreground: var(--brand-orange-foreground);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-blue-foreground: var(--brand-blue-foreground);
 
   --shadow-soft: 0 1px 2px oklch(0.2 0.03 160 / 0.04), 0 8px 24px -12px oklch(0.2 0.03 160 / 0.14);
   --shadow-lift: 0 2px 4px oklch(0.2 0.03 160 / 0.05), 0 18px 40px -20px oklch(0.2 0.03 160 / 0.22);
@@ -130,6 +134,11 @@
   --hero-panel: oklch(0.27 0.045 162);
   --hero-lime: oklch(0.88 0.2 118);
   --hero-lime-foreground: oklch(0.26 0.06 150);
+  /* Supporting colors sampled from the ILSI identity. Green remains primary. */
+  --brand-orange: oklch(0.68 0.22 37);
+  --brand-orange-foreground: oklch(0.99 0.004 95);
+  --brand-blue: oklch(0.27 0.12 276);
+  --brand-blue-foreground: oklch(0.99 0.004 95);
 }
 
 @theme inline {
@@ -178,6 +187,10 @@
   --sidebar-ring: oklch(0.78 0.1 155);
   --footer: oklch(0.13 0 0);
   --footer-foreground: oklch(0.97 0 0);
+  --brand-orange: oklch(0.72 0.19 40);
+  --brand-orange-foreground: oklch(0.18 0.02 35);
+  --brand-blue: oklch(0.7 0.11 265);
+  --brand-blue-foreground: oklch(0.18 0.03 270);
 }
 
 @layer base {

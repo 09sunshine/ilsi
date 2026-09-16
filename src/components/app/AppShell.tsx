@@ -101,8 +101,8 @@ export function AppShell({
     <Link to="/" className="flex items-center gap-2.5 px-3 py-1">
       <span className="relative grid size-8 place-items-center">
         <span className="absolute left-0 top-0 size-4 rounded-[5px] bg-primary" />
-        <span className="absolute bottom-0 right-0 size-4 rounded-[5px] bg-chart-3" />
-        <span className="absolute bottom-0 left-0 size-3 rounded-[4px] bg-chart-2" />
+        <span className="absolute bottom-0 right-0 size-4 rounded-[5px] bg-brand-orange" />
+        <span className="absolute bottom-0 left-0 size-3 rounded-[4px] bg-brand-blue" />
       </span>
       <span className="font-display text-xl font-semibold tracking-tight">ILSI</span>
     </Link>
@@ -164,7 +164,7 @@ export function AppShell({
 
   const userRow = (
     <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2.5">
-      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-chart-3/25 text-xs font-bold">
+      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-blue/10 text-xs font-bold text-brand-blue ring-1 ring-brand-blue/15">
         {currentParticipant.firstName[0]}
         {currentParticipant.lastName[0]}
       </span>
