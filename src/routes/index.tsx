@@ -279,15 +279,7 @@ function HomePage() {
                 className="group flex min-h-56 flex-col rounded-lg border border-primary-foreground/5 bg-primary-foreground/5 p-6 transition-colors hover:border-hero-lime/25 hover:bg-primary-foreground/10 sm:p-7"
               >
                 <div className="flex items-start justify-between">
-                  <span
-                    className={
-                      index % 3 === 1
-                        ? "grid size-11 place-items-center rounded-lg bg-brand-orange/10 text-brand-orange ring-1 ring-brand-orange/25"
-                        : index % 3 === 2
-                          ? "grid size-11 place-items-center rounded-lg bg-brand-blue/15 text-brand-blue ring-1 ring-brand-blue/30"
-                          : "grid size-11 place-items-center rounded-lg bg-hero-lime/10 text-hero-lime ring-1 ring-hero-lime/25"
-                    }
-                  >
+                  <span className="grid size-11 place-items-center rounded-lg bg-hero-lime/10 text-hero-lime ring-1 ring-hero-lime/25">
                     <s.icon className="size-5 stroke-[1.5]" aria-hidden />
                   </span>
                   <ArrowUpRight
