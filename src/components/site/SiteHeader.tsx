@@ -142,9 +142,11 @@ export function SiteHeader() {
         >
           <motion.div variants={itemVariants} className="min-w-0">
             <Link to="/" className="group flex min-w-0 items-center gap-2.5 rounded-lg pr-2">
-              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary font-display text-sm font-bold text-primary-foreground transition-transform group-hover:-rotate-3">
-                I
-              </span>
+              <img
+                src={ilsiMark.url}
+                alt="ILSI logo"
+                className="size-9 shrink-0 object-contain transition-transform group-hover:-rotate-3"
+              />
               <span className="truncate font-display text-lg font-semibold">ILSI</span>
             </Link>
           </motion.div>
