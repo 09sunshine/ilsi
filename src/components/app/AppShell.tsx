@@ -99,11 +99,7 @@ export function AppShell({
 
   const brand = (
     <Link to="/" className="flex items-center gap-2.5 px-3 py-1">
-      <span className="relative grid size-8 place-items-center">
-        <span className="absolute left-0 top-0 size-4 rounded-[5px] bg-primary" />
-        <span className="absolute bottom-0 right-0 size-4 rounded-[5px] bg-brand-orange" />
-        <span className="absolute bottom-0 left-0 size-3 rounded-[4px] bg-brand-blue" />
-      </span>
+      <img src={ilsiMark.url} alt="ILSI logo" className="size-8 object-contain" />
       <span className="font-display text-xl font-semibold tracking-tight">ILSI</span>
     </Link>
   );
