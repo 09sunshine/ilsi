@@ -32,9 +32,7 @@ export function AuthLayout({
         {/* Top bar */}
         <div className="flex items-center justify-between gap-4 rounded-2xl bg-white px-4 py-3 shadow-sm sm:px-5">
           <Link to="/" className="flex items-center gap-2.5 text-sm font-semibold tracking-tight text-neutral-900">
-            <span className="grid size-8 place-items-center rounded-lg bg-neutral-900 text-white">
-              <GraduationCap className="size-4" />
-            </span>
+            <img src={ilsiMark.url} alt="ILSI logo" className="size-8 object-contain" />
             ILSI
           </Link>
           <p className="hidden items-center gap-2 text-xs text-neutral-500 sm:flex">
