@@ -172,7 +172,7 @@ function DashboardPage() {
             }
             value={`${completedModules}/${modules.length}`}
             delta="+1"
-            chart={<SparkLine data={[0, 0, 1, 1, 2, completedModules + 1]} color="var(--chart-2)" />}
+            chart={<SparkLine data={[0, 0, 1, 1, 2, completedModules + 1]} color="var(--brand-blue)" />}
           />
           <KpiCard
             label={fr ? "Moyenne aux quiz" : "Quiz average"}
@@ -184,7 +184,7 @@ function DashboardPage() {
             value={`${avgScore}%`}
             delta={avgScore >= 70 ? "+9.2%" : "-4.1%"}
             positive={avgScore >= 70}
-            chart={<SparkBars data={[62, 70, 66, 78, 74, avgScore]} color="var(--chart-3)" />}
+            chart={<SparkBars data={[62, 70, 66, 78, 74, avgScore]} color="var(--brand-orange)" />}
           />
           <KpiCard
             label={fr ? "Présence live" : "Live attendance"}
@@ -195,7 +195,7 @@ function DashboardPage() {
             }
             value={`${attendance}%`}
             delta={`${lessonsDone}/${lessonsTotal}`}
-            chart={<SparkPlain data={[42, 55, 48, 66, 72, attendance]} color="var(--chart-5)" />}
+            chart={<SparkPlain data={[42, 55, 48, 66, 72, attendance]} color="var(--brand-blue)" />}
           />
         </div>
 
@@ -333,7 +333,7 @@ function DashboardPage() {
                       <tr key={r.module.id} className="border-b border-border/70 last:border-0">
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface text-[11px] font-bold">
+                            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-blue/10 text-[11px] font-bold text-brand-blue">
                               M{r.module.order}
                             </span>
                             <span className="min-w-0 truncate font-medium">{r.title}</span>

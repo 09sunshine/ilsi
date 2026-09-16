@@ -122,7 +122,7 @@ function AdminOverview() {
             }
             value={`${activeCohorts}`}
             delta="+1"
-            chart={<SparkLine data={[1, 1, 2, 2, 3, activeCohorts + 1]} color="var(--chart-2)" />}
+            chart={<SparkLine data={[1, 1, 2, 2, 3, activeCohorts + 1]} color="var(--brand-blue)" />}
           />
           <KpiCard
             label={t("admin.pendingApplications")}
@@ -134,7 +134,7 @@ function AdminOverview() {
             value={`${pendingApps}`}
             delta="+10%"
             positive={false}
-            chart={<SparkPlain data={[2, 4, 3, 6, 5, pendingApps]} color="var(--chart-5)" />}
+            chart={<SparkPlain data={[2, 4, 3, 6, 5, pendingApps]} color="var(--brand-orange)" />}
           />
           <KpiCard
             label={fr ? "Revenus encaissés" : "Collected revenue"}
@@ -145,7 +145,7 @@ function AdminOverview() {
             }
             value={`$${revenue.toLocaleString(fr ? "fr-FR" : "en-US")}`}
             delta={`${pendingPay} ${fr ? "en attente" : "pending"}`}
-            chart={<SparkBars data={[80, 120, 140, 160, 180, revenue || 1]} color="var(--chart-3)" />}
+            chart={<SparkBars data={[80, 120, 140, 160, 180, revenue || 1]} color="var(--brand-orange)" />}
           />
         </div>
 
@@ -272,7 +272,7 @@ function AdminOverview() {
                       <tr key={r.participant.id} className="border-b border-border/70 last:border-0">
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-chart-3/25 text-[11px] font-bold">
+                            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-orange/10 text-[11px] font-bold text-brand-orange ring-1 ring-brand-orange/15">
                               {r.participant.firstName[0]}
                               {r.participant.lastName[0]}
                             </span>

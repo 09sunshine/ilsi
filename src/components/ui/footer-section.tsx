@@ -70,7 +70,11 @@ export function Footer() {
       <div className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-12 pt-20 sm:px-6 lg:px-8 lg:pb-14 lg:pt-24">
         <div className="grid gap-12 md:grid-cols-[1.3fr_2.2fr]">
           <AnimatedContainer className="relative max-w-sm">
-            <FrameIcon className="size-8 text-footer-foreground" strokeWidth={1.6} />
+            <div className="flex items-center gap-2" aria-label="ILSI">
+              <FrameIcon className="size-8 text-hero-lime" strokeWidth={1.6} />
+              <span className="size-2 rounded-full bg-brand-orange" aria-hidden />
+              <span className="size-2 rounded-full bg-brand-blue" aria-hidden />
+            </div>
             <p className="mt-6 text-sm text-footer-foreground/55">
               © {new Date().getFullYear()} ILSI. All rights reserved.
             </p>
@@ -88,7 +92,7 @@ export function Footer() {
                       <li key={link.title}>
                         <Link
                           to={link.href}
-                          className="inline-flex items-center gap-2 text-sm text-footer-foreground/55 transition-colors duration-200 hover:text-footer-foreground"
+                          className="inline-flex items-center gap-2 text-sm text-footer-foreground/55 transition-colors duration-200 hover:text-hero-lime"
                         >
                           {link.icon && <link.icon className="size-4" />}
                           {link.title}

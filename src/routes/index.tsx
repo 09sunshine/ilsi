@@ -116,14 +116,14 @@ function HomePage() {
                 </p>
                 <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3 text-hero-foreground/80">
                   <span className="inline-flex items-center gap-2 text-sm font-semibold">
-                    <BookOpenCheck className="size-4" aria-hidden />6 {t("home.statsPrograms")}
+                    <BookOpenCheck className="size-4 text-brand-orange" aria-hidden />6 {t("home.statsPrograms")}
                   </span>
                   <span className="inline-flex items-center gap-2 text-sm font-semibold">
-                    <BarChart3 className="size-4" aria-hidden />
+                    <BarChart3 className="size-4 text-hero-lime" aria-hidden />
                     87% {t("home.statsCompletion")}
                   </span>
                   <span className="inline-flex items-center gap-2 text-sm font-semibold">
-                    <CalendarClock className="size-4" aria-hidden />
+                    <CalendarClock className="size-4 text-brand-blue" aria-hidden />
                     {t("home.heroPath")}
                   </span>
                 </div>
@@ -163,12 +163,12 @@ function HomePage() {
                   alt="Participants collaborating during an ILSI cohort session"
                   className="h-64 w-full object-cover sm:h-80"
                 />
-                <span className="absolute left-4 top-4 grid size-9 place-items-center rounded-full bg-card text-primary shadow-[var(--shadow-soft)]">
+                <span className="absolute left-4 top-4 grid size-9 place-items-center rounded-full bg-card text-brand-blue shadow-[var(--shadow-soft)]">
                   <GraduationCap className="size-4" aria-hidden />
                 </span>
                 <div className="absolute bottom-4 right-4 w-40 rounded-2xl bg-card p-3 text-card-foreground shadow-[var(--shadow-lift)]">
                   <div className="flex items-center justify-between">
-                    <span className="grid size-7 place-items-center rounded-md bg-accent text-accent-foreground">
+                    <span className="grid size-7 place-items-center rounded-md bg-brand-orange/15 text-brand-orange">
                       <BarChart3 className="size-3.5" aria-hidden />
                     </span>
                     <span className="text-[11px] font-semibold text-success">+12%</span>
@@ -203,12 +203,12 @@ function HomePage() {
                   </div>
                   <div className="grid grid-cols-[72px_1fr_28px] items-center gap-2">
                     <span>{t("home.cohortActive")}</span>
-                    <span className="h-2 rounded-sm bg-muted"><span className="block h-full w-[64%] rounded-sm bg-success" /></span>
+                    <span className="h-2 rounded-sm bg-muted"><span className="block h-full w-[64%] rounded-sm bg-brand-orange" /></span>
                     <span className="text-right text-foreground">64%</span>
                   </div>
                   <div className="grid grid-cols-[72px_1fr_28px] items-center gap-2">
                     <span>{t("home.cohortSupport")}</span>
-                    <span className="h-2 rounded-sm bg-muted"><span className="block h-full w-[94%] rounded-sm bg-accent-foreground" /></span>
+                    <span className="h-2 rounded-sm bg-muted"><span className="block h-full w-[94%] rounded-sm bg-brand-blue" /></span>
                     <span className="text-right text-foreground">94%</span>
                   </div>
                 </div>
@@ -217,7 +217,13 @@ function HomePage() {
                 {[48, 68, 57, 82, 74].map((height, index) => (
                   <span
                     key={height}
-                    className={index % 2 === 0 ? "w-full rounded-t-sm bg-primary" : "w-full rounded-t-sm bg-success"}
+                    className={
+                      index % 3 === 0
+                        ? "w-full rounded-t-sm bg-primary"
+                        : index % 3 === 1
+                          ? "w-full rounded-t-sm bg-brand-orange"
+                          : "w-full rounded-t-sm bg-brand-blue"
+                    }
                     style={{ height: `${height}%` }}
                   />
                 ))}
@@ -273,7 +279,15 @@ function HomePage() {
                 className="group flex min-h-56 flex-col rounded-lg border border-primary-foreground/5 bg-primary-foreground/5 p-6 transition-colors hover:border-hero-lime/25 hover:bg-primary-foreground/10 sm:p-7"
               >
                 <div className="flex items-start justify-between">
-                  <span className="grid size-11 place-items-center rounded-lg bg-hero-lime/10 text-hero-lime ring-1 ring-hero-lime/25 transition-colors group-hover:bg-hero-lime/15">
+                  <span
+                    className={
+                      index % 3 === 1
+                        ? "grid size-11 place-items-center rounded-lg bg-brand-orange/10 text-brand-orange ring-1 ring-brand-orange/25"
+                        : index % 3 === 2
+                          ? "grid size-11 place-items-center rounded-lg bg-brand-blue/15 text-brand-blue ring-1 ring-brand-blue/30"
+                          : "grid size-11 place-items-center rounded-lg bg-hero-lime/10 text-hero-lime ring-1 ring-hero-lime/25"
+                    }
+                  >
                     <s.icon className="size-5 stroke-[1.5]" aria-hidden />
                   </span>
                   <ArrowUpRight
@@ -350,11 +364,11 @@ function HomePage() {
                     </span>
                     <span className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
                       <span className="flex items-center gap-1.5">
-                        <Clock className="size-4 text-primary" aria-hidden />
+                        <Clock className="size-4 text-brand-orange" aria-hidden />
                         {p.durationWeeks} {t("programs.weeks")}
                       </span>
                       <span className="flex items-center gap-1.5">
-                        <Layers className="size-4 text-primary" aria-hidden />
+                        <Layers className="size-4 text-brand-blue" aria-hidden />
                         {p.moduleCount} {t("programs.modules")}
                       </span>
                     </span>
