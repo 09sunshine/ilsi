@@ -55,8 +55,29 @@ const isAllowedOrigin = (origin: string): boolean => {
   if (clean.endsWith(".pages.dev") || clean.includes(".pages.dev")) return true;
   if (clean.endsWith(".netlify.app") || clean.includes(".netlify.app")) return true;
   if (clean.endsWith(".onrender.com") || clean.includes(".onrender.com")) return true;
+  if (clean.includes("ilsicampus.org")) return true;
   return false;
 };
+
+// Immediate preflight handler to prevent 404s from downstream routers (e.g. Better Auth)
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    const origin = req.headers.origin;
+    if (origin && isAllowedOrigin(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+      res.setHeader(
+        "Access-Control-Allow-Headers",
+        req.headers["access-control-request-headers"] ||
+          "Content-Type, Authorization, Cookie, X-Requested-With, Accept, Origin"
+      );
+      res.setHeader("Access-Control-Max-Age", "86400");
+    }
+    return res.status(204).end();
+  }
+  next();
+});
 
 const corsOptions: cors.CorsOptions = {
   origin: (requestOrigin, callback) => {
@@ -68,7 +89,6 @@ const corsOptions: cors.CorsOptions = {
     }
 
     console.warn(`[CORS Blocked] Origin "${requestOrigin}" is not in allowed origins list.`);
-    // Return false instead of throwing Error to prevent preflight 500 status
     return callback(null, false);
   },
   credentials: true,
@@ -85,7 +105,6 @@ const corsOptions: cors.CorsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
 
 // Global IP rate limiting across the entire API
 app.use("/api", globalLimiter);

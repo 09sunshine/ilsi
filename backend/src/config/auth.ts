@@ -5,9 +5,15 @@ import { env } from "./env.js";
 const trustedOrigins = Array.from(
   new Set([
     ...((env.FRONTEND_URL || "").split(",").map((o) => o.trim().replace(/\/+$/, "")).filter(Boolean)),
+    "https://ilsicampus.org",
+    "https://www.ilsicampus.org",
     "http://localhost:8080",
     "http://localhost:5173",
     "http://localhost:3000",
+    "http://localhost:4173",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:4173",
   ])
 );
 
