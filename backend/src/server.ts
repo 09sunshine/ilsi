@@ -14,9 +14,10 @@ async function startServer() {
     console.warn("[Server] Continuing server startup (ensure DATABASE_URL in .env points to your Supabase instance).");
   }
 
-  const server = app.listen(env.PORT, "0.0.0.0", () => {
+  const port = Number.isInteger(env.PORT) && env.PORT > 0 ? env.PORT : 10000;
+  const server = app.listen(port, "0.0.0.0", () => {
     console.log(`====================================================`);
-    console.log(`🚀 ILSI LMS Backend running on port ${env.PORT}`);
+    console.log(`🚀 ILSI LMS Backend running on port ${port}`);
     console.log(`📡 Environment: ${env.NODE_ENV}`);
     console.log(`🔗 Allowed Frontend: ${env.FRONTEND_URL}`);
     console.log(`====================================================`);

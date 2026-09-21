@@ -6,7 +6,16 @@ import { z } from "zod";
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
 const envSchema = z.object({
-  PORT: z.string().default("4000").transform((v) => parseInt(v, 10)),
+  PORT: z
+    .preprocess((val) => {
+      const defaultPort = process.env.NODE_ENV === "production" ? 10000 : 4000;
+      if (val === undefined || val === null) return defaultPort;
+      const str = String(val).trim();
+      if (!str) return defaultPort;
+      const parsed = parseInt(str, 10);
+      return Number.isNaN(parsed) || parsed <= 0 ? defaultPort : parsed;
+    }, z.number().int().min(1).max(65535))
+    .default(4000),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   FRONTEND_URL: z.string().default("http://localhost:8080"),
 
