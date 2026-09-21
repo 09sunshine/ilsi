@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { fromNodeHeaders } from "better-auth/node";
 import { auth } from "../config/auth.js";
 import { AppError, ErrorCodes } from "../constants/errors.js";
 import { Role } from "../types/domain.js";
@@ -27,7 +28,7 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   }
   try {
     const session = await auth.api.getSession({
-      headers: req.headers,
+      headers: fromNodeHeaders(req.headers),
     });
 
     if (session && session.user) {

@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { bearer } from "better-auth/plugins";
 import { pool } from "../database/pool.js";
 import { env } from "./env.js";
 
@@ -17,11 +18,24 @@ const trustedOrigins = Array.from(
   ])
 );
 
+const isProd =
+  env.NODE_ENV === "production" ||
+  process.env.NODE_ENV === "production" ||
+  !env.BETTER_AUTH_URL.includes("localhost");
+
 export const auth = betterAuth({
   database: pool,
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL.replace(/\/+$/, ""),
   trustedOrigins,
+  plugins: [bearer()],
+  advanced: {
+    defaultCookieAttributes: {
+      sameSite: isProd ? "none" : "lax",
+      secure: isProd,
+      httpOnly: true,
+    },
+  },
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,

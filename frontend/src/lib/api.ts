@@ -1,14 +1,40 @@
 const API_BASE = ((import.meta.env as any).VITE_BACKEND_URL || "http://localhost:4000").replace(/\/+$/, "");
 
+export function setStoredSessionToken(token: string | null) {
+  if (typeof window === "undefined") return;
+  if (token) {
+    localStorage.setItem("ilsi_token", token);
+  } else {
+    localStorage.removeItem("ilsi_token");
+  }
+}
+
+export function getStoredSessionToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return (
+    localStorage.getItem("ilsi_token") ||
+    localStorage.getItem("better-auth.session_token") ||
+    null
+  );
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
+  const token = getStoredSessionToken();
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((options.headers as Record<string, string>) || {}),
+  };
+
+  if (token && !headers["Authorization"]) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const res = await fetch(url, {
     ...options,
     credentials: "include", // Sends session cookies
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
+    headers,
   });
 
   let data: any = null;

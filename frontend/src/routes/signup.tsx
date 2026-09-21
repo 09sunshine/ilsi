@@ -6,6 +6,7 @@ import { z } from "zod";
 import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { signUp } from "@/lib/auth-client";
+import { setStoredSessionToken } from "@/lib/api";
 import {
   AuthLayout,
   FieldLabel,
@@ -62,6 +63,10 @@ function SignupPage() {
       if (res.error) {
         toast.error(res.error.message || "Registration failed");
         return;
+      }
+
+      if ((res.data as any)?.token) {
+        setStoredSessionToken((res.data as any).token);
       }
 
       toast.success(t("signup.submit") || "Account created successfully!");

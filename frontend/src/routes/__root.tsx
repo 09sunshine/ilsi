@@ -14,6 +14,8 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { LocaleProvider } from "@/i18n/LocaleProvider";
 import { LearningProvider } from "@/features/learning/LearningProvider";
 import { Toaster } from "@/components/ui/sonner";
+import { setStoredSessionToken } from "@/lib/api";
+import { authClient } from "@/lib/auth-client";
 
 function NotFoundComponent() {
   return (
@@ -144,6 +146,17 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      // Sync Better Auth session to localStorage for Bearer token fallback (supports Incognito / cross-domain)
+      authClient.getSession().then((res: any) => {
+        if (res?.data?.session?.token) {
+          setStoredSessionToken(res.data.session.token);
+        }
+      }).catch(() => {});
+    }
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

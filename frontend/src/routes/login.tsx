@@ -6,6 +6,7 @@ import { z } from "zod";
 import { ArrowLeft, Eye, EyeOff, Loader2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { signIn } from "@/lib/auth-client";
+import { setStoredSessionToken } from "@/lib/api";
 import {
   AuthLayout,
   FieldLabel,
@@ -58,6 +59,10 @@ function LoginPage() {
       if (res.error) {
         toast.error(res.error.message || "Invalid email or password");
         return;
+      }
+
+      if ((res.data as any)?.token) {
+        setStoredSessionToken((res.data as any).token);
       }
 
       toast.success(t("auth.welcome") || "Welcome back!");
