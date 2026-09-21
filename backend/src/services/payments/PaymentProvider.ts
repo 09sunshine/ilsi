@@ -72,7 +72,10 @@ export class StripePaymentProvider implements PaymentProvider {
   async createCheckoutSession(params: CreateCheckoutParams): Promise<CheckoutSessionResult> {
     const stripe = this.getStripe();
     const rawUrl = process.env.FRONTEND_URL || env.FRONTEND_URL || "http://localhost:8080";
-    const frontendUrl = rawUrl.split(",")[0].trim().replace(/\/+$/, "");
+    let frontendUrl = rawUrl.split(",")[0].trim().replace(/\/+$/, "");
+    if (!frontendUrl.startsWith("http://") && !frontendUrl.startsWith("https://")) {
+      frontendUrl = `https://${frontendUrl}`;
+    }
     const amountInCents = Math.round(params.amount * 100);
     const currency = (params.currency || "USD").toLowerCase();
     const productName = params.cohortName

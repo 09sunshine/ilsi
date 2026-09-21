@@ -96,7 +96,10 @@ export class DonationService {
     const donation = insertRes.rows[0];
     const stripe = this.getStripe();
     const rawUrl = process.env.FRONTEND_URL || env.FRONTEND_URL || "http://localhost:8080";
-    const frontendUrl = rawUrl.split(",")[0].trim().replace(/\/+$/, "");
+    let frontendUrl = rawUrl.split(",")[0].trim().replace(/\/+$/, "");
+    if (!frontendUrl.startsWith("http://") && !frontendUrl.startsWith("https://")) {
+      frontendUrl = `https://${frontendUrl}`;
+    }
 
     const amountInCents = Math.round(rawAmount * 100);
     const isEur = currency === "EUR";
