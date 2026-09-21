@@ -147,6 +147,7 @@ export class DonationService {
       client_reference_id: donation.id,
       success_url: successUrl,
       cancel_url: cancelUrl,
+      ...(frequency === "monthly" ? {} : { submit_type: "donate" as const }),
       metadata: {
         type: "DONATION",
         donationId: donation.id,

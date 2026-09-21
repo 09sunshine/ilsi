@@ -128,6 +128,9 @@ app.get("/api/health", (_req, res) => {
 });
 
 // Mount Route Handlers
+// Public endpoints (Support, Contact, Programs, Applications) mounted before routers with root middlewares
+app.use("/api/support", supportRoutes);
+app.use("/api/contact", contactRoutes);
 app.use("/api", authRoutes);
 app.use("/api/programs", programRoutes);
 app.use("/api", applicationRoutes);
@@ -139,8 +142,6 @@ app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin", uploadRoutes);
 app.use("/api/google", googleRoutes);
-app.use("/api/support", supportRoutes);
-app.use("/api/contact", contactRoutes);
 
 
 // Centralized Error Handler

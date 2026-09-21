@@ -10,7 +10,23 @@ import { paymentSchemas } from "../validators/schemas.js";
 const router = Router();
 
 // Apply payment rate limiter
-router.use(paymentLimiter);
+const paymentPrefixes = [
+  "/create-intent",
+  "/enrollments",
+  "/verify-session",
+  "/webhook",
+  "/applications",
+];
+
+router.use((req: Request, res: Response, next: NextFunction) => {
+  const isPaymentRoute = paymentPrefixes.some(
+    (prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`)
+  );
+  if (!isPaymentRoute) {
+    return next();
+  }
+  return paymentLimiter(req, res, next);
+});
 
 /**
  * POST /api/payments/create-intent

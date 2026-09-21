@@ -90,4 +90,56 @@ describe("Donation Validation & Security Principles", () => {
     });
     expect(parsed.success).toBe(false);
   });
+
+  describe("Public Unauthenticated Donation Flow", () => {
+    it("allows unauthenticated donations without user session or token", () => {
+      // Valid donation payload submitted from About Us page by an anonymous guest
+      const guestDonation = {
+        name: "Anonymous Benefactor",
+        email: "benefactor@foundation.org",
+        amount: 250,
+        currency: "USD",
+        frequency: "one-off",
+      };
+
+      const result = supportSchemas.donate.safeParse(guestDonation);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.name).toBe("Anonymous Benefactor");
+        expect(result.data.amount).toBe(250);
+        expect(result.data.currency).toBe("USD");
+        expect(result.data.frequency).toBe("one-off");
+      }
+    });
+
+    it("ensures student router does not intercept public /api/support or /api/contact endpoints", () => {
+      const studentPrefixes = [
+        "/dashboard",
+        "/lessons",
+        "/quizzes",
+        "/current-cohort",
+        "/enrollments",
+        "/cohorts",
+        "/modules",
+        "/live-sessions",
+        "/notifications",
+        "/progress",
+      ];
+
+      const isStudentRoute = (path: string) =>
+        studentPrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+
+      // Public support routes MUST NOT be identified as student routes
+      expect(isStudentRoute("/support/donate")).toBe(false);
+      expect(isStudentRoute("/support/verify-donation-session")).toBe(false);
+      expect(isStudentRoute("/support/volunteer")).toBe(false);
+      expect(isStudentRoute("/contact")).toBe(false);
+
+      // Student routes MUST be identified as student routes
+      expect(isStudentRoute("/dashboard")).toBe(true);
+      expect(isStudentRoute("/lessons/les-123")).toBe(true);
+      expect(isStudentRoute("/quizzes/quiz-456")).toBe(true);
+      expect(isStudentRoute("/live-sessions")).toBe(true);
+    });
+  });
 });

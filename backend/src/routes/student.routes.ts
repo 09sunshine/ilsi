@@ -15,7 +15,28 @@ import { NotificationService } from "../services/NotificationService.js";
 const router = Router();
 
 // All student routes require authentication
-router.use(requireAuth);
+const studentPrefixes = [
+  "/dashboard",
+  "/lessons",
+  "/quizzes",
+  "/current-cohort",
+  "/enrollments",
+  "/cohorts",
+  "/modules",
+  "/live-sessions",
+  "/notifications",
+  "/progress",
+];
+
+router.use((req: Request, res: Response, next: NextFunction) => {
+  const isStudentRoute = studentPrefixes.some(
+    (prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`)
+  );
+  if (!isStudentRoute) {
+    return next();
+  }
+  return requireAuth(req, res, next);
+});
 
 /**
  * GET /api/student/dashboard
