@@ -22,6 +22,9 @@ declare global {
 }
 
 export async function authenticate(req: Request, _res: Response, next: NextFunction): Promise<void> {
+  if (req.method === "OPTIONS") {
+    return next();
+  }
   try {
     const session = await auth.api.getSession({
       headers: req.headers,

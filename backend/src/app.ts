@@ -32,39 +32,60 @@ app.use(
 // Resolve allowed CORS origins cleanly (stripping trailing slashes, supporting comma-separated list and previews)
 const configuredOrigins = (env.FRONTEND_URL || "")
   .split(",")
-  .map((o) => o.trim().replace(/\/+$/, ""))
+  .map((o) => o.trim().replace(/\/+$/, "").toLowerCase())
   .filter(Boolean);
 
 const defaultDevOrigins = [
   "http://localhost:8080",
   "http://localhost:5173",
   "http://localhost:3000",
+  "http://localhost:4173",
   "http://127.0.0.1:8080",
   "http://127.0.0.1:5173",
+  "http://127.0.0.1:4173",
 ];
 
 const allowedOriginsSet = new Set([...configuredOrigins, ...defaultDevOrigins]);
 
-app.use(
-  cors({
-    origin: (requestOrigin, callback) => {
-      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server, webhooks)
-      if (!requestOrigin) return callback(null, true);
-      const cleanOrigin = requestOrigin.replace(/\/+$/, "");
-      if (
-        allowedOriginsSet.has(cleanOrigin) ||
-        cleanOrigin.endsWith(".vercel.app") ||
-        cleanOrigin.endsWith(".pages.dev")
-      ) {
-        return callback(null, true);
-      }
-      callback(new Error(`Origin ${requestOrigin} not allowed by CORS`));
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
-  })
-);
+const isAllowedOrigin = (origin: string): boolean => {
+  const clean = origin.replace(/\/+$/, "").toLowerCase();
+  if (allowedOriginsSet.has(clean)) return true;
+  if (clean.startsWith("http://localhost:") || clean.startsWith("http://127.0.0.1:")) return true;
+  if (clean.endsWith(".vercel.app") || clean.includes(".vercel.app")) return true;
+  if (clean.endsWith(".pages.dev") || clean.includes(".pages.dev")) return true;
+  if (clean.endsWith(".netlify.app") || clean.includes(".netlify.app")) return true;
+  if (clean.endsWith(".onrender.com") || clean.includes(".onrender.com")) return true;
+  return false;
+};
+
+const corsOptions: cors.CorsOptions = {
+  origin: (requestOrigin, callback) => {
+    // Allow requests with no origin (e.g. mobile apps, curl, server-to-server, webhooks)
+    if (!requestOrigin) return callback(null, true);
+
+    if (isAllowedOrigin(requestOrigin)) {
+      return callback(null, true);
+    }
+
+    console.warn(`[CORS Blocked] Origin "${requestOrigin}" is not in allowed origins list.`);
+    // Return false instead of throwing Error to prevent preflight 500 status
+    return callback(null, false);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "Cookie",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+  ],
+  optionsSuccessStatus: 204,
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 // Global IP rate limiting across the entire API
 app.use("/api", globalLimiter);
