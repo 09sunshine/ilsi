@@ -22,11 +22,12 @@ export function errorHandler(
   }
 
   // Handle generic / unexpected error
-  res.status(500).json({
+  const message = err?.message || "An unexpected internal server error occurred";
+  res.status(err?.status || err?.statusCode || 500).json({
     success: false,
     error: {
-      code: ErrorCodes.INTERNAL_SERVER_ERROR,
-      message: "An unexpected internal server error occurred",
+      code: err?.code || ErrorCodes.INTERNAL_SERVER_ERROR,
+      message,
     },
   });
 }

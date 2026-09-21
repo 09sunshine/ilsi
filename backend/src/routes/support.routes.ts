@@ -42,8 +42,15 @@ router.post(
         message: "Stripe checkout session initialized successfully.",
         data: checkoutResult,
       });
-    } catch (error) {
-      next(error);
+    } catch (error: any) {
+      console.error("[Donation Error]:", error);
+      res.status(error.statusCode || 500).json({
+        success: false,
+        error: {
+          code: error.code || "DONATION_ERROR",
+          message: error.message || "Failed to initialize donation",
+        },
+      });
     }
   }
 );

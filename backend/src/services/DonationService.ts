@@ -41,13 +41,12 @@ export class DonationService {
 
   private static getStripe(): Stripe {
     if (!this.stripe) {
-      const key = process.env.STRIPE_SECRET_KEY || env.STRIPE_SECRET_KEY;
+      const rawKey = process.env.STRIPE_SECRET_KEY || env.STRIPE_SECRET_KEY || "";
+      const key = rawKey.trim().replace(/^["']|["']$/g, "");
       if (!key) {
         throw new AppError(500, "PROVIDER_ERROR", "Stripe secret key is not configured.");
       }
-      this.stripe = new Stripe(key, {
-        apiVersion: "2026-08-26.dahlia" as any,
-      });
+      this.stripe = new Stripe(key);
     }
     return this.stripe;
   }
@@ -139,25 +138,35 @@ export class DonationService {
       },
     ];
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: frequency === "monthly" ? "subscription" : "payment",
-      line_items: lineItems,
-      customer_email: email,
-      client_reference_id: donation.id,
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      ...(frequency === "monthly" ? {} : { submit_type: "donate" as const }),
-      metadata: {
-        type: "DONATION",
-        donationId: donation.id,
-        donorName: name,
-        donorEmail: email,
-        frequency,
-        currency,
-        amount: String(rawAmount),
-      },
-    });
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        mode: frequency === "monthly" ? "subscription" : "payment",
+        line_items: lineItems,
+        customer_email: email,
+        client_reference_id: donation.id,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        ...(frequency === "monthly" ? {} : { submit_type: "donate" as const }),
+        metadata: {
+          type: "DONATION",
+          donationId: donation.id,
+          donorName: name,
+          donorEmail: email,
+          frequency,
+          currency,
+          amount: String(rawAmount),
+        },
+      });
+    } catch (stripeErr: any) {
+      console.error("[DonationService] Stripe Checkout creation error:", stripeErr);
+      throw new AppError(
+        500,
+        "PROVIDER_ERROR",
+        stripeErr.message || "Failed to initialize Stripe checkout session."
+      );
+    }
 
     if (!session.url) {
       throw new AppError(
