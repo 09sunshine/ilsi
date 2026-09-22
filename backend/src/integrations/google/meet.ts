@@ -3,11 +3,13 @@ import { env } from "../../config/env.js";
 import { pool } from "../../database/pool.js";
 import { AppError, ErrorCodes } from "../../constants/errors.js";
 
-const oauth2Client = new google.auth.OAuth2(
-  env.GOOGLE_CLIENT_ID,
-  env.GOOGLE_CLIENT_SECRET,
-  env.GOOGLE_REDIRECT_URI
-);
+function getOAuth2Client() {
+  return new google.auth.OAuth2(
+    env.GOOGLE_CLIENT_ID,
+    env.GOOGLE_CLIENT_SECRET,
+    env.GOOGLE_REDIRECT_URI
+  );
+}
 
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
@@ -59,6 +61,7 @@ export class GoogleMeetService {
         "Google OAuth credentials (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET) are not configured."
       );
     }
+    const oauth2Client = getOAuth2Client();
     return oauth2Client.generateAuthUrl({
       access_type: "offline",
       prompt: "consent",
@@ -80,6 +83,7 @@ export class GoogleMeetService {
       throw new AppError(403, ErrorCodes.FORBIDDEN, "Invalid or tampered OAuth state parameter.");
     }
 
+    const oauth2Client = getOAuth2Client();
     const { tokens } = await oauth2Client.getToken(code);
     await pool.query(
       `INSERT INTO google_oauth_tokens (user_id, access_token, refresh_token, expiry_date, scope)
@@ -150,6 +154,7 @@ export class GoogleMeetService {
     if (!meetUrl && tokenRes.rows.length > 0 && env.GOOGLE_CLIENT_ID) {
       try {
         const tokenData = tokenRes.rows[0];
+        const oauth2Client = getOAuth2Client();
         oauth2Client.setCredentials({
           access_token: tokenData.access_token,
           refresh_token: tokenData.refresh_token,

@@ -1,6 +1,7 @@
 import { pool } from "../database/pool.js";
 import { supabaseAdmin } from "../integrations/supabase/client.js";
 import { ModuleAccessService } from "./ModuleAccessService.js";
+import { LessonAccessService } from "./LessonAccessService.js";
 import { AppError, ErrorCodes } from "../constants/errors.js";
 
 export class VideoStorageService {
@@ -9,7 +10,7 @@ export class VideoStorageService {
   /**
    * Authorizes and generates a short-lived signed URL for course video playback.
    */
-  static async getAuthorizedPlaybackUrl(lessonId: string, userId: string, isAdmin: boolean = false) {
+  static async getAuthorizedPlaybackUrl(lessonId: string, userId: string, isAdmin: boolean = false, targetCohortId?: string) {
     // 1. Get lesson and module ID
     const lessonRes = await pool.query(
       `SELECT id, module_id, duration_minutes FROM lessons WHERE id = $1`,
@@ -22,10 +23,13 @@ export class VideoStorageService {
 
     const lesson = lessonRes.rows[0];
 
-    // 2. If not admin, strictly verify module access
+    // 2. If not admin, strictly verify lesson and module access
     if (!isAdmin) {
       try {
-        await ModuleAccessService.assertAccess(userId, lesson.module_id);
+        await LessonAccessService.assertAccess(userId, lessonId, targetCohortId);
+        if (lesson.module_id) {
+          await ModuleAccessService.assertAccess(userId, lesson.module_id);
+        }
       } catch (err: any) {
         throw new AppError(
           403,
@@ -107,9 +111,9 @@ export class VideoStorageService {
   /**
    * Generates a signed URL for private course resources/PDFs
    */
-  static async getAuthorizedResourceUrl(resourceId: string, userId: string, isAdmin: boolean = false) {
+  static async getAuthorizedResourceUrl(resourceId: string, userId: string, isAdmin: boolean = false, targetCohortId?: string) {
     const res = await pool.query(
-      `SELECT r.id, r.module_id, r.storage_path, r.url 
+      `SELECT r.id, r.module_id, r.lesson_id, r.storage_path, r.url 
        FROM resources r 
        WHERE r.id = $1`,
       [resourceId]
@@ -121,8 +125,13 @@ export class VideoStorageService {
 
     const resource = res.rows[0];
 
-    if (!isAdmin && resource.module_id) {
-      await ModuleAccessService.assertAccess(userId, resource.module_id);
+    if (!isAdmin) {
+      if (resource.lesson_id) {
+        await LessonAccessService.assertAccess(userId, resource.lesson_id, targetCohortId);
+      }
+      if (resource.module_id) {
+        await ModuleAccessService.assertAccess(userId, resource.module_id);
+      }
     }
 
     if (resource.storage_path) {

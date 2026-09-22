@@ -7,6 +7,7 @@ import { StudentDashboardService } from "../services/StudentDashboardService.js"
 import { VideoStorageService } from "../services/VideoStorageService.js";
 import { QuizEngineService } from "../services/QuizEngineService.js";
 import { ModuleAccessService } from "../services/ModuleAccessService.js";
+import { LessonAccessService } from "../services/LessonAccessService.js";
 import { EnrollmentAccessService } from "../services/EnrollmentAccessService.js";
 import { pool } from "../database/pool.js";
 import { AppError, ErrorCodes } from "../constants/errors.js";
@@ -54,23 +55,29 @@ router.get("/dashboard", async (req: Request, res: Response, next: NextFunction)
 
 /**
  * GET /api/lessons/:id
- * Fetches lesson content with progression check
+ * Fetches lesson content with centralized LessonAccessService check, returning chapters and resources
  */
 router.get("/lessons/:id", requireOnboardingCompleted, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id as string;
+    const targetCohortId = req.query.cohortId as string | undefined;
+
+    // Strict centralized access authorization
+    const accessEval = await LessonAccessService.assertAccess(req.user!.id, id, targetCohortId);
+    const cohortId = accessEval.cohortId;
+
     const lessonRes = await pool.query(
       `SELECT l.id, l.module_id, l.order_index, l.type, l.title_en, l.title_fr,
               l.description_en, l.description_fr, l.body_en, l.body_fr,
               l.duration_minutes, l.mandatory,
-              m.cohort_id, m.order_index as module_order,
+              m.cohort_id as module_cohort_id, m.order_index as module_order,
               COALESCE(lp.completed, FALSE) as completed,
               COALESCE(lp.video_percent, 0) as video_percent
        FROM lessons l
        JOIN modules m ON m.id = l.module_id
-       LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = $1
-       WHERE l.id = $2`,
-      [req.user!.id, id]
+       LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = $1 AND (lp.cohort_id = $2 OR lp.cohort_id IS NULL)
+       WHERE l.id = $3`,
+      [req.user!.id, cohortId || null, id]
     );
 
     if (lessonRes.rows.length === 0) {
@@ -79,26 +86,33 @@ router.get("/lessons/:id", requireOnboardingCompleted, async (req: Request, res:
 
     const lesson = lessonRes.rows[0];
 
-    // Assert module access
-    await ModuleAccessService.assertAccess(req.user!.id, lesson.module_id);
+    // Fetch chapters for this lesson
+    const chapRes = await pool.query(
+      `SELECT id, lesson_id, order_index, title_en, title_fr, description_en, description_fr,
+              body_en, body_fr, duration_minutes, video_url, status
+       FROM chapters
+       WHERE lesson_id = $1 AND status = 'PUBLISHED'
+       ORDER BY order_index ASC`,
+      [id]
+    );
 
     // Fetch resources attached to lesson
     const resRes = await pool.query(
       `SELECT id, name_en, name_fr, type, size_kb, downloadable, url 
        FROM resources 
-       WHERE lesson_id = $1`,
+       WHERE lesson_id = $1 AND (status = 'PUBLISHED' OR status IS NULL)`,
       [id]
     );
 
     // Check if video is available and fetch signed playback url
-    const videoData = await VideoStorageService.getAuthorizedPlaybackUrl(id, req.user!.id);
+    const videoData = await VideoStorageService.getAuthorizedPlaybackUrl(id, req.user!.id, false, cohortId);
 
     res.json({
       success: true,
       data: {
         id: lesson.id,
         moduleId: lesson.module_id,
-        cohortId: lesson.cohort_id,
+        cohortId: cohortId || lesson.module_cohort_id,
         order: lesson.order_index,
         type: lesson.type,
         title: { en: lesson.title_en, fr: lesson.title_fr },
@@ -109,6 +123,28 @@ router.get("/lessons/:id", requireOnboardingCompleted, async (req: Request, res:
         completed: lesson.completed,
         videoPercent: lesson.video_percent,
         videoUrl: videoData?.playbackUrl || null,
+        access: {
+          lessonId: lesson.id,
+          cohortId,
+          state: accessEval.state,
+          isLocked: accessEval.isLocked,
+          lockReason: accessEval.lockReason,
+          availableFrom: accessEval.availableFrom,
+          availableUntil: accessEval.availableUntil,
+          prerequisite: accessEval.prerequisite,
+          progress: lesson.video_percent,
+        },
+        chapters: chapRes.rows.map((c) => ({
+          id: c.id,
+          lessonId: c.lesson_id,
+          order: c.order_index,
+          title: { en: c.title_en, fr: c.title_fr },
+          description: { en: c.description_en || "", fr: c.description_fr || "" },
+          body: { en: c.body_en || "", fr: c.body_fr || "" },
+          durationMinutes: c.duration_minutes,
+          videoUrl: c.video_url || null,
+          status: c.status,
+        })),
         resources: resRes.rows.map((r) => ({
           id: r.id,
           name: { en: r.name_en, fr: r.name_fr },
@@ -125,8 +161,23 @@ router.get("/lessons/:id", requireOnboardingCompleted, async (req: Request, res:
 });
 
 /**
+ * GET /api/student/lessons/:id/access
+ * Exposes dynamic access evaluation and lock reason without full content payload
+ */
+router.get("/lessons/:id/access", requireOnboardingCompleted, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const cohortId = req.query.cohortId as string | undefined;
+    const evaluation = await LessonAccessService.evaluateAccess(req.user!.id, id, cohortId);
+    res.json({ success: true, data: evaluation });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /api/lessons/:id/video
- * Returns short-lived signed video URL after strict access check with rate limiting
+ * Returns short-lived signed video URL after strict lesson authorization
  */
 router.get(
   "/lessons/:id/video",
@@ -134,7 +185,13 @@ router.get(
   videoLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const videoData = await VideoStorageService.getAuthorizedPlaybackUrl(req.params.id as string, req.user!.id);
+      const cohortId = req.query.cohortId as string | undefined;
+      const videoData = await VideoStorageService.getAuthorizedPlaybackUrl(
+        req.params.id as string,
+        req.user!.id,
+        false,
+        cohortId
+      );
       if (!videoData) {
         throw new AppError(404, ErrorCodes.VIDEO_NOT_FOUND, "No video attached to this lesson");
       }
@@ -147,7 +204,7 @@ router.get(
 
 /**
  * POST /api/progress/lessons/:id
- * Tracks video watch percentage and marks lesson complete with Zod input validation
+ * Tracks video watch percentage and marks lesson complete with cohort-aware progress isolation
  */
 router.post(
   "/progress/lessons/:id",
@@ -157,31 +214,37 @@ router.post(
     try {
       const id = req.params.id as string;
       const { videoPercent, markComplete } = req.body;
+      const targetCohortId = (req.body.cohortId || req.query.cohortId) as string | undefined;
 
-      // Get lesson module
+      // Assert user is authorized to access and progress through this lesson
+      const accessEval = await LessonAccessService.assertAccess(req.user!.id, id, targetCohortId);
+      const cohortId = accessEval.cohortId;
+
+      // Get lesson parent module
       const lessonRes = await pool.query(`SELECT module_id FROM lessons WHERE id = $1`, [id]);
       if (lessonRes.rows.length === 0) {
         throw new AppError(404, ErrorCodes.LESSON_NOT_FOUND, "Lesson not found");
       }
-
       const moduleId = lessonRes.rows[0].module_id;
-      await ModuleAccessService.assertAccess(req.user!.id, moduleId);
 
       const percent = Math.min(100, Math.max(0, Math.round(Number(videoPercent) || 0)));
       const isCompleted = markComplete || percent >= 80;
 
+      // Insert cohort-aware progress
       await pool.query(
-        `INSERT INTO lesson_progress (user_id, lesson_id, module_id, completed, video_percent, completed_at)
-         VALUES ($1, $2, $3, $4, $5, CASE WHEN $4 THEN NOW() ELSE NULL END)
-         ON CONFLICT (user_id, lesson_id) DO UPDATE SET
+        `INSERT INTO lesson_progress (
+           user_id, cohort_id, cohort_lesson_id, lesson_id, module_id, completed, video_percent, completed_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $6 THEN NOW() ELSE NULL END)
+         ON CONFLICT (user_id, cohort_id, lesson_id) WHERE cohort_id IS NOT NULL DO UPDATE SET
            completed = EXCLUDED.completed OR lesson_progress.completed,
            video_percent = GREATEST(lesson_progress.video_percent, EXCLUDED.video_percent),
            completed_at = CASE WHEN (EXCLUDED.completed OR lesson_progress.completed) AND lesson_progress.completed_at IS NULL THEN NOW() ELSE lesson_progress.completed_at END,
            updated_at = NOW()`,
-        [req.user!.id, id, moduleId, isCompleted, percent]
+        [req.user!.id, cohortId || null, accessEval.cohortLessonId || null, id, moduleId, isCompleted, percent]
       );
 
-      res.json({ success: true, data: { completed: isCompleted, videoPercent: percent } });
+      res.json({ success: true, data: { completed: isCompleted, videoPercent: percent, cohortId } });
     } catch (error) {
       next(error);
     }
@@ -190,11 +253,12 @@ router.post(
 
 /**
  * GET /api/quizzes/:id
- * Fetches quiz questions (without answers)
+ * Fetches quiz questions (without answers) after authorization
  */
 router.get("/quizzes/:id", requireOnboardingCompleted, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await QuizEngineService.getQuizForStudent(req.params.id as string, req.user!.id);
+    const cohortId = req.query.cohortId as string | undefined;
+    const result = await QuizEngineService.getQuizForStudent(req.params.id as string, req.user!.id, false, cohortId);
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);
@@ -213,7 +277,8 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const answers = req.body.answers || {};
-      const result = await QuizEngineService.submitQuizAttempt(req.params.id as string, req.user!.id, answers);
+      const cohortId = (req.body.cohortId || req.query.cohortId) as string | undefined;
+      const result = await QuizEngineService.submitQuizAttempt(req.params.id as string, req.user!.id, answers, cohortId);
       res.json({ success: true, data: result });
     } catch (error) {
       next(error);
@@ -232,6 +297,106 @@ router.get("/current-cohort", async (req: Request, res: Response, next: NextFunc
       return res.json({ success: true, data: null, message: "No active cohort enrollment found." });
     }
     res.json({ success: true, data: current });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/student/current-cohort/lessons
+ * Returns list of all scheduled lessons for student's current active cohort with computed access states
+ */
+router.get("/current-cohort/lessons", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const current = await EnrollmentAccessService.getCurrentCohort(req.user!.id);
+    if (!current) {
+      return res.json({ success: true, data: [], message: "No active cohort enrollment found." });
+    }
+
+    const cohortId = current.cohortId;
+    const clRes = await pool.query(
+      `SELECT cl.id as cohort_lesson_id, cl.cohort_id, cl.lesson_id, cl.order_index,
+              cl.start_at, cl.end_at, cl.duration_minutes, cl.is_required, cl.passing_score,
+              l.type, l.title_en, l.title_fr, l.description_en, l.description_fr,
+              l.duration_minutes as lesson_duration, l.module_id,
+              m.title_en as module_title_en, m.title_fr as module_title_fr
+       FROM cohort_lessons cl
+       JOIN lessons l ON l.id = cl.lesson_id
+       JOIN modules m ON m.id = l.module_id
+       WHERE cl.cohort_id = $1 AND cl.is_published = TRUE AND cl.status = 'PUBLISHED'
+       ORDER BY cl.order_index ASC`,
+      [cohortId]
+    );
+
+    const now = new Date();
+    const lessonsWithAccess = await Promise.all(
+      clRes.rows.map(async (row) => {
+        const evalAccess = await LessonAccessService.evaluateAccess(req.user!.id, row.lesson_id, cohortId, now);
+        return {
+          id: row.lesson_id,
+          cohortLessonId: row.cohort_lesson_id,
+          cohortId,
+          moduleId: row.module_id,
+          moduleTitle: { en: row.module_title_en, fr: row.module_title_fr },
+          order: row.order_index,
+          type: row.type,
+          title: { en: row.title_en, fr: row.title_fr },
+          description: { en: row.description_en, fr: row.description_fr },
+          durationMinutes: row.duration_minutes || row.lesson_duration,
+          isRequired: row.is_required,
+          startAt: row.start_at.toISOString(),
+          endAt: row.end_at.toISOString(),
+          state: evalAccess.state,
+          isLocked: evalAccess.isLocked,
+          lockReason: evalAccess.lockReason,
+          availableFrom: evalAccess.availableFrom,
+          availableUntil: evalAccess.availableUntil,
+          prerequisite: evalAccess.prerequisite,
+          completed: evalAccess.completed || false,
+          progress: evalAccess.progressPercent || 0,
+        };
+      })
+    );
+
+    res.json({ success: true, data: lessonsWithAccess });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/student/current-cohort/progress
+ * Cohort-specific progress summary
+ */
+router.get("/current-cohort/progress", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const current = await EnrollmentAccessService.getCurrentCohort(req.user!.id);
+    if (!current) {
+      return res.json({ success: true, data: null, message: "No active cohort enrollment found." });
+    }
+
+    const cohortId = current.cohortId;
+    const lessonsRes = await pool.query(
+      `SELECT cl.lesson_id, COALESCE(lp.completed, FALSE) as is_done
+       FROM cohort_lessons cl
+       LEFT JOIN lesson_progress lp ON lp.lesson_id = cl.lesson_id AND lp.user_id = $1 AND (lp.cohort_id = $2 OR lp.cohort_id IS NULL)
+       WHERE cl.cohort_id = $2 AND cl.is_published = TRUE AND cl.status = 'PUBLISHED'`,
+      [req.user!.id, cohortId]
+    );
+
+    const total = lessonsRes.rows.length;
+    const done = lessonsRes.rows.filter((l) => l.is_done).length;
+    const progressPercent = total ? Math.round((done / total) * 100) : 0;
+
+    res.json({
+      success: true,
+      data: {
+        cohortId,
+        totalLessons: total,
+        completedLessons: done,
+        progressPercentage: progressPercent,
+      },
+    });
   } catch (error) {
     next(error);
   }

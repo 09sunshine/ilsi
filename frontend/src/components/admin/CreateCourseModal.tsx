@@ -84,6 +84,8 @@ interface LessonDraft {
   durationMinutes: number;
   bodyEn: string;
   bodyFr: string;
+  startDate?: string;
+  endDate?: string;
   resources: Array<{
     nameEn: string;
     nameFr: string;
@@ -166,7 +168,7 @@ export function CreateCourseModal({ isOpen, onClose, onCourseCreated }: Props) {
           titleEn: "Introduction to Grounded Leadership",
           titleFr: "Introduction au leadership ancré",
           type: "VIDEO",
-          videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+          videoUrl: "",
           durationMinutes: 20,
           bodyEn: "Core principles of self-awareness and integrity.",
           bodyFr: "Principes fondamentaux de conscience de soi et d'intégrité.",
@@ -433,6 +435,24 @@ export function CreateCourseModal({ isOpen, onClose, onCourseCreated }: Props) {
     setSelectedModuleIdx(modules.length);
   };
 
+  // Remove Module
+  const removeModule = (modIdx: number) => {
+    if (modules.length <= 1) {
+      toast.error(fr ? "Le cours doit comporter au moins un module." : "Course must have at least one module.");
+      return;
+    }
+    const modTitle = modules[modIdx]?.titleEn || `Module ${modIdx + 1}`;
+    if (!confirm(fr ? `Supprimer le module "${modTitle}" ?` : `Delete module "${modTitle}"?`)) {
+      return;
+    }
+    const updated = modules.filter((_, idx) => idx !== modIdx).map((m, idx) => ({ ...m, orderIndex: idx + 1 }));
+    setModules(updated);
+    if (selectedModuleIdx >= updated.length) {
+      setSelectedModuleIdx(Math.max(0, updated.length - 1));
+    }
+    toast.success(fr ? "Module supprimé." : "Module deleted.");
+  };
+
   // Add Lesson
   const addLesson = (modIdx: number) => {
     const mod = modules[modIdx];
@@ -447,6 +467,8 @@ export function CreateCourseModal({ isOpen, onClose, onCourseCreated }: Props) {
       durationMinutes: 20,
       bodyEn: "",
       bodyFr: "",
+      startDate: "",
+      endDate: "",
       resources: [],
     };
     const updated = [...modules];
@@ -791,6 +813,10 @@ export function CreateCourseModal({ isOpen, onClose, onCourseCreated }: Props) {
         lessons: m.lessons.map((l, lIdx) => ({
           ...l,
           orderIndex: l.orderIndex || lIdx + 1,
+          startDate: l.startDate ? new Date(l.startDate).toISOString() : undefined,
+          endDate: l.endDate ? new Date(l.endDate).toISOString() : undefined,
+          startAt: l.startDate ? new Date(l.startDate).toISOString() : undefined,
+          endAt: l.endDate ? new Date(l.endDate).toISOString() : undefined,
           liveSession: l.liveSession
             ? {
                 ...l.liveSession,
@@ -1299,21 +1325,39 @@ export function CreateCourseModal({ isOpen, onClose, onCourseCreated }: Props) {
 
                 <div className="space-y-1 max-h-96 overflow-y-auto">
                   {modules.map((m, idx) => (
-                    <button
+                    <div
                       key={idx}
-                      type="button"
-                      onClick={() => setSelectedModuleIdx(idx)}
                       className={cn(
-                        "w-full text-left px-2.5 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-between",
+                        "group w-full px-2.5 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-between gap-1",
                         selectedModuleIdx === idx
                           ? "bg-primary text-primary-foreground font-semibold"
                           : "text-muted-foreground hover:bg-muted"
                       )}
                     >
-                      <span className="truncate">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedModuleIdx(idx)}
+                        className="flex-1 text-left truncate min-w-0"
+                      >
                         {m.orderIndex}. {m.titleEn}
-                      </span>
-                    </button>
+                      </button>
+                      {modules.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeModule(idx);
+                          }}
+                          className={cn(
+                            "opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/20 text-destructive shrink-0 transition-opacity",
+                            selectedModuleIdx === idx ? "text-primary-foreground hover:bg-white/20" : ""
+                          )}
+                          title={fr ? "Supprimer le module" : "Delete module"}
+                        >
+                          <Trash2 className="size-3" />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1322,12 +1366,24 @@ export function CreateCourseModal({ isOpen, onClose, onCourseCreated }: Props) {
               {currentMod && (
                 <div className="space-y-6 text-xs">
                   <div className="flex items-center justify-between border-b border-border pb-2">
-                    <Badge variant="outline">Module #{currentMod.orderIndex}</Badge>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">Module #{currentMod.orderIndex}</Badge>
                       <span className="text-muted-foreground">
                         {currentMod.lessons.length} {fr ? "Leçon(s)" : "Lesson(s)"}
                       </span>
                     </div>
+                    {modules.length > 1 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeModule(selectedModuleIdx)}
+                        className="h-7 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive gap-1 px-2"
+                      >
+                        <Trash2 className="size-3.5" />
+                        {fr ? "Supprimer le Module" : "Delete Module"}
+                      </Button>
+                    )}
                   </div>
 
                   {/* Module Titles */}
@@ -1472,6 +1528,63 @@ export function CreateCourseModal({ isOpen, onClose, onCourseCreated }: Props) {
                                 }}
                                 className="h-8 text-xs"
                               />
+                            </div>
+                          </div>
+
+                          {/* Lesson Access Window: Start Date & End Date */}
+                          <div className="rounded-lg border border-border/80 bg-muted/20 p-3 space-y-2.5">
+                            <div className="flex flex-wrap items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <Calendar className="size-3.5 text-primary" />
+                                <span className="text-[11px] font-semibold text-foreground">
+                                  {fr ? "Période d'accès de la leçon" : "Lesson Access Window (Start & End Date)"}
+                                </span>
+                                <Badge variant="outline" className="text-[9px] text-muted-foreground border-border font-medium">
+                                  {fr ? "Sécurisé serveur" : "Server Enforced"}
+                                </Badge>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground">
+                                {fr ? "Accessible uniquement dans cette période" : "Accessible strictly within this duration"}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <Label className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
+                                  <span>{fr ? "Date de début (Déverrouillage)" : "Start Date (Available From)"}</span>
+                                </Label>
+                                <Input
+                                  type="datetime-local"
+                                  value={les.startDate || ""}
+                                  onChange={(e) => {
+                                    const updated = [...modules];
+                                    const l = updated[selectedModuleIdx]?.lessons[lesIdx];
+                                    if (l) {
+                                      l.startDate = e.target.value;
+                                      setModules(updated);
+                                    }
+                                  }}
+                                  className="h-8 text-xs mt-1 bg-background font-mono"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-[10px] font-medium text-muted-foreground flex items-center gap-1">
+                                  <span>{fr ? "Date de fin (Expiration / Clôture)" : "End Date (Access Closes)"}</span>
+                                </Label>
+                                <Input
+                                  type="datetime-local"
+                                  value={les.endDate || ""}
+                                  onChange={(e) => {
+                                    const updated = [...modules];
+                                    const l = updated[selectedModuleIdx]?.lessons[lesIdx];
+                                    if (l) {
+                                      l.endDate = e.target.value;
+                                      setModules(updated);
+                                    }
+                                  }}
+                                  className="h-8 text-xs mt-1 bg-background font-mono"
+                                />
+                              </div>
                             </div>
                           </div>
 

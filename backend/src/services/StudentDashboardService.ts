@@ -1,5 +1,6 @@
 import { pool } from "../database/pool.js";
 import { ModuleAccessService } from "./ModuleAccessService.js";
+import { LessonAccessService } from "./LessonAccessService.js";
 import { StudentDashboardDTO } from "../types/domain.js";
 import { AppError, ErrorCodes } from "../constants/errors.js";
 
@@ -115,18 +116,21 @@ export class StudentDashboardService {
 
     const en = selectedEnrollment;
 
-    // 3. Fetch modules in cohort
+    // 3. Fetch modules in cohort or program
     const modulesRes = await pool.query(
-      `SELECT m.id, m.cohort_id, m.order_index, m.title_en, m.title_fr,
-              m.description_en, m.description_fr, m.start_date, m.end_date,
+      `SELECT m.id, COALESCE(m.cohort_id, $1) as cohort_id, m.order_index, m.title_en, m.title_fr,
+              m.description_en, m.description_fr,
+              COALESCE(m.start_date, $3) as start_date,
+              COALESCE(m.end_date, $4) as end_date,
               m.estimated_hours, m.required_completion, m.passing_score,
               q.id as quiz_id, q.title_en as quiz_title_en, q.title_fr as quiz_title_fr,
               q.passing_score as quiz_passing_score, q.attempts_allowed
        FROM modules m
        LEFT JOIN quizzes q ON q.module_id = m.id
-       WHERE m.cohort_id = $1
+       WHERE (m.cohort_id = $1 OR (m.program_id = $2 AND m.cohort_id IS NULL))
+         AND m.status = 'PUBLISHED'
        ORDER BY m.order_index ASC`,
-      [en.cohort_id]
+      [en.cohort_id, en.program_id, en.start_date, en.end_date]
     );
 
     const now = new Date();
@@ -151,10 +155,10 @@ export class StudentDashboardService {
                 COALESCE(lp.completed, FALSE) as is_done,
                 COALESCE(lp.video_percent, 0) as video_percent
          FROM lessons l
-         LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = $1
-         WHERE l.module_id = $2
+         LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = $1 AND (lp.cohort_id = $2 OR lp.cohort_id IS NULL)
+         WHERE l.module_id = $3 AND l.status = 'PUBLISHED'
          ORDER BY l.order_index ASC`,
-        [userId, m.id]
+        [userId, en.cohort_id, m.id]
       );
 
       const doneLessons = lessonsRes.rows.filter((l) => l.is_done).length;
@@ -167,27 +171,19 @@ export class StudentDashboardService {
         const scoreRes = await pool.query(
           `SELECT MAX(percentage) as best_score 
            FROM quiz_attempts 
-           WHERE quiz_id = $1 AND user_id = $2`,
-          [m.quiz_id, userId]
+           WHERE quiz_id = $1 AND user_id = $2 AND (cohort_id = $3 OR cohort_id IS NULL)`,
+          [m.quiz_id, userId, en.cohort_id]
         );
         bestScore = scoreRes.rows[0]?.best_score || 0;
       }
 
       const minutes = lessonsRes.rows.reduce((sum, l) => sum + l.duration_minutes, 0);
 
-      modulesData.push({
-        module: {
-          id: m.id,
-          cohortId: m.cohort_id,
-          order: m.order_index,
-          title: { en: m.title_en, fr: m.title_fr },
-          description: { en: m.description_en, fr: m.description_fr },
-          startDate: m.start_date.toISOString(),
-          endDate: m.end_date.toISOString(),
-          estimatedHours: m.estimated_hours,
-          requiredCompletion: m.required_completion,
-          passingScore: m.passing_score,
-          lessons: lessonsRes.rows.map((l) => ({
+      // Evaluate access for each lesson
+      const evaluatedLessons = await Promise.all(
+        lessonsRes.rows.map(async (l) => {
+          const lAccess = await LessonAccessService.evaluateAccess(userId, l.id, en.cohort_id, now).catch(() => null);
+          return {
             id: l.id,
             moduleId: m.id,
             order: l.order_index,
@@ -197,8 +193,40 @@ export class StudentDashboardService {
             body: { en: "", fr: "" },
             durationMinutes: l.duration_minutes,
             mandatory: l.mandatory,
+            completed: l.is_done,
+            videoPercent: l.video_percent,
+            access: lAccess ? {
+              lessonId: l.id,
+              cohortId: en.cohort_id,
+              state: lAccess.state,
+              isLocked: lAccess.isLocked,
+              lockReason: lAccess.lockReason,
+              availableFrom: lAccess.availableFrom,
+              availableUntil: lAccess.availableUntil,
+              prerequisite: lAccess.prerequisite,
+              progress: lAccess.progressPercent || 0,
+            } : undefined,
             resources: [],
-          })),
+          };
+        })
+      );
+
+      const startDateStr = m.start_date instanceof Date ? m.start_date.toISOString() : new Date(m.start_date).toISOString();
+      const endDateStr = m.end_date instanceof Date ? m.end_date.toISOString() : new Date(m.end_date).toISOString();
+
+      modulesData.push({
+        module: {
+          id: m.id,
+          cohortId: m.cohort_id,
+          order: m.order_index,
+          title: { en: m.title_en, fr: m.title_fr },
+          description: { en: m.description_en, fr: m.description_fr },
+          startDate: startDateStr,
+          endDate: endDateStr,
+          estimatedHours: m.estimated_hours,
+          requiredCompletion: m.required_completion,
+          passingScore: m.passing_score,
+          lessons: evaluatedLessons,
           quiz: {
             id: m.quiz_id || "",
             moduleId: m.id,

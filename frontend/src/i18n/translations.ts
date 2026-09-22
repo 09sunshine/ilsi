@@ -299,6 +299,9 @@ export const dictionaries = {
     "course.resources": "Attached resources",
     "course.takeQuiz": "Take the module quiz",
     "course.moduleProgress": "Module progress",
+    "course.lessonNotStarted": "Lesson Not Yet Available",
+    "course.lessonExpired": "Lesson Access Window Closed",
+    "course.lessonLocked": "Lesson Access Restricted",
 
     "quiz.start": "Start quiz",
     "quiz.question": "Question {current} of {total}",
@@ -658,6 +661,9 @@ export const dictionaries = {
     "course.resources": "Ressources associées",
     "course.takeQuiz": "Passer le quiz du module",
     "course.moduleProgress": "Progression du module",
+    "course.lessonNotStarted": "Leçon pas encore disponible",
+    "course.lessonExpired": "Période d'accès à la leçon expirée",
+    "course.lessonLocked": "Accès à la leçon restreint",
 
     "quiz.start": "Commencer le quiz",
     "quiz.question": "Question {current} sur {total}",

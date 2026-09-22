@@ -1,5 +1,6 @@
 import { pool } from "../database/pool.js";
 import { ModuleAccessService } from "./ModuleAccessService.js";
+import { LessonAccessService } from "./LessonAccessService.js";
 import { AppError, ErrorCodes } from "../constants/errors.js";
 import { NotificationService } from "./NotificationService.js";
 
@@ -7,12 +8,12 @@ export class QuizEngineService {
   /**
    * Retrieves quiz details for a student. Excludes answer keys from output.
    */
-  static async getQuizForStudent(quizId: string, userId: string, isAdmin: boolean = false) {
+  static async getQuizForStudent(quizId: string, userId: string, isAdmin: boolean = false, targetCohortId?: string) {
     const quizRes = await pool.query(
-      `SELECT q.id, q.module_id, q.title_en, q.title_fr, q.description_en, q.description_fr,
-              q.time_limit_minutes, q.passing_score, q.attempts_allowed
+      `SELECT q.id, q.module_id, q.lesson_id, q.title_en, q.title_fr, q.description_en, q.description_fr,
+              q.time_limit_minutes, q.passing_score, q.attempts_allowed, q.published, q.status
        FROM quizzes q
-       WHERE q.id = $1 OR q.module_id = $1`,
+       WHERE q.id = $1 OR q.module_id = $1 OR q.lesson_id = $1`,
       [quizId]
     );
 
@@ -23,7 +24,12 @@ export class QuizEngineService {
     const quiz = quizRes.rows[0];
 
     if (!isAdmin) {
-      await ModuleAccessService.assertAccess(userId, quiz.module_id);
+      if (quiz.lesson_id) {
+        await LessonAccessService.assertAccess(userId, quiz.lesson_id, targetCohortId);
+      }
+      if (quiz.module_id) {
+        await ModuleAccessService.assertAccess(userId, quiz.module_id);
+      }
     }
 
     // Fetch user's previous attempts first to check completion / attempt status
@@ -101,7 +107,8 @@ export class QuizEngineService {
   static async submitQuizAttempt(
     quizId: string,
     userId: string,
-    answers: Record<string, string>
+    answers: Record<string, string>,
+    targetCohortId?: string
   ) {
     const client = await pool.connect();
     try {
@@ -109,9 +116,9 @@ export class QuizEngineService {
 
       // 1. Fetch quiz info and verify access
       const quizRes = await client.query(
-        `SELECT q.id, q.module_id, q.passing_score, q.attempts_allowed
+        `SELECT q.id, q.module_id, q.lesson_id, q.passing_score, q.attempts_allowed
          FROM quizzes q
-         WHERE q.id = $1 OR q.module_id = $1`,
+         WHERE q.id = $1 OR q.module_id = $1 OR q.lesson_id = $1`,
         [quizId]
       );
 
@@ -121,7 +128,19 @@ export class QuizEngineService {
 
       const quiz = quizRes.rows[0];
       const actualQuizId = quiz.id;
-      await ModuleAccessService.assertAccess(userId, quiz.module_id);
+
+      let resolvedCohortId = targetCohortId;
+      if (quiz.lesson_id) {
+        const evalAccess = await LessonAccessService.assertAccess(userId, quiz.lesson_id, targetCohortId);
+        resolvedCohortId = resolvedCohortId || evalAccess.cohortId;
+      }
+      if (quiz.module_id) {
+        await ModuleAccessService.assertAccess(userId, quiz.module_id);
+        if (!resolvedCohortId) {
+          const modRes = await client.query(`SELECT cohort_id FROM modules WHERE id = $1`, [quiz.module_id]);
+          resolvedCohortId = modRes.rows[0]?.cohort_id || null;
+        }
+      }
 
       // Rapid multi-click deduplication (within 3 seconds)
       const recentAttemptRes = await client.query(
@@ -229,6 +248,7 @@ export class QuizEngineService {
 
       const percentage = totalPoints ? Math.round((earnedScore / totalPoints) * 100) : 0;
       const passed = percentage >= quiz.passing_score;
+      const quizCompleted = passed || attemptsExhausted;
       const revealAnswers = passed || attemptsExhausted;
 
       // Filter out correctAnswer if not allowed to reveal yet
@@ -238,12 +258,22 @@ export class QuizEngineService {
         }
       }
 
-      // 4. Save attempt
+      // 4. Save attempt with cohortId and lessonId
       const attemptRes = await client.query(
-        `INSERT INTO quiz_attempts (quiz_id, module_id, user_id, attempt_number, score, percentage, passed)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO quiz_attempts (quiz_id, module_id, lesson_id, cohort_id, user_id, attempt_number, score, percentage, passed)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING id, started_at, submitted_at`,
-        [actualQuizId, quiz.module_id, userId, attemptNumber, earnedScore, percentage, passed]
+        [
+          actualQuizId,
+          quiz.module_id || null,
+          quiz.lesson_id || null,
+          resolvedCohortId || null,
+          userId,
+          attemptNumber,
+          earnedScore,
+          percentage,
+          passed,
+        ]
       );
 
       const attemptId = attemptRes.rows[0].id;
@@ -278,54 +308,72 @@ export class QuizEngineService {
         );
       }
 
-      // 6. Update module_progress
-      const bestScoreRes = await client.query(
-        `SELECT MAX(percentage) as best_score, BOOL_OR(passed) as has_passed
-         FROM quiz_attempts
-         WHERE module_id = $1 AND user_id = $2`,
-        [quiz.module_id, userId]
-      );
+      // 6. Update lesson_progress if attached to a lesson
+      if (quiz.lesson_id) {
+        const markLessonDone = passed;
+        await client.query(
+          `INSERT INTO lesson_progress (
+             user_id, cohort_id, lesson_id, module_id, completed, completed_at
+           )
+           VALUES ($1, $2, $3, $4, $5, CASE WHEN $5 THEN NOW() ELSE NULL END)
+           ON CONFLICT (user_id, cohort_id, lesson_id) WHERE cohort_id IS NOT NULL DO UPDATE SET
+             completed = EXCLUDED.completed OR lesson_progress.completed,
+             completed_at = CASE WHEN (EXCLUDED.completed OR lesson_progress.completed) AND lesson_progress.completed_at IS NULL THEN NOW() ELSE lesson_progress.completed_at END,
+             updated_at = NOW()`,
+          [userId, resolvedCohortId || null, quiz.lesson_id, quiz.module_id || null, markLessonDone]
+        );
+      }
 
-      const bestScore = bestScoreRes.rows[0].best_score || percentage;
-      const hasPassed = bestScoreRes.rows[0].has_passed || passed;
-      const quizFulfilled = hasPassed || attemptsExhausted;
+      // 7. Update module_progress if attached to a module
+      if (quiz.module_id) {
+        const bestScoreRes = await client.query(
+          `SELECT MAX(percentage) as best_score, BOOL_OR(passed) as has_passed
+           FROM quiz_attempts
+           WHERE module_id = $1 AND user_id = $2`,
+          [quiz.module_id, userId]
+        );
 
-      // Check if all lessons are done to update completed flag
-      const lessonsRes = await client.query(
-        `SELECT l.mandatory, COALESCE(lp.completed, FALSE) as done
-         FROM lessons l
-         LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = $1
-         WHERE l.module_id = $2`,
-        [userId, quiz.module_id]
-      );
+        const bestScore = bestScoreRes.rows[0].best_score || percentage;
+        const hasPassed = bestScoreRes.rows[0].has_passed || passed;
+        const quizFulfilled = hasPassed || attemptsExhausted;
 
-      const allMandatoryDone = lessonsRes.rows.filter((l) => l.mandatory).every((l) => l.done);
-      const doneCount = lessonsRes.rows.filter((l) => l.done).length;
-      const lessonPercent = lessonsRes.rows.length ? Math.round((doneCount / lessonsRes.rows.length) * 100) : 100;
-      const moduleCompleted = allMandatoryDone && quizFulfilled;
+        // Check if all lessons are done to update completed flag
+        const lessonsRes = await client.query(
+          `SELECT l.mandatory, COALESCE(lp.completed, FALSE) as done
+           FROM lessons l
+           LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = $1
+           WHERE l.module_id = $2`,
+          [userId, quiz.module_id]
+        );
 
-      await client.query(
-        `INSERT INTO module_progress (user_id, module_id, completed, lessons_completed, completion_percentage, quiz_passed, best_quiz_score, completed_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (user_id, module_id) DO UPDATE SET
-           completed = EXCLUDED.completed,
-           lessons_completed = EXCLUDED.lessons_completed,
-           completion_percentage = EXCLUDED.completion_percentage,
-           quiz_passed = EXCLUDED.quiz_passed,
-           best_quiz_score = EXCLUDED.best_quiz_score,
-           completed_at = CASE WHEN EXCLUDED.completed AND module_progress.completed_at IS NULL THEN NOW() ELSE module_progress.completed_at END,
-           updated_at = NOW()`,
-        [
-          userId,
-          quiz.module_id,
-          moduleCompleted,
-          doneCount,
-          lessonPercent,
-          quizFulfilled,
-          bestScore,
-          moduleCompleted ? new Date() : null,
-        ]
-      );
+        const allMandatoryDone = lessonsRes.rows.filter((l) => l.mandatory).every((l) => l.done);
+        const doneCount = lessonsRes.rows.filter((l) => l.done).length;
+        const lessonPercent = lessonsRes.rows.length ? Math.round((doneCount / lessonsRes.rows.length) * 100) : 100;
+        const moduleCompleted = allMandatoryDone && quizFulfilled;
+
+        await client.query(
+          `INSERT INTO module_progress (user_id, module_id, completed, lessons_completed, completion_percentage, quiz_passed, best_quiz_score, completed_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (user_id, module_id) DO UPDATE SET
+             completed = EXCLUDED.completed,
+             lessons_completed = EXCLUDED.lessons_completed,
+             completion_percentage = EXCLUDED.completion_percentage,
+             quiz_passed = EXCLUDED.quiz_passed,
+             best_quiz_score = EXCLUDED.best_quiz_score,
+             completed_at = CASE WHEN EXCLUDED.completed AND module_progress.completed_at IS NULL THEN NOW() ELSE module_progress.completed_at END,
+             updated_at = NOW()`,
+          [
+            userId,
+            quiz.module_id,
+            moduleCompleted,
+            doneCount,
+            lessonPercent,
+            quizFulfilled,
+            bestScore,
+            moduleCompleted ? new Date() : null,
+          ]
+        );
+      }
 
       await client.query("COMMIT");
 
@@ -340,7 +388,7 @@ export class QuizEngineService {
           percentage,
           passed,
           attemptsExhausted: attemptsExhausted && !passed,
-          quizCompleted: quizFulfilled,
+          quizCompleted,
           startedAt: attemptRes.rows[0].started_at,
           submittedAt: attemptRes.rows[0].submitted_at,
         },

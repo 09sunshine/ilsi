@@ -1054,11 +1054,14 @@ router.post(
           // 3a. Insert Lessons
           if (m.lessons && Array.isArray(m.lessons)) {
             for (const l of m.lessons) {
+              const lessonStartAt = l.startAt || l.startDate ? new Date(l.startAt || l.startDate) : modStartDate;
+              const lessonEndAt = l.endAt || l.endDate ? new Date(l.endAt || l.endDate) : modEndDate;
+
               const lessonRes = await client.query(
                 `INSERT INTO lessons (
                   module_id, order_index, type, title_en, title_fr, description_en, description_fr,
-                  body_en, body_fr, duration_minutes, mandatory
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                  body_en, body_fr, duration_minutes, mandatory, start_date, end_date
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 RETURNING id`,
                 [
                   moduleId,
@@ -1072,9 +1075,34 @@ router.post(
                   l.bodyFr || "",
                   l.durationMinutes || 20,
                   l.mandatory !== false,
+                  lessonStartAt,
+                  lessonEndAt,
                 ]
               );
               const lessonId = lessonRes.rows[0].id;
+
+              // Insert cohort_lessons assignment immediately
+              await client.query(
+                `INSERT INTO cohort_lessons (
+                  cohort_id, lesson_id, order_index, start_at, end_at, duration_minutes,
+                  is_required, is_published, status, passing_score
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, 'PUBLISHED', $8)
+                ON CONFLICT (cohort_id, lesson_id) DO UPDATE SET
+                  start_at = EXCLUDED.start_at,
+                  end_at = EXCLUDED.end_at,
+                  order_index = EXCLUDED.order_index,
+                  duration_minutes = EXCLUDED.duration_minutes`,
+                [
+                  cohortId,
+                  lessonId,
+                  l.orderIndex,
+                  lessonStartAt,
+                  lessonEndAt,
+                  l.durationMinutes || 20,
+                  l.mandatory !== false,
+                  m.passingScore || 70,
+                ]
+              );
 
               // Insert video record if videoUrl provided
               if (l.videoUrl) {
@@ -1956,50 +1984,189 @@ router.patch("/contact-messages/:id/status", async (req: Request, res: Response,
 
 /**
  * GET /api/admin/cohorts/:id/curriculum
- * Fetches modules and lessons for admin editing, including attached video paths/urls
+ * Fetches modules and lessons for admin editing, supporting both legacy cohort-bound modules
+ * and decoupled program-based modules with cohort lesson assignments.
  */
 router.get("/cohorts/:id/curriculum", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const cohortId = req.params.id;
+    const cohortRes = await pool.query(`SELECT program_id FROM cohorts WHERE id = $1`, [cohortId]);
+    if (cohortRes.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.COHORT_NOT_FOUND, "Cohort not found");
+    }
+    const programId = cohortRes.rows[0]?.program_id;
+
     const modulesRes = await pool.query(
-      `SELECT id, order_index, title_en, title_fr, description_en, description_fr,
-              start_date, end_date, estimated_hours, passing_score
-       FROM modules
-       WHERE cohort_id = $1
-       ORDER BY order_index ASC`,
-      [cohortId]
+      `SELECT m.id, m.order_index, m.title_en, m.title_fr, m.description_en, m.description_fr,
+              m.start_date, m.end_date, m.estimated_hours, m.passing_score, m.status
+       FROM modules m
+       WHERE m.cohort_id = $1 OR (m.program_id = $2 AND m.program_id IS NOT NULL)
+       ORDER BY m.order_index ASC`,
+      [cohortId, programId]
     );
 
-    const modules = [];
-    for (const m of modulesRes.rows) {
-      const lessonsRes = await pool.query(
-        `SELECT l.id, l.order_index, l.type, l.title_en, l.title_fr, l.description_en, l.description_fr,
-                l.duration_minutes, l.mandatory,
-                v.storage_path as video_url, v.file_name as video_file_name
-         FROM lessons l
-         LEFT JOIN videos v ON v.lesson_id = l.id
-         WHERE l.module_id = $1
-         ORDER BY l.order_index ASC`,
-        [m.id]
-      );
+    if (modulesRes.rows.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
 
-      modules.push({
-        ...m,
-        lessons: lessonsRes.rows.map((l) => ({
-          id: l.id,
-          orderIndex: l.order_index,
-          type: l.type,
-          titleEn: l.title_en,
-          titleFr: l.title_fr,
-          descriptionEn: l.description_en,
-          descriptionFr: l.description_fr,
-          durationMinutes: l.duration_minutes,
-          mandatory: l.mandatory,
-          videoUrl: l.video_url || "",
-          videoFileName: l.video_file_name || "",
-        })),
+    const moduleIds = modulesRes.rows.map((m) => m.id);
+
+    // 1. Bulk query all lessons across all modules for this cohort
+    const lessonsRes = await pool.query(
+      `SELECT l.id, l.module_id, l.order_index, l.type, l.title_en, l.title_fr, l.description_en, l.description_fr,
+              l.body_en, l.body_fr, l.duration_minutes, l.mandatory, l.status,
+              l.start_date, l.end_date,
+              v.storage_path as video_url, v.file_name as video_file_name,
+              cl.id as cohort_lesson_id, cl.start_at as cohort_start_at, cl.end_at as cohort_end_at,
+              cl.order_index as cohort_order_index, cl.is_published as cohort_is_published,
+              cl.prerequisite_lesson_id, cl.passing_score as cohort_passing_score
+       FROM lessons l
+       LEFT JOIN videos v ON v.lesson_id = l.id
+       LEFT JOIN cohort_lessons cl ON cl.lesson_id = l.id AND cl.cohort_id = $1
+       WHERE l.module_id = ANY($2::uuid[])
+       ORDER BY COALESCE(cl.order_index, l.order_index) ASC`,
+      [cohortId, moduleIds]
+    );
+
+    const lessonIds = lessonsRes.rows.map((l) => l.id);
+
+    // Maps for fast in-memory assembly
+    const chaptersByLessonId = new Map<string, any[]>();
+    const resourcesByLessonId = new Map<string, any[]>();
+    const quizByLessonId = new Map<string, any>();
+
+    if (lessonIds.length > 0) {
+      // 2. Query chapters, resources, and latest quiz per lesson in parallel
+      const [chapRes, resRes, quizRes] = await Promise.all([
+        pool.query(
+          `SELECT id, lesson_id, order_index, title_en, title_fr, description_en, description_fr, duration_minutes, video_url, status
+           FROM chapters WHERE lesson_id = ANY($1::uuid[]) ORDER BY order_index ASC`,
+          [lessonIds]
+        ),
+        pool.query(
+          `SELECT id, lesson_id, name_en, name_fr, type, storage_path, url, size_kb, downloadable
+           FROM resources WHERE lesson_id = ANY($1::uuid[]) ORDER BY created_at ASC`,
+          [lessonIds]
+        ),
+        pool.query(
+          `SELECT DISTINCT ON (lesson_id)
+                  id, lesson_id, title_en, title_fr, description_en, description_fr, passing_score, time_limit_minutes, attempts_allowed, published, status
+           FROM quizzes WHERE lesson_id = ANY($1::uuid[]) ORDER BY lesson_id, created_at DESC`,
+          [lessonIds]
+        ),
+      ]);
+
+      for (const c of chapRes.rows) {
+        if (!chaptersByLessonId.has(c.lesson_id)) chaptersByLessonId.set(c.lesson_id, []);
+        chaptersByLessonId.get(c.lesson_id)!.push({
+          id: c.id,
+          orderIndex: c.order_index,
+          titleEn: c.title_en,
+          titleFr: c.title_fr,
+          descriptionEn: c.description_en || "",
+          descriptionFr: c.description_fr || "",
+          durationMinutes: c.duration_minutes,
+          videoUrl: c.video_url || "",
+          status: c.status,
+        });
+      }
+
+      for (const r of resRes.rows) {
+        if (!resourcesByLessonId.has(r.lesson_id)) resourcesByLessonId.set(r.lesson_id, []);
+        resourcesByLessonId.get(r.lesson_id)!.push({
+          id: r.id,
+          nameEn: r.name_en,
+          nameFr: r.name_fr,
+          type: r.type,
+          storagePath: r.storage_path || null,
+          url: r.url,
+          sizeKb: r.size_kb,
+          downloadable: r.downloadable,
+        });
+      }
+
+      // 3. For any found quizzes, bulk fetch all questions with aggregated options in 1 query
+      const quizIds = quizRes.rows.map((q) => q.id);
+      const questionsByQuizId = new Map<string, any[]>();
+
+      if (quizIds.length > 0) {
+        const questionsRes = await pool.query(
+          `SELECT qq.*,
+                  COALESCE(
+                    json_agg(
+                      json_build_object(
+                        'id', qo.id,
+                        'orderIndex', qo.order_index,
+                        'labelEn', qo.label_en,
+                        'labelFr', qo.label_fr,
+                        'correct', qo.correct
+                      ) ORDER BY qo.order_index ASC
+                    ) FILTER (WHERE qo.id IS NOT NULL),
+                    '[]'
+                  ) as options
+           FROM quiz_questions qq
+           LEFT JOIN quiz_options qo ON qo.question_id = qq.id
+           WHERE qq.quiz_id = ANY($1::uuid[])
+           GROUP BY qq.id
+           ORDER BY qq.order_index ASC`,
+          [quizIds]
+        );
+
+        for (const q of questionsRes.rows) {
+          if (!questionsByQuizId.has(q.quiz_id)) questionsByQuizId.set(q.quiz_id, []);
+          questionsByQuizId.get(q.quiz_id)!.push(q);
+        }
+      }
+
+      for (const qRow of quizRes.rows) {
+        quizByLessonId.set(qRow.lesson_id, {
+          ...qRow,
+          questions: questionsByQuizId.get(qRow.id) || [],
+        });
+      }
+    }
+
+    // 4. Group enriched lessons by module_id
+    const lessonsByModuleId = new Map<string, any[]>();
+    for (const l of lessonsRes.rows) {
+      if (!lessonsByModuleId.has(l.module_id)) lessonsByModuleId.set(l.module_id, []);
+
+      lessonsByModuleId.get(l.module_id)!.push({
+        id: l.id,
+        orderIndex: l.cohort_order_index || l.order_index,
+        type: l.type,
+        titleEn: l.title_en,
+        titleFr: l.title_fr,
+        descriptionEn: l.description_en,
+        descriptionFr: l.description_fr,
+        bodyEn: l.body_en || "",
+        bodyFr: l.body_fr || "",
+        durationMinutes: l.duration_minutes,
+        mandatory: l.mandatory,
+        status: l.status,
+        videoUrl: l.video_url || "",
+        videoFileName: l.video_file_name || "",
+        cohortLessonId: l.cohort_lesson_id || null,
+        cohortStartAt: l.cohort_start_at || l.start_date || null,
+        cohortEndAt: l.cohort_end_at || l.end_date || null,
+        startAt: l.cohort_start_at || l.start_date || null,
+        endAt: l.cohort_end_at || l.end_date || null,
+        startDate: l.cohort_start_at ? new Date(l.cohort_start_at).toISOString().slice(0, 10) : l.start_date ? new Date(l.start_date).toISOString().slice(0, 10) : "",
+        endDate: l.cohort_end_at ? new Date(l.cohort_end_at).toISOString().slice(0, 10) : l.end_date ? new Date(l.end_date).toISOString().slice(0, 10) : "",
+        cohortIsPublished: l.cohort_is_published !== null ? l.cohort_is_published : true,
+        prerequisiteLessonId: l.prerequisite_lesson_id || null,
+        passingScore: l.cohort_passing_score || null,
+        chapters: chaptersByLessonId.get(l.id) || [],
+        resources: resourcesByLessonId.get(l.id) || [],
+        quiz: quizByLessonId.get(l.id) || null,
       });
     }
+
+    // 5. Build final modules structure
+    const modules = modulesRes.rows.map((m) => ({
+      ...m,
+      lessons: lessonsByModuleId.get(m.id) || [],
+    }));
 
     res.json({ success: true, data: modules });
   } catch (error) {
@@ -2008,47 +2175,1646 @@ router.get("/cohorts/:id/curriculum", async (req: Request, res: Response, next: 
 });
 
 /**
- * PATCH /api/admin/lessons/:id/video
- * Attaches or updates a video (Supabase path or link) for an existing lesson
+ * ============================================================================
+ * PROGRAM MANAGEMENT
+ * ============================================================================
  */
-router.patch("/lessons/:id/video", async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const lessonId = req.params.id;
-    const { videoUrl, durationMinutes } = req.body;
 
-    if (!videoUrl) {
-      await pool.query(`DELETE FROM videos WHERE lesson_id = $1`, [lessonId]);
-      res.json({ success: true, message: "Video removed from lesson" });
+/**
+ * GET /api/admin/programs
+ */
+router.get("/programs", async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(`
+      SELECT p.*,
+             (SELECT COUNT(*) FROM cohorts c WHERE c.program_id = p.id) as cohort_count,
+             (SELECT COUNT(*) FROM modules m WHERE m.program_id = p.id) as module_count,
+             (SELECT COUNT(*) FROM lessons l JOIN modules m ON m.id = l.module_id WHERE m.program_id = p.id) as lesson_count
+      FROM programs p
+      ORDER BY p.created_at DESC
+    `);
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/programs
+ */
+router.post(
+  "/programs",
+  validateRequest({ body: adminSchemas.createProgram }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const {
+        slug,
+        titleEn,
+        titleFr,
+        taglineEn,
+        taglineFr,
+        descriptionEn,
+        descriptionFr,
+        durationWeeks,
+        price,
+        priceEur,
+        currency,
+        thumbnailUrl,
+        status,
+      } = req.body;
+
+      const result = await pool.query(
+        `INSERT INTO programs (
+           slug, title_en, title_fr, tagline_en, tagline_fr,
+           description_en, description_fr, duration_weeks,
+           price, price_eur, currency, thumbnail_url, status
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         RETURNING *`,
+        [
+          slug,
+          titleEn,
+          titleFr,
+          taglineEn || null,
+          taglineFr || null,
+          descriptionEn,
+          descriptionFr,
+          durationWeeks,
+          price,
+          priceEur,
+          currency,
+          thumbnailUrl || null,
+          status,
+        ]
+      );
+
+      res.status(201).json({ success: true, data: result.rows[0], message: "Program created successfully" });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/admin/programs/:id
+ */
+router.get("/programs/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const progRes = await pool.query(`SELECT * FROM programs WHERE id = $1`, [id]);
+    if (progRes.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.RESOURCE_NOT_FOUND, "Program not found");
+    }
+
+    const modulesRes = await pool.query(
+      `SELECT m.*,
+              (SELECT COUNT(*) FROM lessons l WHERE l.module_id = m.id) as lesson_count
+       FROM modules m
+       WHERE m.program_id = $1
+       ORDER BY m.order_index ASC`,
+      [id]
+    );
+
+    const cohortsRes = await pool.query(
+      `SELECT id, name_en, name_fr, start_date, end_date, status, capacity
+       FROM cohorts WHERE program_id = $1
+       ORDER BY start_date DESC`,
+      [id]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        ...progRes.rows[0],
+        modules: modulesRes.rows,
+        cohorts: cohortsRes.rows,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/admin/programs/:id
+ */
+router.patch(
+  "/programs/:id",
+  validateRequest({ body: adminSchemas.updateProgram }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const {
+        slug,
+        titleEn,
+        titleFr,
+        taglineEn,
+        taglineFr,
+        descriptionEn,
+        descriptionFr,
+        durationWeeks,
+        price,
+        priceEur,
+        currency,
+        thumbnailUrl,
+        status,
+      } = req.body;
+
+      const result = await pool.query(
+        `UPDATE programs SET
+           slug = COALESCE($1, slug),
+           title_en = COALESCE($2, title_en),
+           title_fr = COALESCE($3, title_fr),
+           tagline_en = COALESCE($4, tagline_en),
+           tagline_fr = COALESCE($5, tagline_fr),
+           description_en = COALESCE($6, description_en),
+           description_fr = COALESCE($7, description_fr),
+           duration_weeks = COALESCE($8, duration_weeks),
+           price = COALESCE($9, price),
+           price_eur = COALESCE($10, price_eur),
+           currency = COALESCE($11, currency),
+           thumbnail_url = COALESCE($12, thumbnail_url),
+           status = COALESCE($13, status),
+           updated_at = NOW()
+         WHERE id = $14
+         RETURNING *`,
+        [
+          slug,
+          titleEn,
+          titleFr,
+          taglineEn,
+          taglineFr,
+          descriptionEn,
+          descriptionFr,
+          durationWeeks,
+          price,
+          priceEur,
+          currency,
+          thumbnailUrl,
+          status,
+          id,
+        ]
+      );
+
+      if (result.rows.length === 0) {
+        throw new AppError(404, ErrorCodes.RESOURCE_NOT_FOUND, "Program not found");
+      }
+
+      res.json({ success: true, data: result.rows[0], message: "Program updated successfully" });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /api/admin/programs/:id
+ */
+router.delete("/programs/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const cohortsRes = await pool.query(`SELECT 1 FROM cohorts WHERE program_id = $1 LIMIT 1`, [id]);
+    if (cohortsRes.rows.length > 0) {
+      throw new AppError(
+        400,
+        ErrorCodes.OPERATION_NOT_ALLOWED,
+        "Cannot delete program with existing cohorts. Archive or delete associated cohorts first."
+      );
+    }
+
+    const result = await pool.query(`DELETE FROM programs WHERE id = $1 RETURNING id`, [id]);
+    if (result.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.RESOURCE_NOT_FOUND, "Program not found");
+    }
+
+    res.json({ success: true, message: "Program deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * ============================================================================
+ * MODULE MANAGEMENT
+ * ============================================================================
+ */
+
+/**
+ * POST /api/admin/programs/:programId/modules
+ */
+router.post(
+  "/programs/:programId/modules",
+  validateRequest({ body: adminSchemas.createModule.omit({ programId: true }) }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { programId } = req.params;
+      const {
+        orderIndex = 1,
+        titleEn,
+        titleFr,
+        descriptionEn,
+        descriptionFr,
+        estimatedHours = 4,
+        requiredCompletion = 80,
+        passingScore = 70,
+        status = "PUBLISHED",
+      } = req.body;
+
+      const result = await pool.query(
+        `INSERT INTO modules (
+           program_id, order_index, title_en, title_fr,
+           description_en, description_fr, estimated_hours,
+           required_completion, passing_score, status
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING *`,
+        [
+          programId,
+          orderIndex,
+          titleEn,
+          titleFr,
+          descriptionEn || null,
+          descriptionFr || null,
+          estimatedHours,
+          requiredCompletion,
+          passingScore,
+          status,
+        ]
+      );
+
+      res.status(201).json({ success: true, data: result.rows[0], message: "Module created successfully" });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/admin/cohorts/:cohortId/modules
+ * Directly attaches a new module to a cohort (and its program)
+ */
+router.post("/cohorts/:cohortId/modules", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { cohortId } = req.params;
+    const cohortRes = await pool.query(`SELECT program_id FROM cohorts WHERE id = $1`, [cohortId]);
+    if (cohortRes.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.COHORT_NOT_FOUND, "Cohort not found");
+    }
+    const programId = cohortRes.rows[0].program_id;
+    const {
+      orderIndex,
+      titleEn,
+      titleFr,
+      descriptionEn,
+      descriptionFr,
+      estimatedHours = 4,
+      requiredCompletion = 80,
+      passingScore = 70,
+      status = "PUBLISHED",
+    } = req.body;
+
+    let calculatedOrder = orderIndex;
+    if (!calculatedOrder) {
+      const maxOrderRes = await pool.query(
+        `SELECT COALESCE(MAX(order_index), 0) + 1 as next_order
+         FROM modules WHERE cohort_id = $1 OR (program_id = $2 AND program_id IS NOT NULL)`,
+        [cohortId, programId]
+      );
+      calculatedOrder = maxOrderRes.rows[0].next_order;
+    }
+
+    const result = await pool.query(
+      `INSERT INTO modules (
+         program_id, cohort_id, order_index, title_en, title_fr,
+         description_en, description_fr, estimated_hours,
+         required_completion, passing_score, status
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING *`,
+      [
+        programId || null,
+        cohortId,
+        calculatedOrder,
+        titleEn,
+        titleFr,
+        descriptionEn || null,
+        descriptionFr || null,
+        estimatedHours,
+        requiredCompletion,
+        passingScore,
+        status,
+      ]
+    );
+
+    res.status(201).json({ success: true, data: result.rows[0], message: "Module created successfully" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/admin/modules/:id
+ */
+router.patch(
+  "/modules/:id",
+  validateRequest({ body: adminSchemas.updateModule }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const {
+        titleEn,
+        titleFr,
+        descriptionEn,
+        descriptionFr,
+        orderIndex,
+        estimatedHours,
+        requiredCompletion,
+        passingScore,
+        status,
+      } = req.body;
+
+      const result = await pool.query(
+        `UPDATE modules SET
+           title_en = COALESCE($1, title_en),
+           title_fr = COALESCE($2, title_fr),
+           description_en = COALESCE($3, description_en),
+           description_fr = COALESCE($4, description_fr),
+           order_index = COALESCE($5, order_index),
+           estimated_hours = COALESCE($6, estimated_hours),
+           required_completion = COALESCE($7, required_completion),
+           passing_score = COALESCE($8, passing_score),
+           status = COALESCE($9, status),
+           updated_at = NOW()
+         WHERE id = $10
+         RETURNING *`,
+        [
+          titleEn,
+          titleFr,
+          descriptionEn,
+          descriptionFr,
+          orderIndex,
+          estimatedHours,
+          requiredCompletion,
+          passingScore,
+          status,
+          id,
+        ]
+      );
+
+      if (result.rows.length === 0) {
+        throw new AppError(404, ErrorCodes.RESOURCE_NOT_FOUND, "Module not found");
+      }
+
+      res.json({ success: true, data: result.rows[0], message: "Module updated successfully" });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /api/admin/modules/:id
+ * Safeguard: Archival if student progress exists, hard delete otherwise
+ */
+router.delete("/modules/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const progressRes = await pool.query(
+      `SELECT 1 FROM module_progress WHERE module_id = $1
+       UNION
+       SELECT 1 FROM lesson_progress lp JOIN lessons l ON l.id = lp.lesson_id WHERE l.module_id = $1
+       LIMIT 1`,
+      [id]
+    );
+
+    if (progressRes.rows.length > 0) {
+      await pool.query(`UPDATE modules SET status = 'ARCHIVED', updated_at = NOW() WHERE id = $1`, [id]);
+      res.json({
+        success: true,
+        archived: true,
+        message: "Module has student progress and was safely archived rather than deleted.",
+      });
       return;
     }
 
-    const lessonRes = await pool.query(`SELECT title_en FROM lessons WHERE id = $1`, [lessonId]);
+    const result = await pool.query(`DELETE FROM modules WHERE id = $1 RETURNING id`, [id]);
+    if (result.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.RESOURCE_NOT_FOUND, "Module not found");
+    }
+
+    res.json({ success: true, message: "Module deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/modules/reorder
+ */
+router.post(
+  "/modules/reorder",
+  validateRequest({ body: adminSchemas.reorderModules }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    const client = await pool.connect();
+    try {
+      const { orders } = req.body;
+      await client.query("BEGIN");
+      // Phase 1: Assign temporary negative values to avoid unique constraint collisions
+      for (let i = 0; i < orders.length; i++) {
+        await client.query(`UPDATE modules SET order_index = $1 WHERE id = $2`, [
+          -(1000000 + i + 1),
+          orders[i].id,
+        ]);
+      }
+      // Phase 2: Set target order_index
+      for (const item of orders) {
+        await client.query(`UPDATE modules SET order_index = $1, updated_at = NOW() WHERE id = $2`, [
+          item.orderIndex,
+          item.id,
+        ]);
+      }
+      await client.query("COMMIT");
+      res.json({ success: true, message: "Modules reordered successfully" });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      next(error);
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/**
+ * ============================================================================
+ * LESSON MANAGEMENT (REUSABLE CONTENT)
+ * ============================================================================
+ */
+
+/**
+ * POST /api/admin/modules/:moduleId/lessons
+ */
+router.post(
+  "/modules/:moduleId/lessons",
+  validateRequest({ body: adminSchemas.createLesson.omit({ moduleId: true }) }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { moduleId } = req.params;
+      const {
+        orderIndex = 1,
+        type = "VIDEO",
+        titleEn,
+        titleFr,
+        descriptionEn,
+        descriptionFr,
+        bodyEn,
+        bodyFr,
+        durationMinutes = 15,
+        mandatory = true,
+        status = "PUBLISHED",
+        videoUrl,
+        startDate,
+        endDate,
+        startAt,
+        endAt,
+      } = req.body;
+
+      const modInfo = await pool.query(
+        `SELECT cohort_id, program_id, start_date, end_date FROM modules WHERE id = $1`,
+        [moduleId]
+      );
+      const mod = modInfo.rows[0] || {};
+      const lessonStartAt = startAt || startDate ? new Date(startAt || startDate) : mod.start_date ? new Date(mod.start_date) : new Date();
+      const lessonEndAt = endAt || endDate ? new Date(endAt || endDate) : mod.end_date ? new Date(mod.end_date) : new Date(Date.now() + 30 * 86400000);
+
+      const result = await pool.query(
+        `INSERT INTO lessons (
+           module_id, order_index, type, title_en, title_fr,
+           description_en, description_fr, body_en, body_fr,
+           duration_minutes, mandatory, status, start_date, end_date
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         RETURNING *`,
+        [
+          moduleId,
+          orderIndex,
+          type,
+          titleEn,
+          titleFr,
+          descriptionEn || null,
+          descriptionFr || null,
+          bodyEn || null,
+          bodyFr || null,
+          durationMinutes,
+          mandatory,
+          status,
+          lessonStartAt,
+          lessonEndAt,
+        ]
+      );
+
+      const lesson = result.rows[0];
+
+      if (videoUrl) {
+        await pool.query(
+          `INSERT INTO videos (lesson_id, storage_path, file_name, mime_type, status)
+           VALUES ($1, $2, $3, 'video/mp4', 'READY')
+           ON CONFLICT (lesson_id) DO UPDATE SET storage_path = EXCLUDED.storage_path, status = 'READY'`,
+          [lesson.id, videoUrl, `${titleEn}.mp4`]
+        );
+      }
+
+      // Auto-schedule into cohort_lessons if module is tied to a cohort or cohorts
+      if (modInfo.rows.length > 0) {
+        const { cohort_id, program_id } = modInfo.rows[0];
+        const targetCohortIds: string[] = [];
+        if (cohort_id) targetCohortIds.push(cohort_id);
+        if (program_id) {
+          const chRes = await pool.query(`SELECT id FROM cohorts WHERE program_id = $1`, [program_id]);
+          for (const r of chRes.rows) {
+            if (!targetCohortIds.includes(r.id)) targetCohortIds.push(r.id);
+          }
+        }
+        for (const cId of targetCohortIds) {
+          await pool.query(
+            `INSERT INTO cohort_lessons (cohort_id, lesson_id, order_index, start_at, end_at, duration_minutes, is_required, is_published, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, true, 'PUBLISHED')
+             ON CONFLICT (cohort_id, lesson_id) DO UPDATE SET
+               start_at = EXCLUDED.start_at,
+               end_at = EXCLUDED.end_at,
+               order_index = EXCLUDED.order_index`,
+            [cId, lesson.id, orderIndex, lessonStartAt, lessonEndAt, durationMinutes, mandatory]
+          );
+        }
+      }
+
+      res.status(201).json({ success: true, data: lesson, message: "Lesson created successfully" });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/admin/lessons/:id
+ */
+router.get("/lessons/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const lessonRes = await pool.query(
+      `SELECT l.*, v.storage_path as video_url, v.file_name as video_file_name
+       FROM lessons l
+       LEFT JOIN videos v ON v.lesson_id = l.id
+       WHERE l.id = $1`,
+      [id]
+    );
+
     if (lessonRes.rows.length === 0) {
       throw new AppError(404, ErrorCodes.LESSON_NOT_FOUND, "Lesson not found");
     }
 
-    const titleEn = lessonRes.rows[0].title_en || "lesson";
-    const resRow = await pool.query(
-      `INSERT INTO videos (lesson_id, storage_path, file_name, mime_type, status)
-       VALUES ($1, $2, $3, 'video/mp4', 'READY')
-       ON CONFLICT (lesson_id) DO UPDATE SET
-         storage_path = EXCLUDED.storage_path,
-         file_name = EXCLUDED.file_name,
-         status = 'READY'
-       RETURNING *`,
-      [lessonId, videoUrl, `${titleEn}.mp4`]
+    const chaptersRes = await pool.query(
+      `SELECT * FROM chapters WHERE lesson_id = $1 ORDER BY order_index ASC`,
+      [id]
     );
 
-    if (durationMinutes) {
-      await pool.query(`UPDATE lessons SET duration_minutes = $1 WHERE id = $2`, [durationMinutes, lessonId]);
+    const quizzesRes = await pool.query(
+      `SELECT id, title_en, title_fr, passing_score, time_limit_minutes, attempts_allowed, status
+       FROM quizzes WHERE lesson_id = $1`,
+      [id]
+    );
+
+    const cohortAssignmentsRes = await pool.query(
+      `SELECT cl.*, c.name_en as cohort_name_en, c.name_fr as cohort_name_fr
+       FROM cohort_lessons cl
+       JOIN cohorts c ON c.id = cl.cohort_id
+       WHERE cl.lesson_id = $1
+       ORDER BY cl.start_at ASC`,
+      [id]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        ...lessonRes.rows[0],
+        chapters: chaptersRes.rows,
+        quizzes: quizzesRes.rows,
+        cohortAssignments: cohortAssignmentsRes.rows,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/admin/lessons/:id
+ */
+router.patch(
+  "/lessons/:id",
+  validateRequest({ body: adminSchemas.updateLesson }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const {
+        titleEn,
+        titleFr,
+        descriptionEn,
+        descriptionFr,
+        bodyEn,
+        bodyFr,
+        orderIndex,
+        type,
+        durationMinutes,
+        mandatory,
+        status,
+        videoUrl,
+        startDate,
+        endDate,
+        startAt,
+        endAt,
+      } = req.body;
+
+      const result = await pool.query(
+        `UPDATE lessons SET
+           title_en = COALESCE($1, title_en),
+           title_fr = COALESCE($2, title_fr),
+           description_en = COALESCE($3, description_en),
+           description_fr = COALESCE($4, description_fr),
+           body_en = COALESCE($5, body_en),
+           body_fr = COALESCE($6, body_fr),
+           order_index = COALESCE($7, order_index),
+           type = COALESCE($8, type),
+           duration_minutes = COALESCE($9, duration_minutes),
+           mandatory = COALESCE($10, mandatory),
+           status = COALESCE($11, status),
+           updated_at = NOW()
+         WHERE id = $12
+         RETURNING *`,
+        [
+          titleEn,
+          titleFr,
+          descriptionEn,
+          descriptionFr,
+          bodyEn,
+          bodyFr,
+          orderIndex,
+          type,
+          durationMinutes,
+          mandatory,
+          status,
+          id,
+        ]
+      );
+
+      if (result.rows.length === 0) {
+        throw new AppError(404, ErrorCodes.LESSON_NOT_FOUND, "Lesson not found");
+      }
+
+      const startVal = startAt || startDate;
+      if (startVal !== undefined) {
+        await pool.query(`UPDATE lessons SET start_date = $1, updated_at = NOW() WHERE id = $2`, [
+          startVal ? new Date(startVal) : null,
+          id,
+        ]);
+        await pool.query(`UPDATE cohort_lessons SET start_at = $1, updated_at = NOW() WHERE lesson_id = $2`, [
+          startVal ? new Date(startVal) : new Date(),
+          id,
+        ]);
+      }
+
+      const endVal = endAt || endDate;
+      if (endVal !== undefined) {
+        await pool.query(`UPDATE lessons SET end_date = $1, updated_at = NOW() WHERE id = $2`, [
+          endVal ? new Date(endVal) : null,
+          id,
+        ]);
+        await pool.query(`UPDATE cohort_lessons SET end_at = $1, updated_at = NOW() WHERE lesson_id = $2`, [
+          endVal ? new Date(endVal) : new Date(Date.now() + 30 * 86400000),
+          id,
+        ]);
+      }
+
+      if (videoUrl !== undefined) {
+        if (!videoUrl) {
+          await pool.query(`DELETE FROM videos WHERE lesson_id = $1`, [id]);
+        } else {
+          await pool.query(
+            `INSERT INTO videos (lesson_id, storage_path, file_name, mime_type, status)
+             VALUES ($1, $2, $3, 'video/mp4', 'READY')
+             ON CONFLICT (lesson_id) DO UPDATE SET storage_path = EXCLUDED.storage_path, status = 'READY'`,
+            [id, videoUrl, `${result.rows[0].title_en || "lesson"}.mp4`]
+          );
+        }
+      }
+
+      res.json({ success: true, data: result.rows[0], message: "Lesson updated successfully" });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /api/admin/lessons/:id
+ * Safeguard: Archival if student progress/quiz attempts exist, hard delete otherwise
+ */
+router.delete("/lessons/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const progressRes = await pool.query(
+      `SELECT 1 FROM lesson_progress WHERE lesson_id = $1
+       UNION
+       SELECT 1 FROM quiz_attempts WHERE lesson_id = $1
+       LIMIT 1`,
+      [id]
+    );
+
+    if (progressRes.rows.length > 0) {
+      await pool.query(`UPDATE lessons SET status = 'ARCHIVED', updated_at = NOW() WHERE id = $1`, [id]);
+      await pool.query(
+        `UPDATE cohort_lessons SET status = 'ARCHIVED', is_published = FALSE, updated_at = NOW() WHERE lesson_id = $1`,
+        [id]
+      );
+      res.json({
+        success: true,
+        archived: true,
+        message: "Lesson has student progress and was safely archived rather than deleted.",
+      });
+      return;
     }
 
-    res.json({ success: true, data: resRow.rows[0], message: "Video updated successfully" });
+    const result = await pool.query(`DELETE FROM lessons WHERE id = $1 RETURNING id`, [id]);
+    if (result.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.LESSON_NOT_FOUND, "Lesson not found");
+    }
+
+    res.json({ success: true, message: "Lesson deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/lessons/reorder
+ */
+router.post(
+  "/lessons/reorder",
+  validateRequest({ body: adminSchemas.reorderLessons }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    const client = await pool.connect();
+    try {
+      const { orders } = req.body;
+      await client.query("BEGIN");
+      // Phase 1: Assign temporary negative values to avoid unique constraint collisions
+      for (let i = 0; i < orders.length; i++) {
+        await client.query(`UPDATE lessons SET order_index = $1 WHERE id = $2`, [
+          -(1000000 + i + 1),
+          orders[i].id,
+        ]);
+      }
+      // Phase 2: Set target order_index and sync cohort_lessons
+      for (const item of orders) {
+        await client.query(`UPDATE lessons SET order_index = $1, updated_at = NOW() WHERE id = $2`, [
+          item.orderIndex,
+          item.id,
+        ]);
+        await client.query(`UPDATE cohort_lessons SET order_index = $1, updated_at = NOW() WHERE lesson_id = $2`, [
+          item.orderIndex,
+          item.id,
+        ]);
+      }
+      await client.query("COMMIT");
+      res.json({ success: true, message: "Lessons reordered successfully" });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      next(error);
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/**
+ * ============================================================================
+ * CHAPTER MANAGEMENT
+ * ============================================================================
+ */
+
+/**
+ * POST /api/admin/lessons/:lessonId/chapters
+ */
+router.post(
+  "/lessons/:lessonId/chapters",
+  validateRequest({ body: adminSchemas.createChapter.omit({ lessonId: true }) }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { lessonId } = req.params;
+      const {
+        orderIndex = 1,
+        titleEn,
+        titleFr,
+        descriptionEn,
+        descriptionFr,
+        bodyEn,
+        bodyFr,
+        durationMinutes = 5,
+        videoUrl,
+        status = "PUBLISHED",
+      } = req.body;
+
+      const result = await pool.query(
+        `INSERT INTO chapters (
+           lesson_id, order_index, title_en, title_fr,
+           description_en, description_fr, body_en, body_fr,
+           duration_minutes, video_url, status
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING *`,
+        [
+          lessonId,
+          orderIndex,
+          titleEn,
+          titleFr,
+          descriptionEn || null,
+          descriptionFr || null,
+          bodyEn || null,
+          bodyFr || null,
+          durationMinutes,
+          videoUrl || null,
+          status,
+        ]
+      );
+
+      res.status(201).json({ success: true, data: result.rows[0], message: "Chapter created successfully" });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * PATCH /api/admin/chapters/:id
+ */
+router.patch(
+  "/chapters/:id",
+  validateRequest({ body: adminSchemas.updateChapter }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const {
+        titleEn,
+        titleFr,
+        descriptionEn,
+        descriptionFr,
+        bodyEn,
+        bodyFr,
+        orderIndex,
+        durationMinutes,
+        videoUrl,
+        status,
+      } = req.body;
+
+      const result = await pool.query(
+        `UPDATE chapters SET
+           title_en = COALESCE($1, title_en),
+           title_fr = COALESCE($2, title_fr),
+           description_en = COALESCE($3, description_en),
+           description_fr = COALESCE($4, description_fr),
+           body_en = COALESCE($5, body_en),
+           body_fr = COALESCE($6, body_fr),
+           order_index = COALESCE($7, order_index),
+           duration_minutes = COALESCE($8, duration_minutes),
+           video_url = COALESCE($9, video_url),
+           status = COALESCE($10, status),
+           updated_at = NOW()
+         WHERE id = $11
+         RETURNING *`,
+        [
+          titleEn,
+          titleFr,
+          descriptionEn,
+          descriptionFr,
+          bodyEn,
+          bodyFr,
+          orderIndex,
+          durationMinutes,
+          videoUrl,
+          status,
+          id,
+        ]
+      );
+
+      if (result.rows.length === 0) {
+        throw new AppError(404, ErrorCodes.RESOURCE_NOT_FOUND, "Chapter not found");
+      }
+
+      res.json({ success: true, data: result.rows[0], message: "Chapter updated successfully" });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /api/admin/chapters/:id
+ */
+router.delete("/chapters/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(`DELETE FROM chapters WHERE id = $1 RETURNING id`, [id]);
+    if (result.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.RESOURCE_NOT_FOUND, "Chapter not found");
+    }
+    res.json({ success: true, message: "Chapter deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/chapters/reorder
+ */
+router.post(
+  "/chapters/reorder",
+  validateRequest({ body: adminSchemas.reorderChapters }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    const client = await pool.connect();
+    try {
+      const { orders } = req.body;
+      await client.query("BEGIN");
+      // Phase 1: Assign temporary negative values to avoid unique constraint collisions
+      for (let i = 0; i < orders.length; i++) {
+        await client.query(`UPDATE chapters SET order_index = $1 WHERE id = $2`, [
+          -(1000000 + i + 1),
+          orders[i].id,
+        ]);
+      }
+      // Phase 2: Set target order_index
+      for (const item of orders) {
+        await client.query(`UPDATE chapters SET order_index = $1, updated_at = NOW() WHERE id = $2`, [
+          item.orderIndex,
+          item.id,
+        ]);
+      }
+      await client.query("COMMIT");
+      res.json({ success: true, message: "Chapters reordered successfully" });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      next(error);
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/**
+ * ============================================================================
+ * COHORT LESSON ASSIGNMENT & SCHEDULING
+ * ============================================================================
+ */
+
+/**
+ * GET /api/admin/cohorts/:cohortId/lessons
+ */
+router.get("/cohorts/:cohortId/lessons", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { cohortId } = req.params;
+    const result = await pool.query(
+      `SELECT cl.*,
+              l.title_en as lesson_title_en, l.title_fr as lesson_title_fr,
+              l.type as lesson_type, l.duration_minutes as lesson_duration,
+              l.module_id, m.title_en as module_title_en, m.title_fr as module_title_fr,
+              pre.title_en as prerequisite_title_en, pre.title_fr as prerequisite_title_fr,
+              (SELECT COUNT(*) FROM lesson_progress lp WHERE lp.cohort_id = cl.cohort_id AND lp.lesson_id = cl.lesson_id AND lp.completed) as completed_count
+       FROM cohort_lessons cl
+       JOIN lessons l ON l.id = cl.lesson_id
+       LEFT JOIN modules m ON m.id = l.module_id
+       LEFT JOIN lessons pre ON pre.id = cl.prerequisite_lesson_id
+       WHERE cl.cohort_id = $1
+       ORDER BY cl.order_index ASC, cl.start_at ASC`,
+      [cohortId]
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/cohorts/:cohortId/lessons
+ * Assigns or re-schedules an individual reusable lesson to a specific cohort
+ */
+router.post(
+  "/cohorts/:cohortId/lessons",
+  validateRequest({ body: adminSchemas.assignCohortLesson }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { cohortId } = req.params;
+      const {
+        lessonId,
+        orderIndex = 1,
+        startAt,
+        endAt,
+        durationMinutes,
+        isRequired = true,
+        isPublished = true,
+        status = "PUBLISHED",
+        passingScore = 70,
+        prerequisiteLessonId = null,
+        prerequisiteAssignmentId = null,
+      } = req.body;
+
+      const result = await pool.query(
+        `INSERT INTO cohort_lessons (
+           cohort_id, lesson_id, order_index, start_at, end_at,
+           duration_minutes, is_required, is_published, status,
+           passing_score, prerequisite_lesson_id, prerequisite_assignment_id
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         ON CONFLICT (cohort_id, lesson_id) DO UPDATE SET
+           order_index = EXCLUDED.order_index,
+           start_at = EXCLUDED.start_at,
+           end_at = EXCLUDED.end_at,
+           duration_minutes = EXCLUDED.duration_minutes,
+           is_required = EXCLUDED.is_required,
+           is_published = EXCLUDED.is_published,
+           status = EXCLUDED.status,
+           passing_score = EXCLUDED.passing_score,
+           prerequisite_lesson_id = EXCLUDED.prerequisite_lesson_id,
+           prerequisite_assignment_id = EXCLUDED.prerequisite_assignment_id,
+           updated_at = NOW()
+         RETURNING *`,
+        [
+          cohortId,
+          lessonId,
+          orderIndex,
+          startAt,
+          endAt,
+          durationMinutes || null,
+          isRequired,
+          isPublished,
+          status,
+          passingScore,
+          prerequisiteLessonId || null,
+          prerequisiteAssignmentId || null,
+        ]
+      );
+
+      res.status(201).json({
+        success: true,
+        data: result.rows[0],
+        message: "Lesson successfully assigned to cohort.",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/admin/cohorts/:cohortId/lessons/bulk-assign
+ * Convenient bulk assignment of all lessons from the parent program into the cohort
+ */
+router.post("/cohorts/:cohortId/lessons/bulk-assign", async (req: Request, res: Response, next: NextFunction) => {
+  const client = await pool.connect();
+  try {
+    const { cohortId } = req.params;
+    const cohortRes = await client.query(`SELECT start_date, end_date, program_id FROM cohorts WHERE id = $1`, [cohortId]);
+    if (cohortRes.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.COHORT_NOT_FOUND, "Cohort not found");
+    }
+    const cohort = cohortRes.rows[0];
+
+    const lessonsRes = await client.query(
+      `SELECT l.id, l.order_index, m.order_index as mod_order
+       FROM lessons l
+       JOIN modules m ON m.id = l.module_id
+       WHERE m.program_id = $1 OR m.cohort_id = $2
+       ORDER BY m.order_index ASC, l.order_index ASC`,
+      [cohort.program_id, cohortId]
+    );
+
+    if (lessonsRes.rows.length === 0) {
+      res.json({ success: true, count: 0, message: "No lessons found to assign." });
+      return;
+    }
+
+    await client.query("BEGIN");
+    let assignedCount = 0;
+    let seq = 1;
+    for (const l of lessonsRes.rows) {
+      await client.query(
+        `INSERT INTO cohort_lessons (
+           cohort_id, lesson_id, order_index, start_at, end_at, is_required, is_published, status
+         )
+         VALUES ($1, $2, $3, $4, $5, TRUE, TRUE, 'PUBLISHED')
+         ON CONFLICT (cohort_id, lesson_id) DO NOTHING`,
+        [cohortId, l.id, seq++, cohort.start_date, cohort.end_date]
+      );
+      assignedCount++;
+    }
+    await client.query("COMMIT");
+
+    res.json({ success: true, count: assignedCount, message: `Assigned ${assignedCount} lessons to cohort.` });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    next(error);
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * PATCH /api/admin/cohort-lessons/:id
+ */
+router.patch(
+  "/cohort-lessons/:id",
+  validateRequest({ body: adminSchemas.updateCohortLesson }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const {
+        startAt,
+        endAt,
+        orderIndex,
+        durationMinutes,
+        isRequired,
+        isPublished,
+        status,
+        passingScore,
+        prerequisiteLessonId,
+        prerequisiteAssignmentId,
+      } = req.body;
+
+      const result = await pool.query(
+        `UPDATE cohort_lessons SET
+           start_at = COALESCE($1, start_at),
+           end_at = COALESCE($2, end_at),
+           order_index = COALESCE($3, order_index),
+           duration_minutes = COALESCE($4, duration_minutes),
+           is_required = COALESCE($5, is_required),
+           is_published = COALESCE($6, is_published),
+           status = COALESCE($7, status),
+           passing_score = COALESCE($8, passing_score),
+           prerequisite_lesson_id = CASE WHEN $9::text IS NOT NULL THEN $9 ELSE prerequisite_lesson_id END,
+           prerequisite_assignment_id = CASE WHEN $10::text IS NOT NULL THEN $10 ELSE prerequisite_assignment_id END,
+           updated_at = NOW()
+         WHERE id = $11
+         RETURNING *`,
+        [
+          startAt,
+          endAt,
+          orderIndex,
+          durationMinutes,
+          isRequired,
+          isPublished,
+          status,
+          passingScore,
+          prerequisiteLessonId !== undefined ? prerequisiteLessonId : null,
+          prerequisiteAssignmentId !== undefined ? prerequisiteAssignmentId : null,
+          id,
+        ]
+      );
+
+      if (result.rows.length === 0) {
+        throw new AppError(404, ErrorCodes.RESOURCE_NOT_FOUND, "Cohort lesson assignment not found");
+      }
+
+      res.json({ success: true, data: result.rows[0], message: "Cohort lesson schedule updated successfully" });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * DELETE /api/admin/cohort-lessons/:id
+ * Safeguard: Archival if student progress exists in this cohort, hard delete otherwise
+ */
+router.delete("/cohort-lessons/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const clRes = await pool.query(`SELECT cohort_id, lesson_id FROM cohort_lessons WHERE id = $1`, [id]);
+    if (clRes.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.RESOURCE_NOT_FOUND, "Cohort lesson assignment not found");
+    }
+    const { cohort_id, lesson_id } = clRes.rows[0];
+
+    const progressRes = await pool.query(
+      `SELECT 1 FROM lesson_progress WHERE cohort_id = $1 AND lesson_id = $2
+       UNION
+       SELECT 1 FROM quiz_attempts WHERE cohort_id = $1 AND lesson_id = $2
+       LIMIT 1`,
+      [cohort_id, lesson_id]
+    );
+
+    if (progressRes.rows.length > 0) {
+      await pool.query(
+        `UPDATE cohort_lessons SET status = 'ARCHIVED', is_published = FALSE, updated_at = NOW() WHERE id = $1`,
+        [id]
+      );
+      res.json({
+        success: true,
+        archived: true,
+        message: "Cohort lesson has participant activity and was safely archived.",
+      });
+      return;
+    }
+
+    await pool.query(`DELETE FROM cohort_lessons WHERE id = $1`, [id]);
+    res.json({ success: true, message: "Cohort lesson assignment removed successfully" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/cohorts/:cohortId/lessons/reorder
+ */
+router.post(
+  "/cohorts/:cohortId/lessons/reorder",
+  validateRequest({ body: adminSchemas.reorderCohortLessons }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    const client = await pool.connect();
+    try {
+      const { orders } = req.body;
+      await client.query("BEGIN");
+      // Phase 1: Assign temporary negative values to avoid unique constraint collisions
+      for (let i = 0; i < orders.length; i++) {
+        await client.query(
+          `UPDATE cohort_lessons SET order_index = $1 WHERE id = $2`,
+          [-(1000000 + i + 1), orders[i].id]
+        );
+      }
+      // Phase 2: Set target order_index
+      for (const item of orders) {
+        await client.query(
+          `UPDATE cohort_lessons SET order_index = $1, updated_at = NOW() WHERE id = $2`,
+          [item.orderIndex, item.id]
+        );
+      }
+      await client.query("COMMIT");
+      res.json({ success: true, message: "Cohort lessons reordered successfully" });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      next(error);
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/**
+ * ============================================================================
+ * QUIZ MANAGEMENT
+ * ============================================================================
+ */
+
+/**
+ * POST /api/admin/quizzes
+ */
+router.post(
+  "/quizzes",
+  validateRequest({ body: adminSchemas.createQuiz }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const {
+        moduleId,
+        lessonId,
+        titleEn,
+        titleFr,
+        descriptionEn,
+        descriptionFr,
+        timeLimitMinutes,
+        passingScore = 70,
+        attemptsAllowed = 3,
+        published = true,
+        status = "PUBLISHED",
+      } = req.body;
+
+      const result = await pool.query(
+        `INSERT INTO quizzes (
+           module_id, lesson_id, title_en, title_fr,
+           description_en, description_fr, time_limit_minutes,
+           passing_score, attempts_allowed, published, status
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING *`,
+        [
+          moduleId || null,
+          lessonId || null,
+          titleEn,
+          titleFr,
+          descriptionEn || null,
+          descriptionFr || null,
+          timeLimitMinutes || null,
+          passingScore,
+          attemptsAllowed,
+          published,
+          status,
+        ]
+      );
+
+      res.status(201).json({ success: true, data: result.rows[0], message: "Quiz created successfully" });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/admin/quizzes/:id
+ */
+router.get("/quizzes/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const quizRes = await pool.query(`SELECT * FROM quizzes WHERE id = $1`, [id]);
+    if (quizRes.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.QUIZ_NOT_FOUND, "Quiz not found");
+    }
+
+    const questionsRes = await pool.query(
+      `SELECT q.*,
+              COALESCE(
+                json_agg(
+                  json_build_object(
+                    'id', o.id,
+                    'orderIndex', o.order_index,
+                    'labelEn', o.label_en,
+                    'labelFr', o.label_fr,
+                    'correct', o.correct
+                  ) ORDER BY o.order_index ASC
+                ) FILTER (WHERE o.id IS NOT NULL),
+                '[]'
+              ) as options
+       FROM quiz_questions q
+       LEFT JOIN quiz_options o ON o.question_id = q.id
+       WHERE q.quiz_id = $1
+       GROUP BY q.id
+       ORDER BY q.order_index ASC`,
+      [id]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        ...quizRes.rows[0],
+        questions: questionsRes.rows,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/admin/quizzes/:id
+ */
+router.patch(
+  "/quizzes/:id",
+  validateRequest({ body: adminSchemas.updateQuiz }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const {
+        titleEn,
+        titleFr,
+        descriptionEn,
+        descriptionFr,
+        timeLimitMinutes,
+        passingScore,
+        attemptsAllowed,
+        published,
+        status,
+      } = req.body;
+
+      const result = await pool.query(
+        `UPDATE quizzes SET
+           title_en = COALESCE($1, title_en),
+           title_fr = COALESCE($2, title_fr),
+           description_en = COALESCE($3, description_en),
+           description_fr = COALESCE($4, description_fr),
+           time_limit_minutes = CASE WHEN $5 IS NOT NULL THEN $5 ELSE time_limit_minutes END,
+           passing_score = COALESCE($6, passing_score),
+           attempts_allowed = COALESCE($7, attempts_allowed),
+           published = COALESCE($8, published),
+           status = COALESCE($9, status),
+           updated_at = NOW()
+         WHERE id = $10
+         RETURNING *`,
+        [
+          titleEn,
+          titleFr,
+          descriptionEn,
+          descriptionFr,
+          timeLimitMinutes,
+          passingScore,
+          attemptsAllowed,
+          published,
+          status,
+          id,
+        ]
+      );
+
+      if (result.rows.length === 0) {
+        throw new AppError(404, ErrorCodes.QUIZ_NOT_FOUND, "Quiz not found");
+      }
+
+      res.json({ success: true, data: result.rows[0], message: "Quiz updated successfully" });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/admin/quizzes/:quizId/questions
+ */
+router.post(
+  "/quizzes/:quizId/questions",
+  validateRequest({ body: adminSchemas.createQuizQuestion.omit({ quizId: true }) }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    const client = await pool.connect();
+    try {
+      const { quizId } = req.params;
+      const {
+        orderIndex = 1,
+        type = "MULTIPLE_CHOICE",
+        promptEn,
+        promptFr,
+        correctText = null,
+        points = 1,
+        explanationEn = null,
+        explanationFr = null,
+        required = true,
+        options = [],
+      } = req.body;
+
+      await client.query("BEGIN");
+      const qRes = await client.query(
+        `INSERT INTO quiz_questions (
+           quiz_id, order_index, type, prompt_en, prompt_fr,
+           correct_text, points, explanation_en, explanation_fr, required
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         RETURNING *`,
+        [
+          quizId,
+          orderIndex,
+          type,
+          promptEn,
+          promptFr,
+          correctText,
+          points,
+          explanationEn,
+          explanationFr,
+          required,
+        ]
+      );
+      const question = qRes.rows[0];
+
+      const createdOptions = [];
+      if (Array.isArray(options) && options.length > 0) {
+        for (const opt of options) {
+          const optRes = await client.query(
+            `INSERT INTO quiz_options (question_id, order_index, label_en, label_fr, correct)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING *`,
+            [question.id, opt.orderIndex || 1, opt.labelEn, opt.labelFr, opt.correct || false]
+          );
+          createdOptions.push(optRes.rows[0]);
+        }
+      }
+
+      await client.query("COMMIT");
+      res.status(201).json({
+        success: true,
+        data: { ...question, options: createdOptions },
+        message: "Quiz question created successfully",
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      next(error);
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/**
+ * DELETE /api/admin/quiz-questions/:id
+ */
+router.delete("/quiz-questions/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(`DELETE FROM quiz_questions WHERE id = $1 RETURNING id`, [id]);
+    if (result.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.RESOURCE_NOT_FOUND, "Quiz question not found");
+    }
+    res.json({ success: true, message: "Quiz question deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/admin/quizzes/:id
+ */
+router.delete("/quizzes/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const attemptsRes = await pool.query(`SELECT 1 FROM quiz_attempts WHERE quiz_id = $1 LIMIT 1`, [id]);
+    if (attemptsRes.rows.length > 0) {
+      await pool.query(`UPDATE quizzes SET status = 'ARCHIVED', published = FALSE, updated_at = NOW() WHERE id = $1`, [id]);
+      res.json({ success: true, archived: true, message: "Quiz has student attempts and was safely archived." });
+      return;
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `DELETE FROM quiz_options WHERE question_id IN (SELECT id FROM quiz_questions WHERE quiz_id = $1)`,
+        [id]
+      );
+      await client.query(`DELETE FROM quiz_questions WHERE quiz_id = $1`, [id]);
+      await client.query(`DELETE FROM quizzes WHERE id = $1`, [id]);
+      await client.query("COMMIT");
+      res.json({ success: true, message: "Quiz deleted successfully" });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/resources
+ * Attach a document or PDF file to a lesson or module
+ */
+router.post("/resources", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const {
+      lessonId,
+      moduleId,
+      nameEn,
+      nameFr,
+      type = "PDF",
+      storagePath,
+      url,
+      sizeKb = 100,
+      downloadable = true,
+      status = "PUBLISHED",
+      isPublished = true,
+    } = req.body;
+
+    const result = await pool.query(
+      `INSERT INTO resources (
+         lesson_id, module_id, name_en, name_fr, type,
+         storage_path, url, size_kb, downloadable, status, is_published
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING *`,
+      [
+        lessonId || null,
+        moduleId || null,
+        nameEn,
+        nameFr || nameEn,
+        type,
+        storagePath || null,
+        url,
+        sizeKb,
+        downloadable,
+        status,
+        isPublished,
+      ]
+    );
+
+    res.status(201).json({ success: true, data: result.rows[0], message: "Resource attached successfully" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * DELETE /api/admin/resources/:id
+ */
+router.delete("/resources/:id", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const resRow = await pool.query(`DELETE FROM resources WHERE id = $1 RETURNING *`, [id]);
+    if (resRow.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.RESOURCE_NOT_FOUND, "Resource not found");
+    }
+    res.json({ success: true, message: "Resource removed successfully" });
   } catch (error) {
     next(error);
   }
 });
 
 export default router;
-
-

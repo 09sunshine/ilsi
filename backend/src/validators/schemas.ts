@@ -260,6 +260,10 @@ export const adminSchemas = {
                 bodyEn: z.string().optional(),
                 bodyFr: z.string().optional(),
                 videoUrl: z.string().optional(),
+                startDate: z.string().optional().or(z.literal("")),
+                endDate: z.string().optional().or(z.literal("")),
+                startAt: z.string().optional().or(z.literal("")),
+                endAt: z.string().optional().or(z.literal("")),
                 durationMinutes: z.number().int().min(1).default(20),
                 mandatory: z.boolean().default(true),
                 resources: z
@@ -386,6 +390,266 @@ export const adminSchemas = {
         })
       )
       .optional(),
+  }),
+
+  // Program Management
+  createProgram: z.object({
+    slug: z.string().trim().min(2).max(100).regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
+    titleEn: z.string().trim().min(3).max(255),
+    titleFr: z.string().trim().min(3).max(255),
+    taglineEn: z.string().trim().max(300).optional(),
+    taglineFr: z.string().trim().max(300).optional(),
+    descriptionEn: z.string().trim().min(10).max(5000),
+    descriptionFr: z.string().trim().min(10).max(5000),
+    durationWeeks: z.number().int().min(1).max(52).default(12),
+    price: z.number().min(0).default(180),
+    priceEur: z.number().min(0).default(165),
+    currency: z.enum(["USD", "EUR"]).default("USD"),
+    thumbnailUrl: z.string().trim().optional().or(z.literal("")).nullable(),
+    status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).default("PUBLISHED"),
+  }),
+  updateProgram: z.object({
+    slug: z.string().trim().min(2).max(100).regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens").optional(),
+    titleEn: z.string().trim().min(3).max(255).optional(),
+    titleFr: z.string().trim().min(3).max(255).optional(),
+    taglineEn: z.string().trim().max(300).optional(),
+    taglineFr: z.string().trim().max(300).optional(),
+    descriptionEn: z.string().trim().min(10).max(5000).optional(),
+    descriptionFr: z.string().trim().min(10).max(5000).optional(),
+    durationWeeks: z.number().int().min(1).max(52).optional(),
+    price: z.number().min(0).optional(),
+    priceEur: z.number().min(0).optional(),
+    currency: z.enum(["USD", "EUR"]).optional(),
+    thumbnailUrl: z.string().trim().optional().or(z.literal("")).nullable(),
+    status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
+  }),
+
+  // Module Management
+  createModule: z.object({
+    programId: z.string().min(1, "programId is required"),
+    orderIndex: z.number().int().min(1).default(1),
+    titleEn: z.string().trim().min(2).max(255),
+    titleFr: z.string().trim().min(2).max(255),
+    descriptionEn: z.string().trim().max(5000).optional().or(z.literal("")),
+    descriptionFr: z.string().trim().max(5000).optional().or(z.literal("")),
+    estimatedHours: z.number().int().min(1).default(4),
+    requiredCompletion: z.number().int().min(0).max(100).default(80),
+    passingScore: z.number().int().min(0).max(100).default(70),
+    status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).default("PUBLISHED"),
+  }),
+  updateModule: z.object({
+    titleEn: z.string().trim().min(2).max(255).optional(),
+    titleFr: z.string().trim().min(2).max(255).optional(),
+    descriptionEn: z.string().trim().max(5000).optional().or(z.literal("")),
+    descriptionFr: z.string().trim().max(5000).optional().or(z.literal("")),
+    orderIndex: z.number().int().min(1).optional(),
+    estimatedHours: z.number().int().min(1).optional(),
+    requiredCompletion: z.number().int().min(0).max(100).optional(),
+    passingScore: z.number().int().min(0).max(100).optional(),
+    status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
+  }),
+  reorderModules: z.object({
+    orders: z.array(
+      z.object({
+        id: z.string().min(1),
+        orderIndex: z.number().int().min(1),
+      })
+    ).min(1),
+  }),
+
+  // Lesson Management
+  createLesson: z.object({
+    moduleId: z.string().min(1, "moduleId is required"),
+    orderIndex: z.number().int().min(1).default(1),
+    type: z.enum(["VIDEO", "TEXT", "PDF", "RESOURCE", "CASE_STUDY", "INTERACTIVE_ACTIVITY"]).default("VIDEO"),
+    titleEn: z.string().trim().min(2).max(255),
+    titleFr: z.string().trim().min(2).max(255),
+    descriptionEn: z.string().trim().max(5000).optional().or(z.literal("")),
+    descriptionFr: z.string().trim().max(5000).optional().or(z.literal("")),
+    bodyEn: z.string().optional().or(z.literal("")),
+    bodyFr: z.string().optional().or(z.literal("")),
+    durationMinutes: z.number().int().min(1).default(15),
+    mandatory: z.boolean().default(true),
+    status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).default("PUBLISHED"),
+    videoUrl: z.string().trim().optional(),
+    startDate: z.string().optional().or(z.literal("")),
+    endDate: z.string().optional().or(z.literal("")),
+    startAt: z.string().optional().or(z.literal("")),
+    endAt: z.string().optional().or(z.literal("")),
+  }),
+  updateLesson: z.object({
+    titleEn: z.string().trim().min(2).max(255).optional(),
+    titleFr: z.string().trim().min(2).max(255).optional(),
+    descriptionEn: z.string().trim().max(5000).optional().or(z.literal("")),
+    descriptionFr: z.string().trim().max(5000).optional().or(z.literal("")),
+    bodyEn: z.string().optional().or(z.literal("")),
+    bodyFr: z.string().optional().or(z.literal("")),
+    orderIndex: z.number().int().min(1).optional(),
+    type: z.enum(["VIDEO", "TEXT", "PDF", "RESOURCE", "CASE_STUDY", "INTERACTIVE_ACTIVITY"]).optional(),
+    durationMinutes: z.number().int().min(1).optional(),
+    mandatory: z.boolean().optional(),
+    status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
+    videoUrl: z.string().trim().optional().or(z.literal("")),
+    startDate: z.string().optional().or(z.literal("")),
+    endDate: z.string().optional().or(z.literal("")),
+    startAt: z.string().optional().or(z.literal("")),
+    endAt: z.string().optional().or(z.literal("")),
+  }),
+  reorderLessons: z.object({
+    orders: z.array(
+      z.object({
+        id: z.string().min(1),
+        orderIndex: z.number().int().min(1),
+      })
+    ).min(1),
+  }),
+
+  // Chapter Management
+  createChapter: z.object({
+    lessonId: z.string().min(1, "lessonId is required"),
+    orderIndex: z.number().int().min(1).default(1),
+    titleEn: z.string().trim().min(2).max(255),
+    titleFr: z.string().trim().min(2).max(255),
+    descriptionEn: z.string().trim().max(5000).optional().or(z.literal("")),
+    descriptionFr: z.string().trim().max(5000).optional().or(z.literal("")),
+    bodyEn: z.string().optional().or(z.literal("")),
+    bodyFr: z.string().optional().or(z.literal("")),
+    durationMinutes: z.number().int().min(1).default(5),
+    videoUrl: z.string().trim().optional(),
+    status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).default("PUBLISHED"),
+  }),
+  updateChapter: z.object({
+    titleEn: z.string().trim().min(2).max(255).optional(),
+    titleFr: z.string().trim().min(2).max(255).optional(),
+    descriptionEn: z.string().trim().max(5000).optional().or(z.literal("")),
+    descriptionFr: z.string().trim().max(5000).optional().or(z.literal("")),
+    bodyEn: z.string().optional().or(z.literal("")),
+    bodyFr: z.string().optional().or(z.literal("")),
+    orderIndex: z.number().int().min(1).optional(),
+    durationMinutes: z.number().int().min(1).optional(),
+    videoUrl: z.string().trim().optional().or(z.literal("")),
+    status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
+  }),
+  reorderChapters: z.object({
+    orders: z.array(
+      z.object({
+        id: z.string().min(1),
+        orderIndex: z.number().int().min(1),
+      })
+    ).min(1),
+  }),
+
+  // Cohort Lesson Assignment Management
+  assignCohortLesson: z.object({
+    cohortId: z.string().optional(),
+    lessonId: z.string().min(1, "lessonId is required"),
+    orderIndex: z.number().int().min(1).default(1),
+    startAt: z.string().refine((d) => !isNaN(Date.parse(d)), "Invalid startAt timestamp"),
+    endAt: z.string().refine((d) => !isNaN(Date.parse(d)), "Invalid endAt timestamp"),
+    durationMinutes: z.number().int().min(1).optional(),
+    isRequired: z.boolean().default(true),
+    isPublished: z.boolean().default(true),
+    status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).default("PUBLISHED"),
+    passingScore: z.number().int().min(0).max(100).default(70),
+    prerequisiteLessonId: z.string().optional().or(z.literal("")).nullable(),
+    prerequisiteAssignmentId: z.string().optional().or(z.literal("")).nullable(),
+  }).refine((data) => new Date(data.startAt) < new Date(data.endAt), {
+    message: "Lesson endAt must be after startAt",
+    path: ["endAt"],
+  }),
+  updateCohortLesson: z.object({
+    startAt: z.string().refine((d) => !isNaN(Date.parse(d)), "Invalid startAt timestamp").optional(),
+    endAt: z.string().refine((d) => !isNaN(Date.parse(d)), "Invalid endAt timestamp").optional(),
+    orderIndex: z.number().int().min(1).optional(),
+    durationMinutes: z.number().int().min(1).optional(),
+    isRequired: z.boolean().optional(),
+    isPublished: z.boolean().optional(),
+    status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
+    passingScore: z.number().int().min(0).max(100).optional(),
+    prerequisiteLessonId: z.string().optional().or(z.literal("")).nullable(),
+    prerequisiteAssignmentId: z.string().optional().or(z.literal("")).nullable(),
+  }).refine(
+    (data) => {
+      if (data.startAt && data.endAt) {
+        return new Date(data.startAt) < new Date(data.endAt);
+      }
+      return true;
+    },
+    { message: "Lesson endAt must be after startAt", path: ["endAt"] }
+  ),
+  reorderCohortLessons: z.object({
+    orders: z.array(
+      z.object({
+        id: z.string().min(1),
+        orderIndex: z.number().int().min(1),
+      })
+    ).min(1),
+  }),
+
+  // Quiz Management
+  createQuiz: z.object({
+    moduleId: z.string().optional(),
+    lessonId: z.string().optional(),
+    titleEn: z.string().trim().min(2).max(255),
+    titleFr: z.string().trim().min(2).max(255),
+    descriptionEn: z.string().trim().max(2000).optional().or(z.literal("")),
+    descriptionFr: z.string().trim().max(2000).optional().or(z.literal("")),
+    timeLimitMinutes: z.number().int().min(1).max(300).optional().nullable(),
+    passingScore: z.number().int().min(0).max(100).default(70),
+    attemptsAllowed: z.number().int().min(1).max(10).default(3),
+    published: z.boolean().default(true),
+    status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).default("PUBLISHED"),
+  }),
+  updateQuiz: z.object({
+    titleEn: z.string().trim().min(2).max(255).optional(),
+    titleFr: z.string().trim().min(2).max(255).optional(),
+    descriptionEn: z.string().trim().max(2000).optional().or(z.literal("")),
+    descriptionFr: z.string().trim().max(2000).optional().or(z.literal("")),
+    timeLimitMinutes: z.number().int().min(1).max(300).optional().nullable(),
+    passingScore: z.number().int().min(0).max(100).optional(),
+    attemptsAllowed: z.number().int().min(1).max(10).optional(),
+    published: z.boolean().optional(),
+    status: z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"]).optional(),
+  }),
+  createQuizQuestion: z.object({
+    quizId: z.string().min(1),
+    orderIndex: z.number().int().min(1).default(1),
+    type: z.enum(["MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "SCENARIO", "WRITTEN", "REFLECTION"]),
+    promptEn: z.string().trim().min(3),
+    promptFr: z.string().trim().min(3),
+    correctText: z.string().optional().nullable(),
+    points: z.number().int().min(1).default(1),
+    explanationEn: z.string().optional(),
+    explanationFr: z.string().optional(),
+    required: z.boolean().default(true),
+    options: z.array(
+      z.object({
+        orderIndex: z.number().int().min(1),
+        labelEn: z.string().trim().min(1),
+        labelFr: z.string().trim().min(1),
+        correct: z.boolean().default(false),
+      })
+    ).optional(),
+  }),
+  updateQuizQuestion: z.object({
+    promptEn: z.string().trim().min(3).optional(),
+    promptFr: z.string().trim().min(3).optional(),
+    type: z.enum(["MULTIPLE_CHOICE", "TRUE_FALSE", "FILL_BLANK", "SCENARIO", "WRITTEN", "REFLECTION"]).optional(),
+    correctText: z.string().optional().nullable(),
+    points: z.number().int().min(1).optional(),
+    explanationEn: z.string().optional(),
+    explanationFr: z.string().optional(),
+    required: z.boolean().optional(),
+    orderIndex: z.number().int().min(1).optional(),
+    options: z.array(
+      z.object({
+        id: z.string().optional(),
+        orderIndex: z.number().int().min(1),
+        labelEn: z.string().trim().min(1),
+        labelFr: z.string().trim().min(1),
+        correct: z.boolean().default(false),
+      })
+    ).optional(),
   }),
 };
 

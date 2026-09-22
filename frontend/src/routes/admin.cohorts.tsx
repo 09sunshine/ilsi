@@ -10,9 +10,9 @@ import { api } from "@/lib/api";
 import { resolveMediaUrl } from "@/lib/utils";
 import { CreateCourseModal } from "@/components/admin/CreateCourseModal";
 import { EditCohortModal } from "@/components/admin/EditCohortModal";
-import { ManageCurriculumVideosModal } from "@/components/admin/ManageCurriculumVideosModal";
+import { EditCurriculumModal } from "@/components/admin/EditCurriculumModal";
 import { DeleteCohortModal } from "@/components/admin/DeleteCohortModal";
-import { Check, Edit3, ExternalLink, Plus, RefreshCw, Trash2, Video } from "lucide-react";
+import { BookOpen, Check, Edit3, ExternalLink, Plus, RefreshCw, Trash2, Video } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/cohorts")({
@@ -36,7 +36,7 @@ function AdminCohorts() {
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingCohort, setEditingCohort] = useState<any | null>(null);
-  const [managingVideosCohort, setManagingVideosCohort] = useState<any | null>(null);
+  const [managingCurriculumCohort, setManagingCurriculumCohort] = useState<any | null>(null);
   const [deletingCohort, setDeletingCohort] = useState<any | null>(null);
   const [liveSessions, setLiveSessions] = useState<Record<string, any[]>>({});
   const [editingMeetUrl, setEditingMeetUrl] = useState<Record<string, string>>({});
@@ -177,11 +177,11 @@ function AdminCohorts() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setManagingVideosCohort(c)}
-                        className="h-7 text-xs gap-1.5 font-medium text-primary hover:border-primary/50"
+                        onClick={() => setManagingCurriculumCohort(c)}
+                        className="h-7 text-xs gap-1.5 font-medium text-primary border-primary/30 hover:bg-primary/10 hover:border-primary/60 shadow-xs"
                       >
-                        <Video className="size-3.5" />
-                        {fr ? "Vidéos de cours" : "Manage Videos"}
+                        <BookOpen className="size-3.5" />
+                        {fr ? "Éditer le curriculum" : "Edit Curriculum & Content"}
                       </Button>
                       <Button
                         size="sm"
@@ -339,11 +339,11 @@ function AdminCohorts() {
         }}
       />
 
-      {/* Manage Curriculum Videos Modal */}
-      <ManageCurriculumVideosModal
-        cohort={managingVideosCohort}
-        isOpen={!!managingVideosCohort}
-        onClose={() => setManagingVideosCohort(null)}
+      {/* Edit Cohort Curriculum, Modules, Lessons, Videos, PDFs & Quizzes Modal */}
+      <EditCurriculumModal
+        cohort={managingCurriculumCohort}
+        isOpen={!!managingCurriculumCohort}
+        onClose={() => setManagingCurriculumCohort(null)}
         onUpdated={fetchCohorts}
       />
 

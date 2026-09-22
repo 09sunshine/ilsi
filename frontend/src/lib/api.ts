@@ -251,5 +251,82 @@ export const api = {
     request<any[]>(`/api/admin/cohorts/${cohortId}/live-sessions`),
   getSettings: () => request<any>("/api/admin/settings"),
   updateSettings: (data: any) => request<any>("/api/admin/settings", { method: "PUT", body: JSON.stringify(data) }),
+
+  // Program Management (Admin)
+  getAdminPrograms: () => request<any[]>("/api/admin/programs"),
+  getAdminProgram: (id: string) => request<any>(`/api/admin/programs/${id}`),
+  createProgram: (data: any) => request<any>("/api/admin/programs", { method: "POST", body: JSON.stringify(data) }),
+  updateProgram: (id: string, data: any) =>
+    request<any>(`/api/admin/programs/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteProgram: (id: string) => request<any>(`/api/admin/programs/${id}`, { method: "DELETE" }),
+
+  // Module Management (Admin)
+  createModule: (programId: string, data: any) =>
+    request<any>(`/api/admin/programs/${programId}/modules`, { method: "POST", body: JSON.stringify(data) }),
+  addCohortModule: (cohortId: string, data: any) =>
+    request<any>(`/api/admin/cohorts/${cohortId}/modules`, { method: "POST", body: JSON.stringify(data) }),
+  updateModule: (id: string, data: any) =>
+    request<any>(`/api/admin/modules/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteModule: (id: string) => request<any>(`/api/admin/modules/${id}`, { method: "DELETE" }),
+  reorderModules: (orders: { id: string; orderIndex: number }[]) =>
+    request<any>("/api/admin/modules/reorder", { method: "POST", body: JSON.stringify({ orders }) }),
+
+  // Lesson Management (Admin)
+  createLesson: (moduleId: string, data: any) =>
+    request<any>(`/api/admin/modules/${moduleId}/lessons`, { method: "POST", body: JSON.stringify(data) }),
+  getAdminLesson: (id: string) => request<any>(`/api/admin/lessons/${id}`),
+  updateLesson: (id: string, data: any) =>
+    request<any>(`/api/admin/lessons/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteLesson: (id: string) => request<any>(`/api/admin/lessons/${id}`, { method: "DELETE" }),
+  reorderLessons: (orders: { id: string; orderIndex: number }[]) =>
+    request<any>("/api/admin/lessons/reorder", { method: "POST", body: JSON.stringify({ orders }) }),
+
+  // Chapter Management (Admin)
+  createChapter: (lessonId: string, data: any) =>
+    request<any>(`/api/admin/lessons/${lessonId}/chapters`, { method: "POST", body: JSON.stringify(data) }),
+  updateChapter: (id: string, data: any) =>
+    request<any>(`/api/admin/chapters/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteChapter: (id: string) => request<any>(`/api/admin/chapters/${id}`, { method: "DELETE" }),
+  reorderChapters: (orders: { id: string; orderIndex: number }[]) =>
+    request<any>("/api/admin/chapters/reorder", { method: "POST", body: JSON.stringify({ orders }) }),
+
+  // Resource / Document Management (Admin)
+  addResource: (data: any) =>
+    request<any>("/api/admin/resources", { method: "POST", body: JSON.stringify(data) }),
+  deleteResource: (id: string) =>
+    request<any>(`/api/admin/resources/${id}`, { method: "DELETE" }),
+
+  // Quiz Management (Admin)
+  createQuiz: (data: any) =>
+    request<any>("/api/admin/quizzes", { method: "POST", body: JSON.stringify(data) }),
+  getAdminQuiz: (id: string) =>
+    request<any>(`/api/admin/quizzes/${id}`),
+  updateQuiz: (id: string, data: any) =>
+    request<any>(`/api/admin/quizzes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteQuiz: (id: string) =>
+    request<any>(`/api/admin/quizzes/${id}`, { method: "DELETE" }),
+  addQuizQuestion: (quizId: string, data: any) =>
+    request<any>(`/api/admin/quizzes/${quizId}/questions`, { method: "POST", body: JSON.stringify(data) }),
+  deleteQuizQuestion: (id: string) =>
+    request<any>(`/api/admin/quiz-questions/${id}`, { method: "DELETE" }),
+
+  // Cohort Lesson Assignments & Scheduling (Admin)
+  getCohortLessons: (cohortId: string) => request<any[]>(`/api/admin/cohorts/${cohortId}/lessons`),
+  assignCohortLesson: (cohortId: string, data: any) =>
+    request<any>(`/api/admin/cohorts/${cohortId}/lessons`, { method: "POST", body: JSON.stringify(data) }),
+  bulkAssignCohortLessons: (cohortId: string) =>
+    request<any>(`/api/admin/cohorts/${cohortId}/lessons/bulk-assign`, { method: "POST" }),
+  updateCohortLesson: (id: string, data: any) =>
+    request<any>(`/api/admin/cohort-lessons/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteCohortLesson: (id: string) => request<any>(`/api/admin/cohort-lessons/${id}`, { method: "DELETE" }),
+  reorderCohortLessons: (cohortId: string, orders: { id: string; orderIndex: number }[]) =>
+    request<any>(`/api/admin/cohorts/${cohortId}/lessons/reorder`, {
+      method: "POST",
+      body: JSON.stringify({ orders }),
+    }),
+
+  // Student Cohort-Scoped Lessons
+  getCurrentCohortLessons: () => request<any[]>("/api/student/current-cohort/lessons"),
+  getCurrentCohortProgress: () => request<any>("/api/student/current-cohort/progress"),
 };
 

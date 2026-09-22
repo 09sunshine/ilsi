@@ -94,14 +94,14 @@ router.get("/:slug", async (req: Request, res: Response, next: NextFunction) => 
 
     const p = progRes.rows[0];
 
-    // Fetch modules for the primary active cohort
+    // Fetch modules for the program (or legacy cohort-bound modules)
     const modulesRes = await pool.query(`
-      SELECT m.id, m.order_index, m.title_en, m.title_fr, m.description_en, m.description_fr,
+      SELECT DISTINCT m.id, m.order_index, m.title_en, m.title_fr, m.description_en, m.description_fr,
              m.estimated_hours, m.required_completion, m.passing_score,
              (SELECT COUNT(*) FROM lessons l WHERE l.module_id = m.id) as lesson_count
       FROM modules m
-      JOIN cohorts c ON c.id = m.cohort_id
-      WHERE c.program_id = $1
+      LEFT JOIN cohorts c ON c.id = m.cohort_id
+      WHERE m.program_id = $1 OR c.program_id = $1
       ORDER BY m.order_index ASC
     `, [p.id]);
 

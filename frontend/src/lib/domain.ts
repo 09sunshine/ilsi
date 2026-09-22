@@ -4,6 +4,28 @@ export type Bilingual = { en: string; fr: string };
 
 export type Role = "SUPER_ADMIN" | "ADMIN" | "INSTRUCTOR" | "PARTICIPANT";
 
+export type ContentStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
+
+export type LessonAccessState =
+  | "LOCKED"
+  | "UPCOMING"
+  | "AVAILABLE"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "FAILED"
+  | "EXPIRED";
+
+export type LockReason =
+  | "NOT_ENROLLED"
+  | "NOT_PUBLISHED"
+  | "AVAILABLE_FROM_FUTURE"
+  | "ACCESS_PERIOD_ENDED"
+  | "PREREQUISITE_INCOMPLETE"
+  | "PREREQUISITE_FAILED"
+  | "COHORT_INACTIVE"
+  | "PAYMENT_REQUIRED"
+  | "CONTENT_UNAVAILABLE";
+
 export type ModuleState =
   | "UPCOMING"
   | "ACTIVE"
@@ -97,6 +119,30 @@ export interface Resource {
   downloadable: boolean;
 }
 
+export interface Chapter {
+  id: string;
+  lessonId: string;
+  order: number;
+  title: Bilingual;
+  description?: Bilingual;
+  body?: Bilingual;
+  durationMinutes: number;
+  videoUrl?: string;
+  status: ContentStatus;
+}
+
+export interface LessonAccess {
+  lessonId: string;
+  cohortId?: string;
+  state: LessonAccessState;
+  isLocked: boolean;
+  lockReason?: LockReason;
+  availableFrom?: string;
+  availableUntil?: string;
+  prerequisite?: { id: string; title: Bilingual } | null;
+  progress: number;
+}
+
 export interface Lesson {
   id: string;
   moduleId: string;
@@ -108,7 +154,29 @@ export interface Lesson {
   videoUrl?: string | undefined;
   durationMinutes: number;
   mandatory: boolean;
+  status?: ContentStatus;
+  chapters?: Chapter[];
   resources: Resource[];
+  access?: LessonAccess;
+}
+
+export interface CohortLesson {
+  id: string;
+  cohortId: string;
+  lessonId: string;
+  order: number;
+  startAt: string;
+  endAt: string;
+  durationMinutes: number;
+  isRequired: boolean;
+  isPublished: boolean;
+  status: ContentStatus;
+  passingScore: number;
+  prerequisiteLessonId?: string | null;
+  prerequisiteAssignmentId?: string | null;
+  lesson?: Lesson;
+  accessState?: LessonAccessState;
+  lockReason?: LockReason;
 }
 
 export interface QuizOption {
@@ -131,7 +199,8 @@ export interface QuizQuestion {
 
 export interface Quiz {
   id: string;
-  moduleId: string;
+  moduleId?: string;
+  lessonId?: string;
   title: Bilingual;
   description: Bilingual;
   timeLimitMinutes?: number;
@@ -139,12 +208,14 @@ export interface Quiz {
   attemptsAllowed: number;
   questions: QuizQuestion[];
   published: boolean;
+  status?: ContentStatus;
 }
 
 export interface LiveSession {
   id: string;
   cohortId: string;
-  moduleId: string;
+  moduleId?: string;
+  lessonId?: string;
   title: Bilingual;
   description: Bilingual;
   date: string;
@@ -158,15 +229,17 @@ export interface LiveSession {
 
 export interface CourseModule {
   id: string;
-  cohortId: string;
+  cohortId?: string;
+  programId?: string;
   order: number;
   title: Bilingual;
   description: Bilingual;
-  startDate: string;
-  endDate: string;
+  startDate?: string;
+  endDate?: string;
   estimatedHours: number;
   requiredCompletion: number;
   passingScore: number;
+  status?: ContentStatus;
   lessons: Lesson[];
   quiz: Quiz;
   resources: Resource[];

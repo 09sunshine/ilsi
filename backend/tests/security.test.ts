@@ -470,7 +470,7 @@ describe("Security Architecture & Anti-Tampering Tests", () => {
 
       const verified = verifyOAuthState(tamperedState);
       expect(verified).toBeNull();
-    }, 15000);
+    });
   });
 
   // 12. Cohort Deletion & Media Purge Architecture

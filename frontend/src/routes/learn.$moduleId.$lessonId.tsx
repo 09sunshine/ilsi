@@ -8,6 +8,9 @@ import {
   FileText,
   PlayCircle,
   Loader2,
+  Lock,
+  Clock,
+  Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app/AppShell";
@@ -46,7 +49,7 @@ function LessonPage() {
   const [lesson, setLesson] = useState<any>(null);
   const [module, setModule] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; code?: string; details?: any } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -58,7 +61,8 @@ function LessonPage() {
         let modRes = null;
         try {
           const dash = await api.getStudentDashboard();
-          modRes = dash?.modules?.find((m: any) => m.id === moduleId);
+          modRes = dash?.modules?.find((m: any) => m.id === moduleId || m.module?.id === moduleId);
+          if (modRes?.module) modRes = modRes.module;
         } catch (_) {}
         if (mounted) {
           setLesson(lRes);
@@ -66,7 +70,11 @@ function LessonPage() {
         }
       } catch (err: any) {
         if (mounted) {
-          setError(err?.message || "Could not load lesson");
+          setError({
+            message: err?.message || "Could not load lesson",
+            code: err?.code,
+            details: err?.details,
+          });
         }
       } finally {
         if (mounted) setLoading(false);
@@ -89,16 +97,75 @@ function LessonPage() {
   }
 
   if (error || !lesson) {
+    const isUpcoming =
+      error?.code === "MODULE_NOT_STARTED" ||
+      error?.details?.state === "UPCOMING" ||
+      error?.message?.toLowerCase().includes("not yet started") ||
+      error?.message?.toLowerCase().includes("not available yet");
+    const isExpired =
+      error?.code === "MODULE_EXPIRED" ||
+      error?.details?.state === "EXPIRED" ||
+      error?.message?.toLowerCase().includes("expired") ||
+      error?.message?.toLowerCase().includes("ended");
+
     return (
       <AppShell title={t("nav.myCourse")}>
-        <div className="panel mx-auto max-w-xl p-8 text-center">
-          <h2 className="font-display text-xl font-semibold">Lesson not available</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {error || "The requested lesson could not be loaded."}
-          </p>
-          <Button asChild className="mt-6">
-            <Link to="/learn">{t("quiz.backToCourse")}</Link>
-          </Button>
+        <div className="panel mx-auto max-w-lg p-8 text-center space-y-4 animate-in fade-in-50">
+          <div className="flex justify-center">
+            <div
+              className={cn(
+                "size-14 rounded-2xl flex items-center justify-center border shadow-xs",
+                isUpcoming
+                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                  : isExpired
+                  ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                  : "bg-muted text-muted-foreground border-border"
+              )}
+            >
+              {isUpcoming ? (
+                <Clock className="size-7" />
+              ) : (
+                <Lock className="size-7" />
+              )}
+            </div>
+          </div>
+
+          <div>
+            <h2 className="font-display text-xl font-bold text-foreground">
+              {isUpcoming
+                ? t("course.lessonNotStarted")
+                : isExpired
+                ? t("course.lessonExpired")
+                : t("course.lessonLocked")}
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
+              {isUpcoming && error?.details?.availableFrom ? (
+                <>
+                  This lesson opens on{" "}
+                  <span className="font-semibold text-foreground">
+                    {new Date(error.details.availableFrom).toLocaleString()}
+                  </span>
+                  . Access is protected until this date according to the cohort schedule.
+                </>
+              ) : isExpired && error?.details?.accessEndedAt ? (
+                <>
+                  Access to this lesson concluded on{" "}
+                  <span className="font-semibold text-foreground">
+                    {new Date(error.details.accessEndedAt).toLocaleString()}
+                  </span>
+                  . The cohort learning window for this lesson has passed.
+                </>
+              ) : (
+                error?.message || "The requested lesson is currently not accessible."
+              )}
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Button asChild className="gap-2">
+              <Link to="/learn">{t("quiz.backToCourse")}</Link>
+            </Button>
+          </div>
         </div>
       </AppShell>
     );
@@ -137,32 +204,68 @@ function LessonPage() {
           <ol className="mt-4 space-y-1">
             {lessons.map((l: any, i: number) => {
               const completed = !!progress.lessons[l.id]?.completed || !!l.completed;
+              const now = Date.now();
+              const startMs = l.startAt || l.startDate ? new Date(l.startAt || l.startDate).getTime() : null;
+              const endMs = l.endAt || l.endDate ? new Date(l.endAt || l.endDate).getTime() : null;
+              const isUpcoming = startMs !== null && now < startMs;
+              const isExpired = endMs !== null && now > endMs;
+              const isLockedByDate = isUpcoming || isExpired;
+
               return (
                 <li key={l.id}>
-                  <Link
-                    to="/learn/$moduleId/$lessonId"
-                    params={{ moduleId, lessonId: l.id }}
-                    className={cn(
-                      "flex items-start gap-2 rounded-md px-2 py-2 text-sm transition-colors",
-                      l.id === lessonId
-                        ? "bg-secondary font-medium text-foreground"
-                        : "text-muted-foreground hover:bg-secondary/60",
-                    )}
-                  >
-                    {completed ? (
-                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
-                    ) : (
-                      <PlayCircle className="mt-0.5 size-4 shrink-0" />
-                    )}
-                    <span className="min-w-0">
-                      <span className="block truncate">
-                        {i + 1}. {L(l.title)}
+                  {isLockedByDate ? (
+                    <div
+                      className={cn(
+                        "flex items-start gap-2 rounded-md px-2 py-2 text-sm opacity-60 cursor-not-allowed select-none transition-colors",
+                        l.id === lessonId
+                          ? "bg-secondary/40 font-medium text-foreground"
+                          : "text-muted-foreground"
+                      )}
+                      title={
+                        isUpcoming
+                          ? `Available on ${new Date(startMs!).toLocaleDateString()}`
+                          : `Access ended on ${new Date(endMs!).toLocaleDateString()}`
+                      }
+                    >
+                      <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">
+                          {i + 1}. {L(l.title)}
+                        </span>
+                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <Clock className="size-2.5" />
+                          {isUpcoming
+                            ? `Opens: ${new Date(startMs!).toLocaleDateString()}`
+                            : `Closed`}
+                        </span>
                       </span>
-                      {l.durationMinutes ? (
-                        <span className="text-xs text-muted-foreground">{l.durationMinutes} min</span>
-                      ) : null}
-                    </span>
-                  </Link>
+                    </div>
+                  ) : (
+                    <Link
+                      to="/learn/$moduleId/$lessonId"
+                      params={{ moduleId, lessonId: l.id }}
+                      className={cn(
+                        "flex items-start gap-2 rounded-md px-2 py-2 text-sm transition-colors",
+                        l.id === lessonId
+                          ? "bg-secondary font-medium text-foreground"
+                          : "text-muted-foreground hover:bg-secondary/60"
+                      )}
+                    >
+                      {completed ? (
+                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
+                      ) : (
+                        <PlayCircle className="mt-0.5 size-4 shrink-0" />
+                      )}
+                      <span className="min-w-0">
+                        <span className="block truncate">
+                          {i + 1}. {L(l.title)}
+                        </span>
+                        {l.durationMinutes ? (
+                          <span className="text-xs text-muted-foreground">{l.durationMinutes} min</span>
+                        ) : null}
+                      </span>
+                    </Link>
+                  )}
                 </li>
               );
             })}
