@@ -35,6 +35,9 @@ export const auth = betterAuth({
       secure: isProd,
       httpOnly: true,
     },
+    ipAddress: {
+      ipAddressHeaders: ["x-forwarded-for", "cf-connecting-ip"],
+    },
   },
   emailAndPassword: {
     enabled: true,

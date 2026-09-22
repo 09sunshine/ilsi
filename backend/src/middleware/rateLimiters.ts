@@ -1,10 +1,15 @@
 import rateLimit from "express-rate-limit";
 
+const baseOptions = {
+  standardHeaders: true as const,
+  legacyHeaders: false as const,
+  validate: { xForwardedForHeader: false },
+};
+
 export const globalLimiter = rateLimit({
+  ...baseOptions,
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 300, // limit each IP to 300 requests per window
-  standardHeaders: true,
-  legacyHeaders: false,
   message: {
     success: false,
     error: {
@@ -15,10 +20,9 @@ export const globalLimiter = rateLimit({
 });
 
 export const authLimiter = rateLimit({
+  ...baseOptions,
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 15, // limit each IP to 15 authentication attempts per 15 minutes
-  standardHeaders: true,
-  legacyHeaders: false,
   message: {
     success: false,
     error: {
@@ -29,10 +33,9 @@ export const authLimiter = rateLimit({
 });
 
 export const applicationLimiter = rateLimit({
+  ...baseOptions,
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 5, // limit each IP to 5 application submissions per hour
-  standardHeaders: true,
-  legacyHeaders: false,
   message: {
     success: false,
     error: {
@@ -43,10 +46,9 @@ export const applicationLimiter = rateLimit({
 });
 
 export const quizLimiter = rateLimit({
+  ...baseOptions,
   windowMs: 10 * 60 * 1000, // 10 minutes
   max: 15, // limit each IP to 15 quiz submissions per 10 minutes
-  standardHeaders: true,
-  legacyHeaders: false,
   message: {
     success: false,
     error: {
@@ -57,10 +59,9 @@ export const quizLimiter = rateLimit({
 });
 
 export const videoLimiter = rateLimit({
+  ...baseOptions,
   windowMs: 10 * 60 * 1000, // 10 minutes
   max: 60, // limit each IP to 60 video signed URL requests per 10 minutes
-  standardHeaders: true,
-  legacyHeaders: false,
   message: {
     success: false,
     error: {
@@ -71,10 +72,9 @@ export const videoLimiter = rateLimit({
 });
 
 export const formSubmissionLimiter = rateLimit({
+  ...baseOptions,
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 15, // limit each IP to 15 support/volunteer/donation submissions per 15 minutes
-  standardHeaders: true,
-  legacyHeaders: false,
   message: {
     success: false,
     error: {
@@ -85,10 +85,9 @@ export const formSubmissionLimiter = rateLimit({
 });
 
 export const paymentLimiter = rateLimit({
+  ...baseOptions,
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 60, // limit each IP to 60 payment operations per 15 minutes
-  standardHeaders: true,
-  legacyHeaders: false,
   message: {
     success: false,
     error: {
@@ -97,4 +96,3 @@ export const paymentLimiter = rateLimit({
     },
   },
 });
-

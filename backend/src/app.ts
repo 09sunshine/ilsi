@@ -22,6 +22,9 @@ import uploadRoutes from "./routes/upload.routes.js";
 
 const app = express();
 
+// Trust reverse proxies (Render, Cloudflare, AWS) so that req.ip and X-Forwarded-For are trusted properly
+app.set("trust proxy", 1);
+
 // Security & Middlewares
 app.use(
   helmet({
@@ -122,7 +125,11 @@ app.use(express.urlencoded({ extended: true }));
 // Session Authentication Middleware
 app.use(authenticate);
 
-// Health check
+// Health checks (Root & /api/health)
+app.all("/", (_req, res) => {
+  res.status(200).json({ status: "ok", service: "ILSI LMS Backend", timestamp: new Date().toISOString() });
+});
+
 app.get("/api/health", (_req, res) => {
   res.json({ status: "healthy", timestamp: new Date().toISOString() });
 });
