@@ -19,7 +19,7 @@ BEGIN
         COALESCE(NEW.role, 'PARTICIPANT'),
         COALESCE(NEW.status, 'ACTIVE'),
         COALESCE(NEW."firstLogin", TRUE),
-        COALESCE(NEW.locale, 'en'),
+        COALESCE(NEW.locale, 'fr'),
         COALESCE(NEW."createdAt", NOW()),
         COALESCE(NEW."updatedAt", NOW())
     )

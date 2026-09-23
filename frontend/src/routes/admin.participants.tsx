@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
+  Trash2,
   UserPlus,
   Users,
   X,
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { DeleteParticipantModal } from "@/components/admin/DeleteParticipantModal";
 import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -73,6 +75,9 @@ function AdminParticipants() {
     name: string;
     tempPass: string;
   } | null>(null);
+
+  // Participant Deletion State
+  const [participantToDelete, setParticipantToDelete] = useState<Participant | null>(null);
 
   const fetchCohorts = async () => {
     try {
@@ -287,6 +292,7 @@ function AdminParticipants() {
                   <th className="p-4">{fr ? "Statut Paiement" : "Payment"}</th>
                   <th className="p-4">{fr ? "Progression" : "Certification"}</th>
                   <th className="p-4">{fr ? "Accès" : "Access State"}</th>
+                  <th className="p-4 text-right">{fr ? "Actions" : "Actions"}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -361,6 +367,18 @@ function AdminParticipants() {
                             {fr ? "Actif" : "Active"}
                           </Badge>
                         )}
+                      </td>
+                      <td className="p-4 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setParticipantToDelete(p)}
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          title={fr ? "Supprimer le participant" : "Delete participant"}
+                          aria-label={fr ? "Supprimer le participant" : "Delete participant"}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
                       </td>
                     </tr>
                   );
@@ -574,6 +592,17 @@ function AdminParticipants() {
             </div>
           </div>
         )}
+
+        {/* Modal: Delete Participant Confirmation */}
+        <DeleteParticipantModal
+          participant={participantToDelete}
+          isOpen={!!participantToDelete}
+          onClose={() => setParticipantToDelete(null)}
+          onDeleted={(deletedId) => {
+            setRows((prev) => prev.filter((item) => item.id !== deletedId));
+            setParticipantToDelete(null);
+          }}
+        />
       </div>
     </AppShell>
   );

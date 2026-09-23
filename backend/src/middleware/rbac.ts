@@ -39,7 +39,7 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
         role: (session.user as any).role || "PARTICIPANT",
         status: (session.user as any).status || "ACTIVE",
         firstLogin: (session.user as any).firstLogin ?? true,
-        locale: (session.user as any).locale || "en",
+        locale: (session.user as any).locale || "fr",
       };
       req.session = session.session;
     }

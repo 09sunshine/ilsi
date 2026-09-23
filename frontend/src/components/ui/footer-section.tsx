@@ -7,6 +7,7 @@ import {
   InstagramIcon,
   LinkedinIcon,
   YoutubeIcon,
+  Music2,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import ilsiLogo from "@/assets/ilsi-logo.png";
@@ -49,10 +50,11 @@ export function Footer() {
     {
       label: t("footer.social"),
       links: [
-        { title: "Facebook", href: "#", icon: FacebookIcon },
-        { title: "Instagram", href: "#", icon: InstagramIcon },
-        { title: "Youtube", href: "#", icon: YoutubeIcon },
-        { title: "LinkedIn", href: "#", icon: LinkedinIcon },
+        { title: "Facebook", href: "https://web.facebook.com/ilsicampus1", icon: FacebookIcon },
+        { title: "Instagram", href: "https://www.instagram.com/ilsi_campus", icon: InstagramIcon },
+        { title: "Youtube", href: "https://www.youtube.com/@ilsi_campus", icon: YoutubeIcon },
+        { title: "LinkedIn", href: "https://www.linkedin.com/company/ilsicampus", icon: LinkedinIcon },
+        { title: "TikTok", href: "https://www.tiktok.com/@ilsi_campus", icon: Music2 }
       ],
     },
   ];

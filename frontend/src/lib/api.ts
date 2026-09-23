@@ -229,6 +229,7 @@ export const api = {
   getParticipants: (cohortId?: string) => request<any[]>(`/api/admin/participants${cohortId ? `?cohortId=${cohortId}` : ""}`),
 
   createParticipant: (data: any) => request<any>("/api/admin/participants", { method: "POST", body: JSON.stringify(data) }),
+  deleteParticipant: (id: string) => request<any>(`/api/admin/participants/${id}`, { method: "DELETE" }),
   getApplications: (status?: string) => request<any[]>(`/api/admin/applications${status ? `?status=${status}` : ""}`),
   updateApplicationStatus: (id: string, data: any) =>
     request<any>(`/api/admin/applications/${id}/status`, { method: "PATCH", body: JSON.stringify(data) }),

@@ -1494,6 +1494,83 @@ router.post("/participants", async (req: Request, res: Response, next: NextFunct
 });
 
 /**
+ * DELETE /api/admin/participants/:id
+ * Permanently deletes a registered participant from database
+ */
+router.delete("/participants/:id", async (req: Request, res: Response, next: NextFunction) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    if (!id) {
+      throw new AppError(400, ErrorCodes.VALIDATION_ERROR, "Missing participant ID");
+    }
+
+    // 1. Verify participant exists and check role
+    const userRes = await client.query(
+      `SELECT u.id, u.email, u.name, u.role, p.first_name, p.last_name
+       FROM users u
+       LEFT JOIN profiles p ON p.user_id = u.id
+       WHERE u.id = $1`,
+      [id]
+    );
+
+    if (userRes.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.USER_NOT_FOUND, "Participant not found");
+    }
+
+    const participant = userRes.rows[0];
+
+    // Safety guard: Cannot delete ADMIN or SUPER_ADMIN through participant route
+    if (participant.role !== "PARTICIPANT" && participant.role !== "STUDENT") {
+      throw new AppError(403, ErrorCodes.FORBIDDEN, "Cannot delete administrative accounts via participant management");
+    }
+
+    await client.query("BEGIN");
+
+    // 2. Remove issued certificates if any (due to ON DELETE RESTRICT on certificates)
+    await client.query(`DELETE FROM certificates WHERE user_id = $1`, [id]);
+
+    // 3. Delete from application users table (cascades to enrollments, profiles, progress, quiz attempts, activity, notifications, sessions, accounts)
+    await client.query(`DELETE FROM users WHERE id = $1`, [id]);
+
+    // 4. Also delete from Better Auth "user" table if present
+    try {
+      await client.query(`DELETE FROM "user" WHERE id = $1`, [id]);
+    } catch {
+      // "user" table may not exist or row already synced
+    }
+
+    // 5. Audit log
+    await client.query(
+      `INSERT INTO audit_logs (user_id, action, resource_type, resource_id, metadata)
+       VALUES ($1, 'DELETE_PARTICIPANT', 'participant', $2, $3)`,
+      [
+        (req as any).user?.id || null,
+        id,
+        JSON.stringify({
+          email: participant.email,
+          name: `${participant.first_name || ""} ${participant.last_name || ""}`.trim() || participant.name,
+          deletedAt: new Date().toISOString(),
+        }),
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    res.json({
+      success: true,
+      message: "Participant successfully deleted from database.",
+      data: { id, email: participant.email },
+    });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    next(error);
+  } finally {
+    client.release();
+  }
+});
+
+/**
  * GET /api/admin/applications
  */
 router.get("/applications", async (req: Request, res: Response, next: NextFunction) => {

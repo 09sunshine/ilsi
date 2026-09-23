@@ -70,7 +70,7 @@ export const auth = betterAuth({
       locale: {
         type: "string",
         required: false,
-        defaultValue: "en",
+        defaultValue: "fr",
       },
     },
   },

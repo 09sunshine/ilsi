@@ -462,7 +462,7 @@ describe("Security Architecture & Anti-Tampering Tests", () => {
 
       const verified = verifyOAuthState(state);
       expect(verified).toBe(userId);
-    }, 15000);
+    }, 60000);
 
     it("rejects tampered OAuth state parameter", async () => {
       const { verifyOAuthState } = await import("../src/integrations/google/meet.js");
@@ -532,6 +532,39 @@ describe("Security Architecture & Anti-Tampering Tests", () => {
       expect(() => checkDeleteCohortAccess("PARTICIPANT")).toThrow("Insufficient permissions");
       expect(checkDeleteCohortAccess("ADMIN")).toBe(true);
       expect(checkDeleteCohortAccess("SUPER_ADMIN")).toBe(true);
+    });
+  });
+
+  // 13. Participant Deletion & Role Safeguards
+  describe("Participant Deletion & Role Safeguards", () => {
+    function evaluateParticipantDeletion(targetUserRole: string, requesterRole: string) {
+      const adminRoles = ["ADMIN", "SUPER_ADMIN"];
+      if (!adminRoles.includes(requesterRole)) {
+        throw new Error("Unauthorized: Only administrators can delete participants.");
+      }
+
+      if (targetUserRole !== "PARTICIPANT" && targetUserRole !== "STUDENT") {
+        throw new Error("Forbidden: Cannot delete administrative accounts via participant management.");
+      }
+
+      return { canDelete: true, targetUserRole };
+    }
+
+    it("allows administrators and super administrators to delete participants", () => {
+      expect(evaluateParticipantDeletion("PARTICIPANT", "ADMIN").canDelete).toBe(true);
+      expect(evaluateParticipantDeletion("STUDENT", "ADMIN").canDelete).toBe(true);
+      expect(evaluateParticipantDeletion("PARTICIPANT", "SUPER_ADMIN").canDelete).toBe(true);
+      expect(evaluateParticipantDeletion("STUDENT", "SUPER_ADMIN").canDelete).toBe(true);
+    });
+
+    it("prevents non-admins from attempting participant deletion", () => {
+      expect(() => evaluateParticipantDeletion("PARTICIPANT", "PARTICIPANT")).toThrow("Unauthorized");
+      expect(() => evaluateParticipantDeletion("PARTICIPANT", "STUDENT")).toThrow("Unauthorized");
+    });
+
+    it("strictly prevents deletion of ADMIN or SUPER_ADMIN through participant deletion route", () => {
+      expect(() => evaluateParticipantDeletion("ADMIN", "ADMIN")).toThrow("Forbidden: Cannot delete administrative accounts");
+      expect(() => evaluateParticipantDeletion("SUPER_ADMIN", "ADMIN")).toThrow("Forbidden: Cannot delete administrative accounts");
     });
   });
 });

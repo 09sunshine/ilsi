@@ -12,7 +12,13 @@ type LocaleContextValue = {
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>("en");
+  const [locale, setLocaleState] = useState<Locale>(() => {
+    if (typeof window !== "undefined") {
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      if (stored === "en" || stored === "fr") return stored;
+    }
+    return "fr";
+  });
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -31,7 +37,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   const t = useCallback(
     (key: TranslationKey, vars?: Record<string, string | number>) => {
       const table = dictionaries[locale] as Record<string, string>;
-      let value = table[key] ?? (dictionaries.en as Record<string, string>)[key] ?? key;
+      let value = table[key] ?? (dictionaries.fr as Record<string, string>)[key] ?? (dictionaries.en as Record<string, string>)[key] ?? key;
       if (vars) {
         for (const [name, replacement] of Object.entries(vars)) {
           value = value.replaceAll(`{${name}}`, String(replacement));
@@ -49,10 +55,10 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
 
 /** Fallback used if the context is momentarily unavailable (e.g. dev hot-reload). */
 const fallbackI18n: LocaleContextValue = {
-  locale: "en",
+  locale: "fr",
   setLocale: () => {},
   t: (key, vars) => {
-    let value = (dictionaries.en as Record<string, string>)[key] ?? key;
+    let value = (dictionaries.fr as Record<string, string>)[key] ?? (dictionaries.en as Record<string, string>)[key] ?? key;
     if (vars) {
       for (const [name, replacement] of Object.entries(vars)) {
         value = value.replaceAll(`{${name}}`, String(replacement));
