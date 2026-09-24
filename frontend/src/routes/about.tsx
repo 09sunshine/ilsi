@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Compass, HeartHandshake, ShieldCheck, Sparkles, CheckCircle2, Loader2, X, HandHeart } from "lucide-react";
+import { Compass, HeartHandshake, ShieldCheck, Sparkles, CheckCircle2, Loader2, X } from "lucide-react";
 import { PageHeader, PublicShell } from "@/components/site/PublicShell";
 import { SupportSection } from "@/components/site/SupportSection";
 import { useI18n } from "@/i18n/LocaleProvider";
@@ -131,9 +131,9 @@ function AboutPage() {
   ];
 
   const team = [
-    { name: "Amara Diallo", role: fr ? "Formatrice principale" : "Lead trainer" },
-    { name: "Jean-Luc Pierre", role: fr ? "Formateur, communication" : "Trainer, communication" },
-    { name: "Rita Nkemdirim", role: fr ? "Responsable des admissions" : "Head of admissions" },
+    { name: "Brooz Riddgly Seymour Saintil", role: fr ? "Coordinateur" : "Coordinator" },
+    { name: "Hervé Garnel Edouard", role: fr ? "Directeur de programme" : "Program Director" },
+    { name: "Ernsly Nelson", role: fr ? "Directeur de la communication" : "Communication Director" },
   ];
 
   return (
@@ -180,8 +180,8 @@ function AboutPage() {
                         ? "Don mensuel récurrent"
                         : "Monthly recurring gift"
                       : fr
-                      ? "Don unique"
-                      : "One-off gift"}
+                        ? "Don unique"
+                        : "One-off gift"}
                   </span>
                 </div>
                 <h3 className="font-display text-xl sm:text-2xl font-bold text-foreground">

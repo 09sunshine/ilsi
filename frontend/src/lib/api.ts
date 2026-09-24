@@ -127,7 +127,7 @@ export const api = {
       frequency: string;
       status: string;
     }>("/api/support/donate", { method: "POST", body: JSON.stringify(data) }),
-  verifyDonationSession: (data: { sessionId: string; donationId?: string }) =>
+  verifyDonationSession: (data: { sessionId: string; donationId?: string | undefined }) =>
     request<{
       status: "COMPLETED" | "PENDING" | "FAILED";
       donationId: string;

@@ -100,14 +100,14 @@ function ContactPage() {
             <Mail className="mt-0.5 size-5 text-primary" aria-hidden />
             <div>
               <p className="text-sm font-semibold">Email</p>
-              <p className="text-sm text-muted-foreground">admissions@ilsi.org</p>
+              <p className="text-sm text-muted-foreground">admission@ilsicampus.org</p>
             </div>
           </div>
           <div className="panel flex items-start gap-3 p-5">
             <Phone className="mt-0.5 size-5 text-primary" aria-hidden />
             <div>
               <p className="text-sm font-semibold">{t("apply.phone")}</p>
-              <p className="text-sm text-muted-foreground">+1 (555) 014-2200</p>
+              <p className="text-sm text-muted-foreground">+509 31 94 2183</p>
             </div>
           </div>
           <div className="panel flex items-start gap-3 p-5">
