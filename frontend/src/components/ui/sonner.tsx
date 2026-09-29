@@ -1,4 +1,15 @@
-import { Toaster as Sonner } from "sonner";
+import { Toaster as Sonner, toast as sonnerToast } from "sonner";
+import { formatHumanErrorMessage } from "@/lib/humanError";
+
+// Global interceptor: guarantees no raw HTML, stack trace or code snippet ever renders in error toasts
+if (typeof window !== "undefined" && (sonnerToast as any).error && !(sonnerToast as any).__ilsi_sanitized) {
+  const originalError = (sonnerToast as any).error.bind(sonnerToast);
+  (sonnerToast as any).error = (message: any, data?: any) => {
+    const cleanMessage = formatHumanErrorMessage(message);
+    return originalError(cleanMessage, data);
+  };
+  (sonnerToast as any).__ilsi_sanitized = true;
+}
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
@@ -21,3 +32,4 @@ const Toaster = ({ ...props }: ToasterProps) => {
 };
 
 export { Toaster };
+

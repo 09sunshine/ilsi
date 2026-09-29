@@ -1,3 +1,5 @@
+import { formatHumanErrorMessage } from "./humanError";
+
 const API_BASE = ((import.meta.env as any).VITE_BACKEND_URL || "http://localhost:4000").replace(/\/+$/, "");
 
 export function setStoredSessionToken(token: string | null) {
@@ -46,9 +48,10 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   }
 
   if (!res.ok || (data && data.success === false)) {
-    const errorMsg = data?.error?.message || data?.message || `Request failed with status ${res.status}`;
+    const rawError = data?.error || data;
+    const cleanMsg = formatHumanErrorMessage(rawError, `Request failed with status ${res.status}`);
     const code = data?.error?.code || "API_ERROR";
-    const error: any = new Error(errorMsg);
+    const error: any = new Error(cleanMsg);
     error.code = code;
     error.details = data?.error?.details;
     throw error;
@@ -167,16 +170,36 @@ export const api = {
   uploadFile: async (file: File): Promise<{ url: string; name: string; filename: string; sizeKb: number; type: string }> => {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch(`${API_BASE}/api/admin/upload`, {
-      method: "POST",
-      credentials: "include",
-      body: formData,
-    });
-    const data = await res.json();
-    if (!res.ok || data.success === false) {
-      throw new Error(data?.error?.message || data?.message || "File upload failed");
+
+    const token = getStoredSessionToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
     }
-    return data.data;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/upload`, {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: formData,
+      });
+
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { error: { message: text } };
+      }
+
+      if (!res.ok || data.success === false) {
+        throw new Error(formatHumanErrorMessage(data?.error || data, `Upload failed with status ${res.status}`));
+      }
+      return data.data;
+    } catch (err: any) {
+      throw new Error(formatHumanErrorMessage(err, "Failed to upload document. Please try again."));
+    }
   },
   uploadVideo: async (
     file: File,
@@ -197,6 +220,11 @@ export const api = {
       xhr.open("POST", `${API_BASE}/api/admin/upload-video`);
       xhr.withCredentials = true;
 
+      const token = getStoredSessionToken();
+      if (token) {
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      }
+
       if (onProgress && xhr.upload) {
         xhr.upload.addEventListener("progress", (e) => {
           if (e.lengthComputable) {
@@ -212,20 +240,31 @@ export const api = {
           if (xhr.status >= 200 && xhr.status < 300 && res.success !== false) {
             resolve(res.data);
           } else {
-            reject(new Error(res.error?.message || res.message || "Video upload failed"));
+            const msg = formatHumanErrorMessage(res.error || res, "Video upload failed");
+            reject(new Error(msg));
           }
         } catch {
-          reject(new Error(`Video upload failed with status ${xhr.status}`));
+          const msg = formatHumanErrorMessage(xhr.responseText, `Video upload failed with status ${xhr.status}`);
+          reject(new Error(msg));
         }
       };
 
-      xhr.onerror = () => reject(new Error("Network error during video upload"));
+      xhr.onerror = () => reject(new Error("Network connection error during video upload. Please check your internet."));
       xhr.send(formData);
     });
   },
   getCohortCurriculum: (cohortId: string) => request<any[]>(`/api/admin/cohorts/${cohortId}/curriculum`),
-  updateLessonVideo: (lessonId: string, data: { videoUrl: string; durationMinutes?: number }) =>
-    request<any>(`/api/admin/lessons/${lessonId}/video`, { method: "PATCH", body: JSON.stringify(data) }),
+  updateLessonVideo: async (lessonId: string, data: { videoUrl: string; durationMinutes?: number }) => {
+    try {
+      return await request<any>(`/api/admin/lessons/${lessonId}/video`, { method: "PATCH", body: JSON.stringify(data) });
+    } catch (err: any) {
+      // Fallback to general lesson update endpoint if dedicated video sub-route is unavailable
+      if (err?.code === "ENDPOINT_NOT_FOUND" || err?.message?.includes("not found")) {
+        return await request<any>(`/api/admin/lessons/${lessonId}`, { method: "PATCH", body: JSON.stringify(data) });
+      }
+      throw err;
+    }
+  },
   getParticipants: (cohortId?: string) => request<any[]>(`/api/admin/participants${cohortId ? `?cohortId=${cohortId}` : ""}`),
 
   createParticipant: (data: any) => request<any>("/api/admin/participants", { method: "POST", body: JSON.stringify(data) }),

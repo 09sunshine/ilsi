@@ -2992,6 +2992,50 @@ router.patch(
 );
 
 /**
+ * PATCH /api/admin/lessons/:id/video
+ * Links or updates the lesson video URL and optionally duration
+ */
+router.patch("/lessons/:id/video", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { videoUrl, durationMinutes } = req.body;
+
+    const lessonRes = await pool.query(`SELECT id, title_en FROM lessons WHERE id = $1`, [id]);
+    if (lessonRes.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.LESSON_NOT_FOUND, "Lesson not found");
+    }
+
+    if (durationMinutes !== undefined && durationMinutes !== null) {
+      await pool.query(`UPDATE lessons SET duration_minutes = $1, updated_at = NOW() WHERE id = $2`, [
+        Number(durationMinutes),
+        id,
+      ]);
+    }
+
+    if (videoUrl !== undefined) {
+      if (!videoUrl) {
+        await pool.query(`DELETE FROM videos WHERE lesson_id = $1`, [id]);
+      } else {
+        await pool.query(
+          `INSERT INTO videos (lesson_id, storage_path, file_name, mime_type, status)
+           VALUES ($1, $2, $3, 'video/mp4', 'READY')
+           ON CONFLICT (lesson_id) DO UPDATE SET storage_path = EXCLUDED.storage_path, status = 'READY', updated_at = NOW()`,
+          [id, videoUrl, `${lessonRes.rows[0].title_en || "lesson"}.mp4`]
+        );
+      }
+    }
+
+    res.json({
+      success: true,
+      message: "Lesson video updated successfully",
+      data: { lessonId: id, videoUrl: videoUrl || "" },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * DELETE /api/admin/lessons/:id
  * Safeguard: Archival if student progress/quiz attempts exist, hard delete otherwise
  */
@@ -3086,18 +3130,25 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { lessonId } = req.params;
-      const {
-        orderIndex = 1,
-        titleEn,
-        titleFr,
-        descriptionEn,
-        descriptionFr,
-        bodyEn,
-        bodyFr,
-        durationMinutes = 5,
-        videoUrl,
-        status = "PUBLISHED",
-      } = req.body;
+      const titleEn = (req.body.titleEn || req.body.title_en || "").trim();
+      const titleFr = (req.body.titleFr || req.body.title_fr || titleEn).trim();
+      const descriptionEn = req.body.descriptionEn || req.body.description_en || null;
+      const descriptionFr = req.body.descriptionFr || req.body.description_fr || null;
+      const bodyEn = req.body.bodyEn || req.body.body_en || null;
+      const bodyFr = req.body.bodyFr || req.body.body_fr || null;
+      const durationMinutes = Number(req.body.durationMinutes ?? req.body.duration_minutes ?? 5) || 5;
+      const videoUrl = req.body.videoUrl || req.body.video_url || null;
+      const status = req.body.status || "PUBLISHED";
+
+      // Compute next sequential orderIndex if not explicitly provided
+      let orderIndex = Number(req.body.orderIndex ?? req.body.order_index);
+      if (!orderIndex || orderIndex < 1) {
+        const orderRes = await pool.query(
+          `SELECT COALESCE(MAX(order_index), 0) + 1 as next_order FROM chapters WHERE lesson_id = $1`,
+          [lessonId]
+        );
+        orderIndex = Number(orderRes.rows[0]?.next_order) || 1;
+      }
 
       const result = await pool.query(
         `INSERT INTO chapters (
@@ -3112,12 +3163,12 @@ router.post(
           orderIndex,
           titleEn,
           titleFr,
-          descriptionEn || null,
-          descriptionFr || null,
-          bodyEn || null,
-          bodyFr || null,
+          descriptionEn,
+          descriptionFr,
+          bodyEn,
+          bodyFr,
           durationMinutes,
-          videoUrl || null,
+          videoUrl,
           status,
         ]
       );
@@ -3556,19 +3607,17 @@ router.post(
   validateRequest({ body: adminSchemas.createQuiz }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const {
-        moduleId,
-        lessonId,
-        titleEn,
-        titleFr,
-        descriptionEn,
-        descriptionFr,
-        timeLimitMinutes,
-        passingScore = 70,
-        attemptsAllowed = 3,
-        published = true,
-        status = "PUBLISHED",
-      } = req.body;
+      const moduleId = req.body.moduleId || req.body.module_id || null;
+      const lessonId = req.body.lessonId || req.body.lesson_id || null;
+      const titleEn = (req.body.titleEn || req.body.title_en || "").trim();
+      const titleFr = (req.body.titleFr || req.body.title_fr || titleEn).trim();
+      const descriptionEn = req.body.descriptionEn || req.body.description_en || null;
+      const descriptionFr = req.body.descriptionFr || req.body.description_fr || null;
+      const timeLimitMinutes = req.body.timeLimitMinutes ?? req.body.time_limit_minutes ?? null;
+      const passingScore = Number(req.body.passingScore ?? req.body.passing_score ?? 70) || 70;
+      const attemptsAllowed = Number(req.body.attemptsAllowed ?? req.body.max_attempts ?? 3) || 3;
+      const published = req.body.published !== undefined ? Boolean(req.body.published) : true;
+      const status = req.body.status || "PUBLISHED";
 
       const result = await pool.query(
         `INSERT INTO quizzes (
@@ -3579,13 +3628,13 @@ router.post(
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *`,
         [
-          moduleId || null,
-          lessonId || null,
+          moduleId,
+          lessonId,
           titleEn,
           titleFr,
-          descriptionEn || null,
-          descriptionFr || null,
-          timeLimitMinutes || null,
+          descriptionEn,
+          descriptionFr,
+          timeLimitMinutes,
           passingScore,
           attemptsAllowed,
           published,
@@ -3654,17 +3703,15 @@ router.patch(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
-      const {
-        titleEn,
-        titleFr,
-        descriptionEn,
-        descriptionFr,
-        timeLimitMinutes,
-        passingScore,
-        attemptsAllowed,
-        published,
-        status,
-      } = req.body;
+      const titleEn = req.body.titleEn || req.body.title_en;
+      const titleFr = req.body.titleFr || req.body.title_fr;
+      const descriptionEn = req.body.descriptionEn || req.body.description_en;
+      const descriptionFr = req.body.descriptionFr || req.body.description_fr;
+      const timeLimitMinutes = req.body.timeLimitMinutes ?? req.body.time_limit_minutes;
+      const passingScore = req.body.passingScore ?? req.body.passing_score;
+      const attemptsAllowed = req.body.attemptsAllowed ?? req.body.max_attempts;
+      const published = req.body.published;
+      const status = req.body.status;
 
       const result = await pool.query(
         `UPDATE quizzes SET
@@ -3715,18 +3762,25 @@ router.post(
     const client = await pool.connect();
     try {
       const { quizId } = req.params;
-      const {
-        orderIndex = 1,
-        type = "MULTIPLE_CHOICE",
-        promptEn,
-        promptFr,
-        correctText = null,
-        points = 1,
-        explanationEn = null,
-        explanationFr = null,
-        required = true,
-        options = [],
-      } = req.body;
+      const promptEn = (req.body.promptEn || req.body.question_en || req.body.prompt_en || "").trim();
+      const promptFr = (req.body.promptFr || req.body.question_fr || req.body.prompt_fr || promptEn).trim();
+      const type = req.body.type || "MULTIPLE_CHOICE";
+      const correctText = req.body.correctText || req.body.correct_text || null;
+      const points = Number(req.body.points) || 1;
+      const explanationEn = req.body.explanationEn || req.body.explanation_en || null;
+      const explanationFr = req.body.explanationFr || req.body.explanation_fr || null;
+      const required = req.body.required !== undefined ? Boolean(req.body.required) : true;
+      const rawOptions = req.body.options || [];
+
+      // Compute sequential orderIndex
+      let orderIndex = Number(req.body.orderIndex ?? req.body.order_index);
+      if (!orderIndex || orderIndex < 1) {
+        const orderRes = await client.query(
+          `SELECT COALESCE(MAX(order_index), 0) + 1 as next_order FROM quiz_questions WHERE quiz_id = $1`,
+          [quizId]
+        );
+        orderIndex = Number(orderRes.rows[0]?.next_order) || 1;
+      }
 
       await client.query("BEGIN");
       const qRes = await client.query(
@@ -3752,13 +3806,19 @@ router.post(
       const question = qRes.rows[0];
 
       const createdOptions = [];
-      if (Array.isArray(options) && options.length > 0) {
-        for (const opt of options) {
+      if (Array.isArray(rawOptions) && rawOptions.length > 0) {
+        for (let idx = 0; idx < rawOptions.length; idx++) {
+          const opt = rawOptions[idx];
+          const labelEn = (opt.labelEn || opt.option_en || opt.label_en || opt.textEn || opt.text_en || "").trim();
+          const labelFr = (opt.labelFr || opt.option_fr || opt.label_fr || opt.textFr || opt.text_fr || labelEn).trim();
+          const isCorrect = opt.correct !== undefined ? Boolean(opt.correct) : (opt.isCorrect !== undefined ? Boolean(opt.isCorrect) : (opt.is_correct !== undefined ? Boolean(opt.is_correct) : false));
+          const optOrder = Number(opt.orderIndex || opt.order_index) || idx + 1;
+
           const optRes = await client.query(
             `INSERT INTO quiz_options (question_id, order_index, label_en, label_fr, correct)
              VALUES ($1, $2, $3, $4, $5)
              RETURNING *`,
-            [question.id, opt.orderIndex || 1, opt.labelEn, opt.labelFr, opt.correct || false]
+            [question.id, optOrder, labelEn, labelFr, isCorrect]
           );
           createdOptions.push(optRes.rows[0]);
         }
@@ -3768,7 +3828,7 @@ router.post(
       res.status(201).json({
         success: true,
         data: { ...question, options: createdOptions },
-        message: "Quiz question created successfully",
+        message: "Question added to quiz successfully",
       });
     } catch (error) {
       await client.query("ROLLBACK");
@@ -3836,19 +3896,17 @@ router.delete("/quizzes/:id", async (req: Request, res: Response, next: NextFunc
  */
 router.post("/resources", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const {
-      lessonId,
-      moduleId,
-      nameEn,
-      nameFr,
-      type = "PDF",
-      storagePath,
-      url,
-      sizeKb = 100,
-      downloadable = true,
-      status = "PUBLISHED",
-      isPublished = true,
-    } = req.body;
+    const lessonId = req.body.lessonId || req.body.lesson_id || null;
+    const moduleId = req.body.moduleId || req.body.module_id || null;
+    const nameEn = (req.body.nameEn || req.body.name_en || req.body.title || req.body.fileName || "Document").trim();
+    const nameFr = (req.body.nameFr || req.body.name_fr || nameEn).trim();
+    const type = req.body.type || "PDF";
+    const storagePath = req.body.storagePath || req.body.storage_path || null;
+    const url = req.body.url || storagePath || "";
+    const sizeKb = Number(req.body.sizeKb ?? req.body.size_kb ?? 100) || 100;
+    const downloadable = req.body.downloadable !== undefined ? Boolean(req.body.downloadable) : true;
+    const status = req.body.status || "PUBLISHED";
+    const isPublished = req.body.isPublished !== undefined ? Boolean(req.body.isPublished) : (req.body.is_published !== undefined ? Boolean(req.body.is_published) : true);
 
     const result = await pool.query(
       `INSERT INTO resources (
@@ -3858,12 +3916,12 @@ router.post("/resources", async (req: Request, res: Response, next: NextFunction
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
-        lessonId || null,
-        moduleId || null,
+        lessonId,
+        moduleId,
         nameEn,
-        nameFr || nameEn,
+        nameFr,
         type,
-        storagePath || null,
+        storagePath,
         url,
         sizeKb,
         downloadable,

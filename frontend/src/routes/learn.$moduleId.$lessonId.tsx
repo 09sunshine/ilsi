@@ -22,6 +22,7 @@ import { useLearning } from "@/features/learning/LearningProvider";
 import { api } from "@/lib/api";
 import { cn, resolveMediaUrl } from "@/lib/utils";
 import { LessonVideoPlayer } from "@/components/learning/LessonVideoPlayer";
+import { formatLocalizedDateTime } from "@/lib/timezone";
 
 export const Route = createFileRoute("/learn/$moduleId/$lessonId")({
   loader: ({ params }) => {
@@ -41,7 +42,7 @@ export const Route = createFileRoute("/learn/$moduleId/$lessonId")({
 
 function LessonPage() {
   const { moduleId, lessonId } = Route.useLoaderData();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const L = useLocalized();
   const navigate = useNavigate();
   const { progress, completeLesson } = useLearning();
@@ -143,7 +144,7 @@ function LessonPage() {
                 <>
                   This lesson opens on{" "}
                   <span className="font-semibold text-foreground">
-                    {new Date(error.details.availableFrom).toLocaleString()}
+                    {formatLocalizedDateTime(error.details.availableFrom, locale)}
                   </span>
                   . Access is protected until this date according to the cohort schedule.
                 </>
@@ -151,7 +152,7 @@ function LessonPage() {
                 <>
                   Access to this lesson concluded on{" "}
                   <span className="font-semibold text-foreground">
-                    {new Date(error.details.accessEndedAt).toLocaleString()}
+                    {formatLocalizedDateTime(error.details.accessEndedAt, locale)}
                   </span>
                   . The cohort learning window for this lesson has passed.
                 </>

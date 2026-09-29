@@ -25,6 +25,7 @@ import {
   Paperclip,
   Check,
   Calendar,
+  Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,14 @@ import { api } from "@/lib/api";
 import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
 import { cn, resolveMediaUrl } from "@/lib/utils";
 import { LessonVideoPlayer } from "@/components/learning/LessonVideoPlayer";
+import {
+  getUserTimezone,
+  getUserTimezoneAbbr,
+  toLocalDatetimeInputValue,
+  fromLocalDatetimeInputValue,
+  formatLocalizedDateTime,
+} from "@/lib/timezone";
+import { formatHumanErrorMessage } from "@/lib/humanError";
 
 interface Props {
   cohort: any | null;
@@ -47,6 +56,9 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
   const { locale } = useI18n();
   const fr = locale === "fr";
   const L = useLocalized();
+
+  const userTz = getUserTimezone();
+  const userTzAbbr = getUserTimezoneAbbr();
 
   const [modules, setModules] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -187,7 +199,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to add module");
+      toast.error(formatHumanErrorMessage(err, "Failed to add module"));
     }
   };
 
@@ -203,7 +215,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to update module");
+      toast.error(formatHumanErrorMessage(err, "Failed to update module"));
     }
   };
 
@@ -222,7 +234,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to delete module");
+      toast.error(formatHumanErrorMessage(err, "Failed to delete module"));
     }
   };
 
@@ -241,7 +253,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       toast.success(fr ? "Ordre des modules mis à jour." : "Module order updated.");
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to reorder modules");
+      toast.error(formatHumanErrorMessage(err, "Failed to reorder modules"));
     }
   };
 
@@ -255,16 +267,19 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       return;
     }
     try {
+      const utcStart = fromLocalDatetimeInputValue(newLessonStartDate);
+      const utcEnd = fromLocalDatetimeInputValue(newLessonEndDate);
+
       await api.createLesson(activeModule.id, {
         titleEn: newLessonTitleEn.trim(),
         titleFr: newLessonTitleFr.trim() || newLessonTitleEn.trim(),
         durationMinutes: Number(newLessonDuration) || 15,
         orderIndex: (activeModule.lessons?.length || 0) + 1,
         type: "VIDEO",
-        startDate: newLessonStartDate ? new Date(newLessonStartDate).toISOString() : undefined,
-        endDate: newLessonEndDate ? new Date(newLessonEndDate).toISOString() : undefined,
-        startAt: newLessonStartDate ? new Date(newLessonStartDate).toISOString() : undefined,
-        endAt: newLessonEndDate ? new Date(newLessonEndDate).toISOString() : undefined,
+        startDate: utcStart || undefined,
+        endDate: utcEnd || undefined,
+        startAt: utcStart || undefined,
+        endAt: utcEnd || undefined,
       });
       toast.success(fr ? "Leçon ajoutée au module !" : "Lesson created!");
       setNewLessonTitleEn("");
@@ -276,28 +291,31 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to add lesson");
+      toast.error(formatHumanErrorMessage(err, "Failed to add lesson"));
     }
   };
 
   const handleUpdateLesson = async () => {
     if (!editingLesson) return;
     try {
+      const utcStart = fromLocalDatetimeInputValue(editingLesson.startDate);
+      const utcEnd = fromLocalDatetimeInputValue(editingLesson.endDate);
+
       await api.updateLesson(editingLesson.id, {
         titleEn: editingLesson.titleEn,
         titleFr: editingLesson.titleFr,
         durationMinutes: Number(editingLesson.durationMinutes) || 15,
-        startDate: editingLesson.startDate ? new Date(editingLesson.startDate).toISOString() : null,
-        endDate: editingLesson.endDate ? new Date(editingLesson.endDate).toISOString() : null,
-        startAt: editingLesson.startDate ? new Date(editingLesson.startDate).toISOString() : null,
-        endAt: editingLesson.endDate ? new Date(editingLesson.endDate).toISOString() : null,
+        startDate: utcStart,
+        endDate: utcEnd,
+        startAt: utcStart,
+        endAt: utcEnd,
       });
       toast.success(fr ? "Leçon mise à jour !" : "Lesson updated!");
       setEditingLesson(null);
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to update lesson");
+      toast.error(formatHumanErrorMessage(err, "Failed to update lesson"));
     }
   };
 
@@ -430,10 +448,16 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
     }
     try {
       await api.createChapter(targetChapterLessonId, {
+        lessonId: targetChapterLessonId,
+        lesson_id: targetChapterLessonId,
         titleEn: chapterTitleEn.trim(),
+        title_en: chapterTitleEn.trim(),
         titleFr: chapterTitleFr.trim() || chapterTitleEn.trim(),
+        title_fr: chapterTitleFr.trim() || chapterTitleEn.trim(),
         durationMinutes: Number(chapterDuration) || 5,
+        duration_minutes: Number(chapterDuration) || 5,
         videoUrl: chapterVideoUrl.trim() || undefined,
+        video_url: chapterVideoUrl.trim() || undefined,
       });
       toast.success(fr ? "Chapitre ajouté !" : "Chapter added!");
       setChapterTitleEn("");
@@ -443,7 +467,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to add chapter");
+      toast.error(formatHumanErrorMessage(err, "Failed to add chapter"));
     }
   };
 
@@ -455,7 +479,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to delete chapter");
+      toast.error(formatHumanErrorMessage(err, "Failed to delete chapter"));
     }
   };
 
@@ -473,12 +497,17 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
 
       await api.addResource({
         lesson_id: lessonId,
+        lessonId: lessonId,
         name_en: file.name,
+        nameEn: file.name,
         name_fr: file.name,
+        nameFr: file.name,
         type: file.type.includes("pdf") ? "PDF" : "DOCUMENT",
         url: res.url,
         storage_path: res.url,
+        storagePath: res.url,
         size_kb: res.sizeKb || Math.round(file.size / 1024),
+        sizeKb: res.sizeKb || Math.round(file.size / 1024),
         downloadable: true,
       });
 
@@ -486,7 +515,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to upload document");
+      toast.error(formatHumanErrorMessage(err, "Failed to upload document"));
     } finally {
       setIsUploadingResource(null);
       e.target.value = "";
@@ -501,11 +530,15 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
     try {
       await api.addResource({
         lesson_id: lessonId,
+        lessonId: lessonId,
         name_en: newResourceNameEn.trim(),
+        nameEn: newResourceNameEn.trim(),
         name_fr: newResourceNameFr.trim() || newResourceNameEn.trim(),
+        nameFr: newResourceNameFr.trim() || newResourceNameEn.trim(),
         type: "LINK",
         url: newResourceUrl.trim(),
         size_kb: 0,
+        sizeKb: 0,
         downloadable: true,
       });
       toast.success(fr ? "Lien de ressource ajouté !" : "Resource link added!");
@@ -515,7 +548,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to add resource");
+      toast.error(formatHumanErrorMessage(err, "Failed to add resource"));
     }
   };
 
@@ -527,7 +560,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to delete resource");
+      toast.error(formatHumanErrorMessage(err, "Failed to delete resource"));
     }
   };
 
@@ -542,10 +575,15 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
     try {
       await api.createQuiz({
         lesson_id: targetQuizLessonId,
+        lessonId: targetQuizLessonId,
         title_en: quizTitleEn.trim(),
+        titleEn: quizTitleEn.trim(),
         title_fr: quizTitleFr.trim() || quizTitleEn.trim(),
+        titleFr: quizTitleFr.trim() || quizTitleEn.trim(),
         passing_score: Number(quizPassingScore) || 70,
+        passingScore: Number(quizPassingScore) || 70,
         max_attempts: Number(quizMaxAttempts) || 3,
+        attemptsAllowed: Number(quizMaxAttempts) || 3,
       });
       toast.success(fr ? "Quiz créé !" : "Quiz created!");
       setQuizTitleEn("");
@@ -554,7 +592,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to create quiz");
+      toast.error(formatHumanErrorMessage(err, "Failed to create quiz"));
     }
   };
 
@@ -573,7 +611,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to delete quiz");
+      toast.error(formatHumanErrorMessage(err, "Failed to delete quiz"));
     }
   };
 
@@ -595,15 +633,23 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
     try {
       await api.addQuizQuestion(targetQuestionQuizId, {
         question_en: questionTextEn.trim(),
+        promptEn: questionTextEn.trim(),
         question_fr: questionTextFr.trim() || questionTextEn.trim(),
+        promptFr: questionTextFr.trim() || questionTextEn.trim(),
         explanation_en: questionExplanationEn.trim() || null,
+        explanationEn: questionExplanationEn.trim() || null,
         explanation_fr: questionExplanationFr.trim() || null,
+        explanationFr: questionExplanationFr.trim() || null,
         points: Number(questionPoints) || 1,
         options: validOptions.map((o, idx) => ({
           option_en: o.textEn.trim(),
+          labelEn: o.textEn.trim(),
           option_fr: o.textFr.trim() || o.textEn.trim(),
+          labelFr: o.textFr.trim() || o.textEn.trim(),
           is_correct: o.isCorrect,
+          correct: o.isCorrect,
           order_index: idx + 1,
+          orderIndex: idx + 1,
         })),
       });
       toast.success(fr ? "Question ajoutée au quiz !" : "Question added to quiz!");
@@ -619,7 +665,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to add question");
+      toast.error(formatHumanErrorMessage(err, "Failed to add question"));
     }
   };
 
@@ -631,7 +677,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      toast.error(err.message || "Failed to delete question");
+      toast.error(formatHumanErrorMessage(err, "Failed to delete question"));
     }
   };
 
@@ -962,15 +1008,19 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                                   {(lesson.startAt || lesson.startDate || lesson.endAt || lesson.endDate) && (
                                     <>
                                       <span>•</span>
-                                      <span className="inline-flex items-center gap-1 font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded text-[11px]">
+                                      <span
+                                        className="inline-flex items-center gap-1 font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded text-[11px]"
+                                        title={`${fr ? "Fuseau horaire" : "Timezone"}: ${userTz} (${userTzAbbr})`}
+                                      >
                                         <Calendar className="size-3" />
                                         {lesson.startAt || lesson.startDate
-                                          ? new Date(lesson.startAt || lesson.startDate).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US", { month: "short", day: "numeric" })
+                                          ? formatLocalizedDateTime(lesson.startAt || lesson.startDate, locale)
                                           : "..."}
                                         {" → "}
                                         {lesson.endAt || lesson.endDate
-                                          ? new Date(lesson.endAt || lesson.endDate).toLocaleDateString(locale === "fr" ? "fr-FR" : "en-US", { month: "short", day: "numeric" })
+                                          ? formatLocalizedDateTime(lesson.endAt || lesson.endDate, locale)
                                           : "..."}
+                                        <span className="text-[10px] text-muted-foreground ml-0.5">({userTzAbbr})</span>
                                       </span>
                                     </>
                                   )}
@@ -1021,12 +1071,8 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                                         ? lesson.title.fr
                                         : lesson.titleFr || lesson.title,
                                     durationMinutes: lesson.durationMinutes || 15,
-                                    startDate: lesson.startDate || lesson.startAt
-                                      ? new Date(lesson.startDate || lesson.startAt).toISOString().slice(0, 16)
-                                      : "",
-                                    endDate: lesson.endDate || lesson.endAt
-                                      ? new Date(lesson.endDate || lesson.endAt).toISOString().slice(0, 16)
-                                      : "",
+                                    startDate: toLocalDatetimeInputValue(lesson.startDate || lesson.startAt),
+                                    endDate: toLocalDatetimeInputValue(lesson.endDate || lesson.endAt),
                                   });
                                 }}
                                 className="size-7 text-muted-foreground hover:text-primary"
@@ -1772,19 +1818,28 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                 />
               </div>
               <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-2.5">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                  <Calendar className="size-3.5 text-primary" />
-                  <span>{fr ? "Période d'accès de la leçon (Sécurisé)" : "Lesson Access Window (Server-Enforced)"}</span>
+                <div className="flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                    <Calendar className="size-3.5 text-primary" />
+                    <span>{fr ? "Période d'accès de la leçon (Universelle)" : "Lesson Access Window (Universal UTC)"}</span>
+                  </div>
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-full"
+                    title={`Timezone: ${userTz}`}
+                  >
+                    <Globe className="size-2.5" />
+                    {userTzAbbr}
+                  </span>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
                   {fr
-                    ? "Les étudiants pourront accéder à cette leçon UNIQUEMENT entre ces deux dates."
-                    : "Participants can access this lesson ONLY within this duration window."}
+                    ? `Les horaires saisis sont automatiquement convertis depuis votre fuseau (${userTz}) et synchronisés en UTC pour tous les apprenants dans le monde.`
+                    : `Dates & times you enter are in your local timezone (${userTzAbbr}) and automatically synchronized to UTC for participants worldwide.`}
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                   <div>
                     <label className="text-[10px] font-medium text-muted-foreground">
-                      {fr ? "Date de début" : "Start Date (Available From)"}
+                      {fr ? `Date de début (${userTzAbbr})` : `Start Date (${userTzAbbr})`}
                     </label>
                     <Input
                       type="datetime-local"
@@ -1795,7 +1850,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                   </div>
                   <div>
                     <label className="text-[10px] font-medium text-muted-foreground">
-                      {fr ? "Date de fin" : "End Date (Access Closes)"}
+                      {fr ? `Date de fin (${userTzAbbr})` : `End Date (${userTzAbbr})`}
                     </label>
                     <Input
                       type="datetime-local"
@@ -1805,6 +1860,20 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                     />
                   </div>
                 </div>
+                {(newLessonStartDate || newLessonEndDate) && (
+                  <div className="text-[11px] text-muted-foreground bg-background/60 border border-border/50 rounded-lg p-2 font-mono flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-semibold text-muted-foreground">
+                        {fr ? "Aperçu heure locale" : "Local Time Preview"}:
+                      </span>
+                      <span className="text-foreground font-medium">
+                        {newLessonStartDate ? formatLocalizedDateTime(fromLocalDatetimeInputValue(newLessonStartDate), locale) : "..."}
+                        {" → "}
+                        {newLessonEndDate ? formatLocalizedDateTime(fromLocalDatetimeInputValue(newLessonEndDate), locale) : "..."}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
@@ -1881,19 +1950,28 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                 />
               </div>
               <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-2.5">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                  <Calendar className="size-3.5 text-primary" />
-                  <span>{fr ? "Période d'accès de la leçon (Sécurisé)" : "Lesson Access Window (Server-Enforced)"}</span>
+                <div className="flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                    <Calendar className="size-3.5 text-primary" />
+                    <span>{fr ? "Période d'accès de la leçon (Universelle)" : "Lesson Access Window (Universal UTC)"}</span>
+                  </div>
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-full"
+                    title={`Timezone: ${userTz}`}
+                  >
+                    <Globe className="size-2.5" />
+                    {userTzAbbr}
+                  </span>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
                   {fr
-                    ? "Les étudiants pourront accéder à cette leçon UNIQUEMENT entre ces deux dates."
-                    : "Participants can access this lesson ONLY within this duration window."}
+                    ? `Les horaires saisis sont automatiquement convertis depuis votre fuseau (${userTz}) et synchronisés en UTC pour tous les apprenants dans le monde.`
+                    : `Dates & times you enter are in your local timezone (${userTzAbbr}) and automatically synchronized to UTC for participants worldwide.`}
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                   <div>
                     <label className="text-[10px] font-medium text-muted-foreground">
-                      {fr ? "Date de début" : "Start Date (Available From)"}
+                      {fr ? `Date de début (${userTzAbbr})` : `Start Date (${userTzAbbr})`}
                     </label>
                     <Input
                       type="datetime-local"
@@ -1909,7 +1987,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                   </div>
                   <div>
                     <label className="text-[10px] font-medium text-muted-foreground">
-                      {fr ? "Date de fin" : "End Date (Access Closes)"}
+                      {fr ? `Date de fin (${userTzAbbr})` : `End Date (${userTzAbbr})`}
                     </label>
                     <Input
                       type="datetime-local"
@@ -1924,6 +2002,20 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                     />
                   </div>
                 </div>
+                {(editingLesson.startDate || editingLesson.endDate) && (
+                  <div className="text-[11px] text-muted-foreground bg-background/60 border border-border/50 rounded-lg p-2 font-mono flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-semibold text-muted-foreground">
+                        {fr ? "Aperçu heure locale" : "Local Time Preview"}:
+                      </span>
+                      <span className="text-foreground font-medium">
+                        {editingLesson.startDate ? formatLocalizedDateTime(fromLocalDatetimeInputValue(editingLesson.startDate), locale) : "..."}
+                        {" → "}
+                        {editingLesson.endDate ? formatLocalizedDateTime(fromLocalDatetimeInputValue(editingLesson.endDate), locale) : "..."}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">

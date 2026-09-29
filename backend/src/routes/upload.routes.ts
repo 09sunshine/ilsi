@@ -127,29 +127,40 @@ router.post(
             : "image/jpeg"
           : "application/octet-stream");
 
-      // Upload file directly to Supabase Storage
-      const { error: uploadErr } = await supabaseAdmin.storage
-        .from(bucket)
-        .upload(storagePath, req.file.buffer, {
-          contentType: mimeType,
-          upsert: true,
-        });
+      let fileUrl = "";
 
-      if (uploadErr) {
-        console.error(`[Supabase Storage ${bucket} Upload Error]:`, uploadErr);
-        throw new AppError(
-          500,
-          "STORAGE_UPLOAD_FAILED",
-          `Failed to upload file to storage: ${uploadErr.message}`
-        );
+      // Try uploading to Supabase Storage, with fallback to local disk
+      try {
+        const { error: uploadErr } = await supabaseAdmin.storage
+          .from(bucket)
+          .upload(storagePath, req.file.buffer, {
+            contentType: mimeType,
+            upsert: true,
+          });
+
+        if (!uploadErr) {
+          const { data: pubData } = supabaseAdmin.storage
+            .from(bucket)
+            .getPublicUrl(storagePath);
+          fileUrl = pubData.publicUrl;
+        } else {
+          console.warn(`[Supabase Storage ${bucket}] upload failed, falling back to local disk:`, uploadErr.message);
+        }
+      } catch (err: any) {
+        console.warn(`[Supabase Storage] unexpected error, falling back to local disk:`, err?.message);
       }
 
-      // Generate public CDN URL
-      const { data: pubData } = supabaseAdmin.storage
-        .from(bucket)
-        .getPublicUrl(storagePath);
+      // If Supabase upload didn't produce URL, save to local disk public/uploads
+      if (!fileUrl) {
+        const localFolder = path.join(process.cwd(), "public", "uploads", storageFolder);
+        if (!fs.existsSync(localFolder)) {
+          fs.mkdirSync(localFolder, { recursive: true });
+        }
+        const diskPath = path.join(localFolder, uniqueFilename);
+        fs.writeFileSync(diskPath, req.file.buffer);
+        fileUrl = `/uploads/${storageFolder}/${uniqueFilename}`;
+      }
 
-      const fileUrl = pubData.publicUrl;
       const sizeKb = Math.round(req.file.size / 1024);
 
       res.json({
@@ -171,7 +182,7 @@ router.post(
 
 /**
  * POST /api/admin/upload-video
- * Uploads lesson video to Supabase Storage 'course-videos' bucket
+ * Uploads lesson video with Supabase Storage and local disk fallback
  */
 router.post(
   "/upload-video",
@@ -189,57 +200,57 @@ router.post(
         .basename(req.file.originalname, ext)
         .replace(/[^a-zA-Z0-9_-]/g, "_")
         .substring(0, 50);
-      const storagePath = `lessons/${Date.now()}-${cleanBase}${ext}`;
+      const uniqueFilename = `${cleanBase}-${Date.now()}${ext}`;
+      const storagePath = `lessons/${uniqueFilename}`;
 
-      // Read file buffer from disk
-      const fileBuffer = fs.readFileSync(tempFilePath);
+      let finalVideoUrl = "";
 
-      // Upload to Supabase Storage bucket 'course-videos'
-      const { error: uploadErr } = await supabaseAdmin.storage
-        .from("course-videos")
-        .upload(storagePath, fileBuffer, {
-          contentType: req.file.mimetype || "video/mp4",
-          upsert: true,
-        });
-
-      // Cleanup local temp file
+      // Try uploading to Supabase Storage 'course-videos' bucket
       try {
-        if (fs.existsSync(tempFilePath)) {
-          fs.unlinkSync(tempFilePath);
-        }
-      } catch (cleanupErr) {
-        console.warn("Failed to delete temp video file:", cleanupErr);
-      }
-
-      if (uploadErr) {
-        console.error("[Supabase Storage Video Upload Error]:", uploadErr);
-        throw new AppError(
-          500,
-          "STORAGE_UPLOAD_FAILED",
-          `Failed to upload video to Supabase Storage: ${uploadErr.message}`
-        );
-      }
-
-      // Generate signed preview URL (valid for 24 hours for admin preview)
-      let previewUrl = "";
-      const { data: signedData, error: signedErr } = await supabaseAdmin.storage
-        .from("course-videos")
-        .createSignedUrl(storagePath, 86400);
-
-      if (!signedErr && signedData?.signedUrl) {
-        previewUrl = signedData.signedUrl;
-      } else {
-        const { data: pubData } = supabaseAdmin.storage
+        const fileBuffer = fs.readFileSync(tempFilePath);
+        const { error: uploadErr } = await supabaseAdmin.storage
           .from("course-videos")
-          .getPublicUrl(storagePath);
-        previewUrl = pubData?.publicUrl || storagePath;
+          .upload(storagePath, fileBuffer, {
+            contentType: req.file.mimetype || "video/mp4",
+            upsert: true,
+          });
+
+        if (!uploadErr) {
+          const { data: signedData } = await supabaseAdmin.storage
+            .from("course-videos")
+            .createSignedUrl(storagePath, 86400 * 7); // 7 days
+
+          if (signedData?.signedUrl) {
+            finalVideoUrl = signedData.signedUrl;
+          } else {
+            const { data: pubData } = supabaseAdmin.storage
+              .from("course-videos")
+              .getPublicUrl(storagePath);
+            finalVideoUrl = pubData?.publicUrl || "";
+          }
+
+          // Cleanup temp file since it was successfully uploaded to cloud
+          try {
+            if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+          } catch {}
+        } else {
+          console.warn("[Supabase Storage Video] upload failed, keeping local file:", uploadErr.message);
+        }
+      } catch (cloudErr: any) {
+        console.warn("[Supabase Storage Video] unexpected error, keeping local file:", cloudErr?.message);
+      }
+
+      // If Supabase upload didn't produce URL, preserve the local temp file in public/uploads
+      if (!finalVideoUrl) {
+        const localFileName = path.basename(tempFilePath);
+        finalVideoUrl = `/uploads/${localFileName}`;
       }
 
       res.json({
         success: true,
         data: {
           storagePath,
-          url: previewUrl,
+          url: finalVideoUrl,
           fileName: req.file.originalname,
           fileSizeBytes: req.file.size,
           sizeMb: Number((req.file.size / (1024 * 1024)).toFixed(2)),

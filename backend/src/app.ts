@@ -150,8 +150,19 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/admin", uploadRoutes);
 app.use("/api/google", googleRoutes);
 
+// Catch-all 404 for unhandled API endpoints to prevent raw HTML responses
+app.all("/api/*", (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: {
+      code: "ENDPOINT_NOT_FOUND",
+      message: `The requested action or endpoint (${req.method} ${req.path}) was not found on this server.`,
+    },
+  });
+});
 
 // Centralized Error Handler
 app.use(errorHandler);
 
 export default app;
+

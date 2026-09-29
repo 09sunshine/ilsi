@@ -27,7 +27,21 @@ export function validateRequest(schemas: ValidationSchemas) {
           path: e.path.join("."),
           message: e.message,
         }));
-        next(new AppError(400, ErrorCodes.VALIDATION_ERROR, "Invalid request payload", details));
+        // Build a readable human-language error summary
+        const summary = error.errors
+          .map((e) => {
+            const field = e.path.length > 0 ? e.path[e.path.length - 1] : "Field";
+            const fieldName = String(field)
+              .replace(/([A-Z])/g, " $1")
+              .replace(/_/g, " ")
+              .trim();
+            const capitalized = fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+            return `${capitalized}: ${e.message}`;
+          })
+          .slice(0, 3)
+          .join(". ");
+
+        next(new AppError(400, ErrorCodes.VALIDATION_ERROR, summary || "Please check your form inputs and try again.", details));
       } else {
         next(error);
       }
