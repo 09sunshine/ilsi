@@ -2349,8 +2349,8 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                       setQuestionType("MULTIPLE_CHOICE");
                       if (
                         questionOptions.length < 2 ||
-                        (questionOptions[0].textEn === "True" &&
-                          questionOptions[1].textEn === "False")
+                        (questionOptions[0]?.textEn === "True" &&
+                          questionOptions[1]?.textEn === "False")
                       ) {
                         setQuestionOptions([
                           { textEn: "", textFr: "", isCorrect: true },
