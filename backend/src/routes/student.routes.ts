@@ -105,6 +105,50 @@ router.get("/lessons/:id", requireOnboardingCompleted, async (req: Request, res:
     );
 
     // Check if video is available and fetch signed playback url
+    // Fetch quiz attached to this lesson (if any)
+    const quizRes = await pool.query(
+      `SELECT q.id, q.title_en, q.title_fr, q.description_en, q.description_fr,
+              q.passing_score, q.attempts_allowed, q.published, q.status,
+              (SELECT COUNT(*) FROM quiz_questions qq WHERE qq.quiz_id = q.id)::int as question_count
+       FROM quizzes q
+       WHERE q.lesson_id = $1 AND (q.published = TRUE OR q.status = 'PUBLISHED')
+       ORDER BY q.created_at DESC
+       LIMIT 1`,
+      [id]
+    );
+
+    let lessonQuiz = null;
+    if (quizRes.rows.length > 0) {
+      const q = quizRes.rows[0];
+      const attemptsRes = await pool.query(
+        `SELECT id, attempt_number, score, percentage, passed, started_at, submitted_at
+         FROM quiz_attempts
+         WHERE quiz_id = $1 AND user_id = $2 AND (cohort_id = $3 OR cohort_id IS NULL)
+         ORDER BY attempt_number DESC`,
+        [q.id, req.user!.id, cohortId || null]
+      );
+      const hasPassed = attemptsRes.rows.some((a) => a.passed);
+      const bestAttempt = attemptsRes.rows.reduce(
+        (best, cur) => (!best || cur.percentage > best.percentage ? cur : best),
+        null as any
+      );
+      lessonQuiz = {
+        id: q.id,
+        lessonId: id,
+        title: { en: q.title_en, fr: q.title_fr },
+        description: { en: q.description_en || "", fr: q.description_fr || "" },
+        passingScore: q.passing_score,
+        attemptsAllowed: q.attempts_allowed,
+        questionCount: q.question_count,
+        hasPassed,
+        attemptsCount: attemptsRes.rows.length,
+        bestScore: bestAttempt?.percentage ?? null,
+        latestAttempt: attemptsRes.rows[0] || null,
+        isCompleted: hasPassed || attemptsRes.rows.length >= (q.attempts_allowed || 3),
+      };
+    }
+
+    // Check if video is available and fetch signed playback url
     const videoData = await VideoStorageService.getAuthorizedPlaybackUrl(id, req.user!.id, false, cohortId);
 
     res.json({
@@ -153,6 +197,7 @@ router.get("/lessons/:id", requireOnboardingCompleted, async (req: Request, res:
           url: r.url,
           downloadable: r.downloadable,
         })),
+        quiz: lessonQuiz,
       },
     });
   } catch (error) {

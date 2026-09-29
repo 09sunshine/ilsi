@@ -100,6 +100,7 @@ export interface ProgramDTO {
   price: number;
   priceEur?: number;
   currency: string;
+  thumbnailUrl?: string | null;
 }
 
 export interface CohortDTO {
@@ -119,6 +120,7 @@ export interface CohortDTO {
   applicationOpen?: boolean;
   applicationDeadline?: string;
   maxParticipants?: number;
+  thumbnailUrl?: string | null;
 }
 
 export interface EnrollmentDTO {
@@ -314,6 +316,7 @@ export interface EnrolledCohortSummary {
   completedModulesCount: number;
   totalModulesCount: number;
   isCurrent: boolean;
+  thumbnailUrl?: string | null;
 }
 
 export interface StudentDashboardDTO {

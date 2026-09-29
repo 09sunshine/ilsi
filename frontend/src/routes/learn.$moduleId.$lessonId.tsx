@@ -11,6 +11,7 @@ import {
   Lock,
   Clock,
   Calendar,
+  HelpCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app/AppShell";
@@ -43,6 +44,7 @@ export const Route = createFileRoute("/learn/$moduleId/$lessonId")({
 function LessonPage() {
   const { moduleId, lessonId } = Route.useLoaderData();
   const { t, locale } = useI18n();
+  const fr = locale === "fr";
   const L = useLocalized();
   const navigate = useNavigate();
   const { progress, completeLesson } = useLearning();
@@ -261,9 +263,16 @@ function LessonPage() {
                         <span className="block truncate">
                           {i + 1}. {L(l.title)}
                         </span>
-                        {l.durationMinutes ? (
-                          <span className="text-xs text-muted-foreground">{l.durationMinutes} min</span>
-                        ) : null}
+                        <div className="flex items-center gap-2">
+                          {l.durationMinutes ? (
+                            <span className="text-xs text-muted-foreground">{l.durationMinutes} min</span>
+                          ) : null}
+                          {l.quiz ? (
+                            <span className="flex items-center gap-0.5 text-[10px] font-medium text-primary">
+                              <HelpCircle className="size-2.5" /> Quiz
+                            </span>
+                          ) : null}
+                        </div>
                       </span>
                     </Link>
                   )}
@@ -271,7 +280,21 @@ function LessonPage() {
               );
             })}
           </ol>
-          <Button asChild variant="outline" size="sm" className="mt-4 w-full">
+          {lesson?.quiz ? (
+            <Button asChild size="sm" className="mt-4 w-full gap-1.5 shadow-xs">
+              <Link
+                to="/learn/$moduleId/quiz"
+                params={{ moduleId }}
+                search={{ lessonId: lesson.id, quizId: lesson.quiz.id }}
+              >
+                <HelpCircle className="size-3.5" />
+                {lesson.quiz.hasPassed
+                  ? fr ? "Revoir le quiz de leçon" : "Review Lesson Quiz"
+                  : fr ? "Quiz de la leçon" : "Take Lesson Quiz"}
+              </Link>
+            </Button>
+          ) : null}
+          <Button asChild variant="outline" size="sm" className={cn("w-full", lesson?.quiz ? "mt-2" : "mt-4")}>
             <Link to="/learn/$moduleId/quiz" params={{ moduleId }}>
               {t("course.takeQuiz")}
             </Link>
@@ -308,6 +331,66 @@ function LessonPage() {
             </div>
 
             <p className="mt-5 text-sm leading-relaxed text-muted-foreground">{L(lesson.body || lesson.description || "")}</p>
+
+            {/* Attached Lesson Quiz Section */}
+            {lesson.quiz ? (
+              <div className="mt-6 rounded-xl border border-primary/25 bg-primary/5 p-4 sm:p-5 shadow-xs">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <HelpCircle className="size-4" />
+                      </span>
+                      <h3 className="font-display text-base font-semibold text-foreground truncate">
+                        {fr ? "Quiz de la leçon" : "Lesson Quiz"}: {L(lesson.quiz.title)}
+                      </h3>
+                      {lesson.quiz.hasPassed ? (
+                        <Badge className="bg-success/10 text-success border-success/30 flex items-center gap-1 text-xs">
+                          <CheckCircle2 className="size-3" /> {fr ? "Réussi" : "Passed"} ({lesson.quiz.bestScore}%)
+                        </Badge>
+                      ) : lesson.quiz.attemptsCount > 0 ? (
+                        <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 text-xs">
+                          {fr ? "Dernier score" : "Latest"}: {lesson.quiz.latestAttempt?.percentage}% ({fr ? "Requis" : "Req"}: {lesson.quiz.passingScore}%)
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          {fr ? "À passer" : "To do"}
+                        </Badge>
+                      )}
+                    </div>
+                    {lesson.quiz.description?.en || lesson.quiz.description?.fr ? (
+                      <p className="text-xs text-muted-foreground">{L(lesson.quiz.description)}</p>
+                    ) : null}
+                    <p className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span>
+                        {fr ? "Score de passage" : "Passing score"}: <strong className="text-foreground">{lesson.quiz.passingScore}%</strong>
+                      </span>
+                      <span>
+                        {fr ? "Questions" : "Questions"}: <strong className="text-foreground">{lesson.quiz.questionCount || 0}</strong>
+                      </span>
+                      <span>
+                        {fr ? "Tentatives" : "Attempts"}: <strong className="text-foreground">{lesson.quiz.attemptsCount}/{lesson.quiz.attemptsAllowed}</strong>
+                      </span>
+                    </p>
+                  </div>
+
+                  <Button asChild size="sm" className="shrink-0 gap-1.5 shadow-sm">
+                    <Link
+                      to="/learn/$moduleId/quiz"
+                      params={{ moduleId }}
+                      search={{ lessonId: lesson.id, quizId: lesson.quiz.id }}
+                    >
+                      <HelpCircle className="size-3.5" />
+                      {lesson.quiz.hasPassed
+                        ? fr ? "Revoir les réponses" : "Review Quiz Answers"
+                        : lesson.quiz.attemptsCount > 0
+                        ? fr ? "Repasser le quiz" : "Retake Quiz"
+                        : fr ? "Commencer le quiz" : "Start Lesson Quiz"}
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
             {lesson.resources && lesson.resources.length > 0 ? (
               <div className="mt-6">

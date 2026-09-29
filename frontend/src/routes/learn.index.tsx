@@ -10,7 +10,7 @@ import { cn, resolveMediaUrl } from "@/lib/utils";
 import { GraduationCap, Layers } from "lucide-react";
 
 export const Route = createFileRoute("/learn/")({
-  validateSearch: (search: Record<string, unknown>): { cohortId?: string } => {
+  validateSearch: (search: Record<string, unknown>): { cohortId?: string | undefined } => {
     return {
       cohortId: (search["cohortId"] as string) || undefined,
     };

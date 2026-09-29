@@ -14,16 +14,22 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/learn/$moduleId/quiz")({
+  validateSearch: (search: Record<string, unknown>): { quizId?: string | undefined; lessonId?: string | undefined } => {
+    return {
+      quizId: (search["quizId"] as string) || undefined,
+      lessonId: (search["lessonId"] as string) || undefined,
+    };
+  },
   loader: ({ params }) => {
     return { moduleId: params.moduleId };
   },
   head: () => ({
     meta: [
-      { title: "Module quiz — ILSI" },
-      { name: "description", content: "Take the module quiz to unlock the next module." },
+      { title: "Quiz — ILSI" },
+      { name: "description", content: "Take your quiz to complete your learning module or lesson." },
       { name: "robots", content: "noindex, nofollow" },
-      { property: "og:title", content: "Module quiz — ILSI" },
-      { property: "og:description", content: "Take the module quiz to unlock the next module." },
+      { property: "og:title", content: "Quiz — ILSI" },
+      { property: "og:description", content: "Take your quiz to complete your learning module or lesson." },
     ],
   }),
   component: QuizPage,
@@ -31,7 +37,10 @@ export const Route = createFileRoute("/learn/$moduleId/quiz")({
 
 function QuizPage() {
   const { moduleId } = Route.useLoaderData();
-  const { t } = useI18n();
+  const search = Route.useSearch();
+  const { quizId, lessonId } = search;
+  const { t, locale } = useI18n();
+  const fr = locale === "fr";
   const L = useLocalized();
   const { gradeQuiz, attemptsFor } = useLearning();
 
@@ -57,9 +66,10 @@ function QuizPage() {
         let qData: any = null;
         let prevAtt: any[] = [];
 
-        // 1. Fetch quiz directly by moduleId or quizId
+        // 1. Fetch quiz directly by quizId, lessonId, or moduleId
+        const targetLookupId = quizId || lessonId || moduleId;
         try {
-          const res = await api.getQuiz(moduleId);
+          const res = await api.getQuiz(targetLookupId);
           if (res) {
             qData = res.quiz || res;
             if (Array.isArray(res.previousAttempts)) {
@@ -70,7 +80,23 @@ function QuizPage() {
           console.warn("Direct getQuiz lookup failed:", err);
         }
 
-        // 2. Fetch student dashboard to get module list and metadata
+        // 2. If lessonId provided and quiz not resolved yet, fetch from lesson details
+        if (!qData && lessonId) {
+          try {
+            const lRes = await api.getLesson(lessonId);
+            if (lRes?.quiz?.id) {
+              const res = await api.getQuiz(lRes.quiz.id);
+              if (res) {
+                qData = res.quiz || res;
+                if (Array.isArray(res.previousAttempts)) {
+                  prevAtt = res.previousAttempts;
+                }
+              }
+            }
+          } catch (_) {}
+        }
+
+        // 3. Fetch student dashboard to get module list and metadata
         const dash = await api.getStudentDashboard().catch(() => null);
         const moduleList = dash?.modules || [];
         const modEntry = moduleList.find(
@@ -100,7 +126,11 @@ function QuizPage() {
           setQuiz(qData);
           setPreviousAttempts(prevAtt);
           if (!qData) {
-            setError("No quiz has been created for this module yet.");
+            setError(
+              lessonId
+                ? fr ? "Aucun quiz n'a encore été créé pour cette leçon." : "No quiz has been created for this lesson yet."
+                : fr ? "Aucun quiz n'a encore été créé pour ce module." : "No quiz has been created for this module yet."
+            );
           }
         }
       } catch (err: any) {
@@ -113,7 +143,7 @@ function QuizPage() {
     return () => {
       mounted = false;
     };
-  }, [moduleId]);
+  }, [moduleId, quizId, lessonId]);
 
   if (loading) {
     return (
@@ -214,10 +244,12 @@ function QuizPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  <Badge variant={hasPassed ? "success" : "secondary"}>
+                  <Badge variant={hasPassed ? "outline" : "secondary"} className={hasPassed ? "bg-success/15 text-success border-success/30" : ""}>
                     {hasPassed ? "Passed" : "Completed (3 attempts)"}
                   </Badge>
-                  <span className="text-xs text-muted-foreground">Answer Key & Review</span>
+                  <span className="text-xs text-muted-foreground">
+                    {lessonId ? (fr ? "Quiz de leçon — Corrigé" : "Lesson Quiz — Answer Key") : "Answer Key & Review"}
+                  </span>
                 </div>
                 <h2 className="mt-1 font-display text-2xl font-semibold">{L(quiz.title)}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -233,7 +265,13 @@ function QuizPage() {
                   </Button>
                 ) : null}
                 <Button asChild variant="outline">
-                  <Link to="/learn">{t("quiz.backToCourse")}</Link>
+                  {lessonId ? (
+                    <Link to="/learn/$moduleId/$lessonId" params={{ moduleId, lessonId }}>
+                      {fr ? "Retour à la leçon" : "Back to Lesson"}
+                    </Link>
+                  ) : (
+                    <Link to="/learn">{t("quiz.backToCourse")}</Link>
+                  )}
                 </Button>
                 <Button variant="ghost" onClick={() => setReviewMode(false)}>
                   Close
@@ -265,7 +303,7 @@ function QuizPage() {
                         >
                           <span>{L(o.label)}</span>
                           {o.correct ? (
-                            <Badge variant="success" className="gap-1 text-xs">
+                            <Badge variant="outline" className="gap-1 text-xs bg-success/15 text-success border-success/30">
                               <CheckCircle2 className="size-3" /> Correct
                             </Badge>
                           ) : null}
@@ -363,7 +401,13 @@ function QuizPage() {
             )}
 
             <div className="mt-6 flex flex-wrap justify-center gap-2">
-              {isQuizCompletedNow && nextLessonUrl ? (
+              {lessonId ? (
+                <Button asChild className="gap-2">
+                  <Link to="/learn/$moduleId/$lessonId" params={{ moduleId, lessonId }}>
+                    {fr ? "Retour à la leçon" : "Back to Lesson"} <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+              ) : isQuizCompletedNow && nextLessonUrl ? (
                 <Button asChild className="gap-2">
                   <Link to={nextLessonUrl}>
                     Continue to Next Lesson <ArrowRight className="size-4" />
@@ -372,7 +416,13 @@ function QuizPage() {
               ) : null}
 
               <Button asChild variant="outline">
-                <Link to="/learn">{t("quiz.backToCourse")}</Link>
+                {lessonId ? (
+                  <Link to="/learn/$moduleId/$lessonId" params={{ moduleId, lessonId }}>
+                    {fr ? "Retour à la leçon" : "Back to Lesson"}
+                  </Link>
+                ) : (
+                  <Link to="/learn">{t("quiz.backToCourse")}</Link>
+                )}
               </Button>
 
               {!isAttemptPassed && attemptsLeft > 0 ? (
@@ -443,10 +493,10 @@ function QuizPage() {
                         </div>
                       ) : null}
 
-                      {q.explanation || g?.explanation ? (
+                      {q.explanation || (g as any)?.explanation ? (
                         <p className="mt-2 rounded-md bg-surface p-3 text-xs leading-relaxed text-muted-foreground">
                           <span className="font-semibold">{t("quiz.explanation")}: </span>
-                          {L(q.explanation || g?.explanation)}
+                          {L(q.explanation || (g as any)?.explanation)}
                         </p>
                       ) : null}
                     </div>
@@ -469,7 +519,7 @@ function QuizPage() {
             <CheckCircle2 className={cn("size-12", hasPassed ? "text-success" : "text-primary")} />
           </div>
           <h2 className="font-display text-2xl font-semibold">{L(quiz.title)}</h2>
-          <Badge variant={hasPassed ? "success" : "secondary"} className="mx-auto text-sm">
+          <Badge variant={hasPassed ? "outline" : "secondary"} className={cn("mx-auto text-sm", hasPassed ? "bg-success/15 text-success border-success/30" : "")}>
             {hasPassed ? "Quiz Passed" : "Completed (3 attempts reached)"}
           </Badge>
 
@@ -514,7 +564,13 @@ function QuizPage() {
             </Button>
 
             <Button asChild variant="ghost" className="w-full">
-              <Link to="/learn">{t("quiz.backToCourse")}</Link>
+              {lessonId ? (
+                <Link to="/learn/$moduleId/$lessonId" params={{ moduleId, lessonId }}>
+                  {fr ? "Retour à la leçon" : "Back to Lesson"}
+                </Link>
+              ) : (
+                <Link to="/learn">{t("quiz.backToCourse")}</Link>
+              )}
             </Button>
           </div>
         </div>
@@ -527,6 +583,11 @@ function QuizPage() {
     return (
       <AppShell title={L(quiz.title)}>
         <div className="panel mx-auto max-w-xl p-7 text-center">
+          <div className="flex justify-center mb-2">
+            <Badge variant="outline" className="border-primary/30 text-primary">
+              {lessonId ? (fr ? "Quiz de la leçon" : "Lesson Quiz") : (fr ? "Quiz du module" : "Module Quiz")}
+            </Badge>
+          </div>
           <h2 className="font-display text-2xl font-semibold">{L(quiz.title)}</h2>
           <p className="mt-2 text-sm text-muted-foreground">{L(quiz.description || "")}</p>
           <dl className="mt-6 grid grid-cols-3 gap-3 text-sm">
@@ -553,7 +614,13 @@ function QuizPage() {
             {t("quiz.start")}
           </Button>
           <Button asChild variant="ghost" className="mt-2 w-full">
-            <Link to="/learn">{t("quiz.backToCourse")}</Link>
+            {lessonId ? (
+              <Link to="/learn/$moduleId/$lessonId" params={{ moduleId, lessonId }}>
+                {fr ? "Retour à la leçon" : "Back to Lesson"}
+              </Link>
+            ) : (
+              <Link to="/learn">{t("quiz.backToCourse")}</Link>
+            )}
           </Button>
         </div>
       </AppShell>

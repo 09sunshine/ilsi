@@ -282,11 +282,52 @@ router.patch("/cohorts/:id", async (req: Request, res: Response, next: NextFunct
       throw new AppError(404, ErrorCodes.COHORT_NOT_FOUND, "Cohort not found");
     }
 
-    // Sync program thumbnail if provided
-    if (thumbnailUrl && resRow.rows[0].program_id) {
+    // Sync program metadata and thumbnail if provided
+    if (resRow.rows[0].program_id) {
       await pool.query(
-        `UPDATE programs SET thumbnail_url = $1, updated_at = NOW() WHERE id = $2`,
-        [thumbnailUrl, resRow.rows[0].program_id]
+        `UPDATE programs SET
+           title_en = COALESCE($1, title_en),
+           title_fr = COALESCE($2, title_fr),
+           description_en = COALESCE($3, description_en),
+           description_fr = COALESCE($4, description_fr),
+           thumbnail_url = COALESCE($5, thumbnail_url),
+           updated_at = NOW()
+         WHERE id = $6`,
+        [
+          nameEn || null,
+          nameFr || null,
+          descriptionEn || null,
+          descriptionFr || null,
+          thumbnailUrl || null,
+          resRow.rows[0].program_id,
+        ]
+      );
+    }
+
+    // Sync passing score across cohort modules and quizzes
+    if (passingScore !== undefined && passingScore !== null) {
+      await pool.query(
+        `UPDATE modules SET passing_score = $1, updated_at = NOW() WHERE cohort_id = $2`,
+        [passingScore, id]
+      );
+      await pool.query(
+        `UPDATE quizzes SET passing_score = $1, updated_at = NOW()
+         WHERE module_id IN (SELECT id FROM modules WHERE cohort_id = $2)`,
+        [passingScore, id]
+      );
+    }
+
+    // Sync cohort date changes to module boundaries
+    if (startDate) {
+      await pool.query(
+        `UPDATE modules SET start_date = $1, updated_at = NOW() WHERE cohort_id = $2 AND (start_date IS NULL OR start_date < $1)`,
+        [startDate, id]
+      );
+    }
+    if (endDate) {
+      await pool.query(
+        `UPDATE modules SET end_date = $1, updated_at = NOW() WHERE cohort_id = $2 AND (end_date IS NULL OR end_date > $1)`,
+        [endDate, id]
       );
     }
 
