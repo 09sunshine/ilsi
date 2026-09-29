@@ -122,6 +122,14 @@ export class EnrollmentAccessService {
 
     const enrollment = res.rows[0];
 
+    if (enrollment.status === "DISQUALIFIED") {
+      throw new AppError(
+        403,
+        ErrorCodes.DISQUALIFIED,
+        "You have been disqualified from this cohort after failing all quiz attempts and cannot continue the program."
+      );
+    }
+
     if (enrollment.status !== "ACTIVE" && enrollment.status !== "COMPLETED") {
       throw new AppError(
         403,

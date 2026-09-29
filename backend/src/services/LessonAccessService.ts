@@ -121,6 +121,16 @@ export class LessonAccessService {
     }
 
     const enrollment = enrollRes.rows[0];
+    if (enrollment.status === "DISQUALIFIED") {
+      return {
+        allowed: false,
+        state: "LOCKED",
+        code: ErrorCodes.DISQUALIFIED,
+        isLocked: true,
+        lockReason: "DISQUALIFIED",
+      };
+    }
+
     if (enrollment.status !== "ACTIVE" && enrollment.status !== "COMPLETED") {
       return {
         allowed: false,
@@ -365,7 +375,9 @@ export class LessonAccessService {
     const evalResult = await this.evaluateAccess(userId, lessonId, targetCohortId, now);
     if (!evalResult.allowed) {
       const message =
-        evalResult.lockReason === "AVAILABLE_FROM_FUTURE"
+        evalResult.lockReason === "DISQUALIFIED"
+          ? "You have been disqualified from this cohort after failing all quiz attempts and cannot access lessons."
+          : evalResult.lockReason === "AVAILABLE_FROM_FUTURE"
           ? `Lesson is not yet available. It opens on ${evalResult.availableFrom}.`
           : evalResult.lockReason === "ACCESS_PERIOD_ENDED"
           ? `Lesson access period ended on ${evalResult.availableUntil}. This lesson is closed.`
@@ -380,6 +392,7 @@ export class LessonAccessService {
         lockReason: evalResult.lockReason,
         availableFrom: evalResult.availableFrom,
         prerequisite: evalResult.prerequisite,
+        disqualified: evalResult.lockReason === "DISQUALIFIED",
       });
     }
     return evalResult;

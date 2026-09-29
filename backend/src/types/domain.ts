@@ -26,6 +26,7 @@ export type LockReason =
   | "PREREQUISITE_FAILED"
   | "COHORT_INACTIVE"
   | "PAYMENT_REQUIRED"
+  | "DISQUALIFIED"
   | "CONTENT_UNAVAILABLE";
 
 export type ModuleState =
@@ -69,6 +70,7 @@ export type EnrollmentStatus =
   | "COMPLETED"
   | "SUSPENDED"
   | "CANCELLED"
+  | "DISQUALIFIED"
   | "DROPPED";
 
 export type PaymentStatus = "NOT_REQUIRED" | "PENDING" | "PAID" | "FAILED" | "REFUNDED";
@@ -358,4 +360,7 @@ export interface StudentDashboardDTO {
   completedModulesTrend?: number[];
   quizScoresTrend?: number[];
   attendanceTrend?: number[];
+  isDisqualified?: boolean;
+  enrollmentStatus?: EnrollmentStatus;
+  disqualificationMessage?: Bilingual | null;
 }

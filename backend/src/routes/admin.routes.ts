@@ -1429,6 +1429,8 @@ router.get("/participants", async (req: Request, res: Response, next: NextFuncti
         certification: r.first_cert_status || "NOT_CERTIFIED",
         suspended: r.status === "SUSPENDED",
         firstLogin: r.first_login,
+        isDisqualified: cohorts.some((c) => c.enrollStatus === "DISQUALIFIED") || r.status === "DISQUALIFIED",
+        enrollStatus: primary?.enrollStatus || (r.status === "DISQUALIFIED" ? "DISQUALIFIED" : "ACTIVE"),
         joinedAt: r.created_at ? r.created_at.toISOString() : new Date().toISOString(),
       };
     });

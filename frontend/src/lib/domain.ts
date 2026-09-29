@@ -24,7 +24,19 @@ export type LockReason =
   | "PREREQUISITE_FAILED"
   | "COHORT_INACTIVE"
   | "PAYMENT_REQUIRED"
+  | "DISQUALIFIED"
   | "CONTENT_UNAVAILABLE";
+
+export type EnrollmentStatus =
+  | "PENDING"
+  | "ACCEPTED"
+  | "PAYMENT_PENDING"
+  | "ACTIVE"
+  | "COMPLETED"
+  | "SUSPENDED"
+  | "CANCELLED"
+  | "DISQUALIFIED"
+  | "DROPPED";
 
 export type ModuleState =
   | "UPCOMING"
@@ -275,6 +287,15 @@ export interface Participant {
   firstLogin: boolean;
   locale: "en" | "fr";
   joinedAt: string;
+  isDisqualified?: boolean;
+  enrollStatus?: EnrollmentStatus | string;
+  cohorts?: Array<{
+    cohortId: string;
+    name: Bilingual;
+    paymentStatus: string;
+    certStatus?: string;
+    enrollStatus?: string;
+  }>;
 }
 
 export interface Application {

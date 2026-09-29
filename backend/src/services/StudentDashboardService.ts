@@ -34,10 +34,10 @@ export class StudentDashboardService {
          JOIN cohorts c ON c.id = e.cohort_id
          JOIN programs p ON p.id = c.program_id
          WHERE e.user_id = $1
-           AND e.status IN ('ACTIVE', 'COMPLETED')
+           AND e.status IN ('ACTIVE', 'COMPLETED', 'DISQUALIFIED')
            AND e.payment_status IN ('PAID', 'NOT_REQUIRED')
          ORDER BY 
-           CASE WHEN e.status = 'ACTIVE' THEN 1 ELSE 2 END,
+           CASE WHEN e.status = 'ACTIVE' THEN 1 WHEN e.status = 'COMPLETED' THEN 2 ELSE 3 END,
            c.start_date DESC`,
         [userId]
       ),
@@ -237,6 +237,8 @@ export class StudentDashboardService {
     // Evaluate access for each module sequentially in-memory
     const sortedModules = modulesRes.rows;
 
+    const isParticipantDisqualified = en.enrollment_status === "DISQUALIFIED";
+
     for (let i = 0; i < sortedModules.length; i++) {
       const m = sortedModules[i];
       const mLessons = lessonsByModule.get(m.id) || [];
@@ -252,10 +254,10 @@ export class StudentDashboardService {
       }
 
       // Check module access state in-memory
-      let moduleState: "LOCKED" | "UPCOMING" | "ACTIVE" | "COMPLETED" | "FAILED" | "EXPIRED" = "ACTIVE";
+      let moduleState: "LOCKED" | "UPCOMING" | "ACTIVE" | "COMPLETED" | "FAILED" | "EXPIRED" = isParticipantDisqualified ? "LOCKED" : "ACTIVE";
       const isCompletedInProg = moduleProgMap.get(m.id)?.completed;
 
-      if (i > 0) {
+      if (!isParticipantDisqualified && i > 0) {
         // Prerequisite check from previous module
         const prevM = sortedModules[i - 1];
         const prevLessons = lessonsByModule.get(prevM.id) || [];
@@ -315,7 +317,7 @@ export class StudentDashboardService {
 
       // Evaluate lesson access in-memory
       const evaluatedLessons = mLessons.map((l, lIdx) => {
-        let isLessonLocked = moduleState === "LOCKED";
+        let isLessonLocked = isParticipantDisqualified || moduleState === "LOCKED";
         if (!isLessonLocked && moduleState === "ACTIVE" && lIdx > 0) {
           const prevL = mLessons[lIdx - 1];
           if (prevL && !prevL.is_done) {
@@ -326,6 +328,12 @@ export class StudentDashboardService {
         const lQuizAttempts = l.lesson_quiz_id ? attemptsByQuiz.get(l.lesson_quiz_id) || [] : [];
         const lPassed = lQuizAttempts.some((a) => a.passed);
         const lBestScore = lQuizAttempts.length > 0 ? Math.max(...lQuizAttempts.map((a) => a.percentage || 0)) : null;
+
+        const lockReason = isParticipantDisqualified
+          ? "DISQUALIFIED"
+          : isLessonLocked && !l.is_done
+          ? "PREREQUISITE_INCOMPLETE"
+          : undefined;
 
         return {
           id: l.id,
@@ -353,9 +361,9 @@ export class StudentDashboardService {
           access: {
             lessonId: l.id,
             cohortId: en.cohort_id,
-            state: l.is_done ? "COMPLETED" : isLessonLocked ? "LOCKED" : "ACTIVE",
-            isLocked: isLessonLocked && !l.is_done,
-            lockReason: isLessonLocked && !l.is_done ? "PREREQUISITE_INCOMPLETE" : undefined,
+            state: isParticipantDisqualified ? "LOCKED" : l.is_done ? "COMPLETED" : isLessonLocked ? "LOCKED" : "ACTIVE",
+            isLocked: isParticipantDisqualified || (isLessonLocked && !l.is_done),
+            lockReason,
             availableFrom: startDateStr,
             availableUntil: endDateStr,
             progress: l.video_percent,
@@ -515,6 +523,14 @@ export class StudentDashboardService {
       completedModulesTrend,
       quizScoresTrend,
       attendanceTrend,
+      isDisqualified: isParticipantDisqualified,
+      enrollmentStatus: en.enrollment_status,
+      disqualificationMessage: isParticipantDisqualified
+        ? {
+            en: "You have been disqualified from this cohort after failing all quiz attempts and cannot continue the rest of the cohort.",
+            fr: "Vous avez été disqualifié(e) de cette cohorte après avoir échoué à toutes les tentatives de quiz et ne pouvez plus poursuivre le reste de la cohorte.",
+          }
+        : null,
     };
   }
 }

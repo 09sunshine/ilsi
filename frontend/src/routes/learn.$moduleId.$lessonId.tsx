@@ -12,6 +12,7 @@ import {
   Clock,
   Calendar,
   HelpCircle,
+  ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app/AppShell";
@@ -100,16 +101,26 @@ function LessonPage() {
   }
 
   if (error || !lesson) {
+    const isDisqualified =
+      error?.code === "DISQUALIFIED" ||
+      error?.details?.lockReason === "DISQUALIFIED" ||
+      error?.details?.disqualified ||
+      error?.message?.toLowerCase().includes("disqualified");
+
     const isUpcoming =
-      error?.code === "MODULE_NOT_STARTED" ||
-      error?.details?.state === "UPCOMING" ||
-      error?.message?.toLowerCase().includes("not yet started") ||
-      error?.message?.toLowerCase().includes("not available yet");
+      !isDisqualified && (
+        error?.code === "MODULE_NOT_STARTED" ||
+        error?.details?.state === "UPCOMING" ||
+        error?.message?.toLowerCase().includes("not yet started") ||
+        error?.message?.toLowerCase().includes("not available yet")
+      );
     const isExpired =
-      error?.code === "MODULE_EXPIRED" ||
-      error?.details?.state === "EXPIRED" ||
-      error?.message?.toLowerCase().includes("expired") ||
-      error?.message?.toLowerCase().includes("ended");
+      !isDisqualified && (
+        error?.code === "MODULE_EXPIRED" ||
+        error?.details?.state === "EXPIRED" ||
+        error?.message?.toLowerCase().includes("expired") ||
+        error?.message?.toLowerCase().includes("ended")
+      );
 
     return (
       <AppShell title={t("nav.myCourse")}>
@@ -118,14 +129,18 @@ function LessonPage() {
             <div
               className={cn(
                 "size-14 rounded-2xl flex items-center justify-center border shadow-xs",
-                isUpcoming
+                isDisqualified
+                  ? "bg-destructive/15 text-destructive border-destructive/30"
+                  : isUpcoming
                   ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
                   : isExpired
                   ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
                   : "bg-muted text-muted-foreground border-border"
               )}
             >
-              {isUpcoming ? (
+              {isDisqualified ? (
+                <ShieldAlert className="size-7" />
+              ) : isUpcoming ? (
                 <Clock className="size-7" />
               ) : (
                 <Lock className="size-7" />
@@ -135,14 +150,20 @@ function LessonPage() {
 
           <div>
             <h2 className="font-display text-xl font-bold text-foreground">
-              {isUpcoming
+              {isDisqualified
+                ? fr ? "Disqualifié(e) de la cohorte" : "Disqualified from Cohort"
+                : isUpcoming
                 ? t("course.lessonNotStarted")
                 : isExpired
                 ? t("course.lessonExpired")
                 : t("course.lessonLocked")}
             </h2>
             <p className="mt-2 text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
-              {isUpcoming && error?.details?.availableFrom ? (
+              {isDisqualified ? (
+                fr
+                  ? "Vous avez échoué à toutes les 3 tentatives de quiz accordées. Conformément au règlement officiel du programme ILSI, vous avez été disqualifié(e) de cette cohorte et ne pouvez pas poursuivre le reste du programme."
+                  : "You have failed all 3 allowed quiz attempts. In accordance with ILSI cohort learning policy, you have been disqualified from this cohort and cannot continue the rest of the coursework."
+              ) : isUpcoming && error?.details?.availableFrom ? (
                 <>
                   This lesson opens on{" "}
                   <span className="font-semibold text-foreground">
@@ -191,6 +212,11 @@ function LessonPage() {
     setLesson((prev: any) => ({ ...prev, completed: true }));
     toast.success(t("course.completed"));
   };
+
+  const isParticipantDisqualified =
+    lesson?.access?.lockReason === "DISQUALIFIED" ||
+    lesson?.access?.code === "DISQUALIFIED" ||
+    (lesson?.quiz && !lesson.quiz.hasPassed && lesson.quiz.attemptsCount >= (lesson.quiz.attemptsAllowed || 3));
 
   return (
     <AppShell title={L(module?.title || lesson.title)}>
@@ -303,6 +329,27 @@ function LessonPage() {
 
         {/* Lesson content */}
         <div className="min-w-0 space-y-5 order-1 lg:order-2">
+          {/* Disqualification Banner */}
+          {isParticipantDisqualified ? (
+            <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 sm:p-5 text-destructive-foreground shadow-sm">
+              <div className="flex items-start gap-3.5">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-destructive/20 text-destructive">
+                  <ShieldAlert className="size-5" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-display text-base font-bold text-destructive">
+                    {fr ? "Disqualifié(e) de la cohorte" : "Disqualified from Cohort"}
+                  </h3>
+                  <p className="text-sm leading-relaxed text-destructive/90">
+                    {fr
+                      ? "Vous avez échoué aux 3 tentatives accordées pour le quiz. Conformément au règlement officiel du programme ILSI, vous avez été disqualifié(e) et ne pouvez pas poursuivre le reste de la formation."
+                      : "You have failed all 3 allowed quiz attempts. In accordance with ILSI cohort learning policy, you have been disqualified from this cohort and cannot continue the rest of the coursework."}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="panel p-4 sm:p-6">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary">{(lesson.type || "VIDEO").replace("_", " ")}</Badge>
@@ -313,6 +360,7 @@ function LessonPage() {
             </div>
             <h2 className="mt-3 font-display text-2xl font-semibold">{L(lesson.title)}</h2>
 
+            {/* 1. Video Player */}
             <div className="mt-5">
               <LessonVideoPlayer
                 url={lesson.videoUrl}
@@ -323,7 +371,7 @@ function LessonPage() {
                   } catch (_) {}
                 }}
                 onEnded={() => {
-                  if (!isDone) {
+                  if (!isDone && !isParticipantDisqualified) {
                     handleComplete();
                   }
                 }}
@@ -332,7 +380,44 @@ function LessonPage() {
 
             <p className="mt-5 text-sm leading-relaxed text-muted-foreground">{L(lesson.body || lesson.description || "")}</p>
 
-            {/* Attached Lesson Quiz Section */}
+            {/* 2. Attached Resources / Documents (swapped before quiz) */}
+            {lesson.resources && lesson.resources.length > 0 ? (
+              <div className="mt-6">
+                <h3 className="text-sm font-semibold">{t("course.resources")}</h3>
+                <ul className="mt-2 space-y-2">
+                  {lesson.resources.map((r: any) => (
+                    <li
+                      key={r.id}
+                      className="flex items-center gap-3 rounded-lg border border-border p-3"
+                    >
+                      <FileText className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate text-sm">{L(r.name)}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {r.type} {r.sizeKb ? `· ${r.sizeKb} KB` : ""}
+                      </span>
+                      <Button asChild size="sm" variant="ghost" aria-label="Download">
+                        <a
+                          href={r.url ? resolveMediaUrl(r.url) : "#"}
+                          download={typeof r.name === "object" ? (r.name.en || "document") : (r.name || "document")}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => {
+                            if (!r.url || r.url === "#") {
+                              e.preventDefault();
+                              toast.info("Document not available.");
+                            }
+                          }}
+                        >
+                          <Download className="size-4" />
+                        </a>
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {/* 3. Attached Lesson Quiz Section (swapped after documents) */}
             {lesson.quiz ? (
               <div className="mt-6 rounded-xl border border-primary/25 bg-primary/5 p-4 sm:p-5 shadow-xs">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -347,6 +432,10 @@ function LessonPage() {
                       {lesson.quiz.hasPassed ? (
                         <Badge className="bg-success/10 text-success border-success/30 flex items-center gap-1 text-xs">
                           <CheckCircle2 className="size-3" /> {fr ? "Réussi" : "Passed"} ({lesson.quiz.bestScore}%)
+                        </Badge>
+                      ) : lesson.quiz.attemptsCount >= (lesson.quiz.attemptsAllowed || 3) ? (
+                        <Badge variant="destructive" className="bg-destructive/15 text-destructive border-destructive/30 text-xs font-semibold">
+                          {fr ? "Disqualifié" : "Disqualified"} ({lesson.quiz.attemptsCount}/{lesson.quiz.attemptsAllowed || 3})
                         </Badge>
                       ) : lesson.quiz.attemptsCount > 0 ? (
                         <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 text-xs">
@@ -383,48 +472,14 @@ function LessonPage() {
                       <HelpCircle className="size-3.5" />
                       {lesson.quiz.hasPassed
                         ? fr ? "Revoir les réponses" : "Review Quiz Answers"
+                        : lesson.quiz.attemptsCount >= (lesson.quiz.attemptsAllowed || 3)
+                        ? fr ? "Voir le résultat" : "View Results"
                         : lesson.quiz.attemptsCount > 0
                         ? fr ? "Repasser le quiz" : "Retake Quiz"
                         : fr ? "Commencer le quiz" : "Start Lesson Quiz"}
                     </Link>
                   </Button>
                 </div>
-              </div>
-            ) : null}
-
-            {lesson.resources && lesson.resources.length > 0 ? (
-              <div className="mt-6">
-                <h3 className="text-sm font-semibold">{t("course.resources")}</h3>
-                <ul className="mt-2 space-y-2">
-                  {lesson.resources.map((r: any) => (
-                    <li
-                      key={r.id}
-                      className="flex items-center gap-3 rounded-lg border border-border p-3"
-                    >
-                      <FileText className="size-4 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate text-sm">{L(r.name)}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {r.type} {r.sizeKb ? `· ${r.sizeKb} KB` : ""}
-                      </span>
-                      <Button asChild size="sm" variant="ghost" aria-label="Download">
-                        <a
-                          href={r.url ? resolveMediaUrl(r.url) : "#"}
-                          download={typeof r.name === "object" ? (r.name.en || "document") : (r.name || "document")}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => {
-                            if (!r.url || r.url === "#") {
-                              e.preventDefault();
-                              toast.info("Document not available.");
-                            }
-                          }}
-                        >
-                          <Download className="size-4" />
-                        </a>
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
               </div>
             ) : null}
           </div>
@@ -448,9 +503,10 @@ function LessonPage() {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={!next}
+                disabled={!next || isParticipantDisqualified}
                 onClick={() =>
                   next &&
+                  !isParticipantDisqualified &&
                   navigate({
                     to: "/learn/$moduleId/$lessonId",
                     params: { moduleId, lessonId: next.id },
@@ -462,7 +518,7 @@ function LessonPage() {
             </div>
             <Button
               size="sm"
-              disabled={isDone}
+              disabled={isDone || isParticipantDisqualified}
               onClick={handleComplete}
             >
               {isDone ? (

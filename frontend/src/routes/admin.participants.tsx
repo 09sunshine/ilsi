@@ -138,16 +138,35 @@ function AdminParticipants() {
     void load();
   }, []);
 
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "DISQUALIFIED">("ALL");
+
+  const isParticipantDisqualified = (p: Participant) => {
+    return Boolean(
+      (p as any).isDisqualified ||
+      (p as any).enrollStatus === "DISQUALIFIED" ||
+      (p as any).status === "DISQUALIFIED" ||
+      (p as any).cohorts?.some((c: any) => c.enrollStatus === "DISQUALIFIED" || c.status === "DISQUALIFIED")
+    );
+  };
+
   const visible = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter((p) =>
+    let filtered = rows;
+    if (statusFilter === "DISQUALIFIED") {
+      filtered = filtered.filter(isParticipantDisqualified);
+    } else if (statusFilter === "ACTIVE") {
+      filtered = filtered.filter((p) => !isParticipantDisqualified(p));
+    }
+    if (!term) return filtered;
+    return filtered.filter((p) =>
       `${p.firstName} ${p.lastName} ${p.email} ${p.country || ""}`.toLowerCase().includes(term)
     );
-  }, [rows, q]);
+  }, [rows, q, statusFilter]);
 
   const paidCount = rows.filter((p) => p.paymentStatus === "PAID").length;
   const otpCount = rows.filter((p) => p.firstLogin).length;
+  const disqualifiedCount = rows.filter(isParticipantDisqualified).length;
+  const activeCount = rows.filter((p) => !isParticipantDisqualified(p)).length;
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,7 +249,7 @@ function AdminParticipants() {
     <AppShell variant="admin" title={t("nav.participants")}>
       <div className="space-y-6">
         {/* KPI Row */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="panel p-5">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {fr ? "Total Participants" : "Total Participants"}
@@ -247,6 +266,15 @@ function AdminParticipants() {
             </p>
             <p className="mt-1 font-display text-2xl font-bold text-success">{paidCount}</p>
           </div>
+          <div className="panel p-5 border-destructive/30 bg-destructive/5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-destructive font-semibold">
+              {fr ? "Participants Disqualifiés" : "Disqualified Participants"}
+            </p>
+            <p className="mt-1 font-display text-2xl font-bold text-destructive">{disqualifiedCount}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {fr ? "3 échecs au quiz" : "Failed 3 quiz attempts"}
+            </p>
+          </div>
           <div className="panel p-5">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {fr ? "En attente 1re connexion (OTP)" : "Pending First Login (OTP)"}
@@ -255,16 +283,57 @@ function AdminParticipants() {
           </div>
         </div>
 
-        {/* Search & Actions Bar */}
+        {/* Search, Filter & Actions Bar */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative max-w-sm flex-1">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder={fr ? "Rechercher un participant..." : "Search by name, email, country..."}
-              className="pl-9"
-            />
+          <div className="flex flex-wrap items-center gap-2 flex-1">
+            <div className="relative max-w-xs flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={fr ? "Rechercher un participant..." : "Search by name, email, country..."}
+                className="pl-9"
+              />
+            </div>
+
+            <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setStatusFilter("ALL")}
+                className={cn(
+                  "rounded-md px-2.5 py-1 font-medium transition-colors",
+                  statusFilter === "ALL"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {fr ? "Tous" : "All"} ({rows.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("ACTIVE")}
+                className={cn(
+                  "rounded-md px-2.5 py-1 font-medium transition-colors",
+                  statusFilter === "ACTIVE"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {fr ? "Actifs" : "Active"} ({activeCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("DISQUALIFIED")}
+                className={cn(
+                  "rounded-md px-2.5 py-1 font-medium transition-colors",
+                  statusFilter === "DISQUALIFIED"
+                    ? "bg-destructive text-destructive-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-destructive"
+                )}
+              >
+                {fr ? "Disqualifiés" : "Disqualified"} ({disqualifiedCount})
+              </button>
+            </div>
           </div>
 
           <Button onClick={openRegisterModal} className="gap-2">
@@ -297,18 +366,34 @@ function AdminParticipants() {
               </thead>
               <tbody className="divide-y divide-border">
                 {visible.map((p) => {
+                  const isDisqualified = isParticipantDisqualified(p);
                   // Support both old (single cohort) and new (multi-cohort) shape
-                  const allCohorts: Array<{ cohortId: string; name: { en: string; fr: string }; paymentStatus: string }> =
+                  const allCohorts: Array<{ cohortId: string; name: { en: string; fr: string }; paymentStatus: string; enrollStatus?: string }> =
                     (p as any).cohorts?.length
                       ? (p as any).cohorts
                       : (p as any).cohortName
-                        ? [{ cohortId: (p as any).cohortId, name: (p as any).cohortName, paymentStatus: p.paymentStatus }]
+                        ? [{ cohortId: (p as any).cohortId, name: (p as any).cohortName, paymentStatus: p.paymentStatus, enrollStatus: (p as any).enrollStatus }]
                         : [];
 
                   return (
-                    <tr key={p.id} className="transition-colors hover:bg-muted/30">
+                    <tr
+                      key={p.id}
+                      className={cn(
+                        "transition-colors",
+                        isDisqualified
+                          ? "bg-destructive/[0.04] hover:bg-destructive/[0.08]"
+                          : "hover:bg-muted/30"
+                      )}
+                    >
                       <td className="p-4 font-semibold text-foreground">
-                        {p.firstName} {p.lastName}
+                        <div className="flex items-center gap-2">
+                          {p.firstName} {p.lastName}
+                          {isDisqualified && (
+                            <span className="rounded bg-destructive/15 text-destructive border border-destructive/30 px-1.5 py-0.5 text-[10px] font-bold">
+                              {fr ? "DISQUALIFIÉ" : "DISQUALIFIED"}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="p-4">
                         <a
@@ -327,7 +412,7 @@ function AdminParticipants() {
                         ) : (
                           <div className="flex flex-col gap-1">
                             {allCohorts.map((c, idx) => (
-                              <div key={c.cohortId || idx} className="flex items-center gap-1.5">
+                              <div key={c.cohortId || idx} className="flex items-center gap-1.5 flex-wrap">
                                 <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[9px] font-bold text-primary">
                                   {idx + 1}
                                 </span>
@@ -337,6 +422,11 @@ function AdminParticipants() {
                                 {c.paymentStatus === "PAID" && (
                                   <span className="rounded bg-success/10 px-1 py-0.5 text-[9px] font-semibold text-success">
                                     PAID
+                                  </span>
+                                )}
+                                {c.enrollStatus === "DISQUALIFIED" && (
+                                  <span className="rounded bg-destructive/15 text-destructive border border-destructive/30 px-1.5 py-0.5 text-[9px] font-bold">
+                                    DISQUALIFIED
                                   </span>
                                 )}
                               </div>
@@ -358,7 +448,12 @@ function AdminParticipants() {
                         </Badge>
                       </td>
                       <td className="p-4">
-                        {p.firstLogin ? (
+                        {isDisqualified ? (
+                          <Badge variant="destructive" className="bg-destructive/15 text-destructive border border-destructive/30 font-semibold gap-1">
+                            <ShieldAlert className="size-3" />
+                            {fr ? "Disqualifié" : "Disqualified"}
+                          </Badge>
+                        ) : p.firstLogin ? (
                           <Badge variant="outline" className="border-amber-500/30 text-amber-500">
                             {fr ? "OTP Non activé" : "First Login Pending"}
                           </Badge>

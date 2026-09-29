@@ -56,6 +56,14 @@ export class ModuleAccessService {
     }
 
     const enrollment = enrollRes.rows[0];
+    if (enrollment.status === "DISQUALIFIED") {
+      return {
+        allowed: false,
+        state: "LOCKED",
+        code: ErrorCodes.DISQUALIFIED,
+      };
+    }
+
     if (enrollment.status !== "ACTIVE" && enrollment.status !== "COMPLETED") {
       return {
         allowed: false,
@@ -235,13 +243,19 @@ export class ModuleAccessService {
   static async assertAccess(userId: string, moduleId: string, now: Date = new Date()): Promise<void> {
     const evaluation = await this.evaluateAccess(userId, moduleId, now);
     if (!evaluation.allowed) {
+      const message =
+        evaluation.code === ErrorCodes.DISQUALIFIED
+          ? "You have been disqualified from this cohort after failing all quiz attempts and cannot continue the program."
+          : `Module access denied: ${evaluation.code}`;
+
       throw new AppError(
         403,
         evaluation.code,
-        `Module access denied: ${evaluation.code}`,
+        message,
         {
           blockingModuleOrder: evaluation.blockingModuleOrder,
           requiredScore: evaluation.requiredScore,
+          disqualified: evaluation.code === ErrorCodes.DISQUALIFIED,
         }
       );
     }

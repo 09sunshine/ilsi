@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { CheckCircle2, RotateCcw, TriangleAlert, XCircle, Loader2, ArrowRight, BookOpen } from "lucide-react";
+import { CheckCircle2, RotateCcw, TriangleAlert, XCircle, Loader2, ArrowRight, BookOpen, ShieldAlert } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -176,7 +176,8 @@ function QuizPage() {
   const attemptsAllowed = quiz.attemptsAllowed || quiz.attempts_allowed || 3;
   const hasPassed = attempts.some((a: any) => a.passed) || !!quiz.hasPassed;
   const attemptsExhausted = (attempts.length >= attemptsAllowed && !hasPassed) || !!quiz.attemptsExhausted;
-  const isCompleted = hasPassed || attemptsExhausted || !!quiz.quizCompleted;
+  const isDisqualified = !!quiz.isDisqualified || !!quiz.disqualified || attemptsExhausted;
+  const isCompleted = hasPassed || attemptsExhausted || isDisqualified;
   const attemptsLeft = Math.max(0, attemptsAllowed - attempts.length);
   const passingScore = quiz.passingScore || quiz.passing_score || 80;
   const questions: any[] = quiz.questions || [];
@@ -348,9 +349,12 @@ function QuizPage() {
   // Result view right after submitting an attempt
   if (result) {
     const isAttemptPassed = result.attempt.passed;
-    const isAttemptsExhausted =
-      (attemptsLeft <= 0 && !isAttemptPassed) || (result.attempt as any)?.attemptsExhausted;
-    const isQuizCompletedNow = isAttemptPassed || isAttemptsExhausted || (result.attempt as any)?.quizCompleted;
+    const isSubmissionDisqualified = Boolean(
+      (result.attempt as any).isDisqualified ||
+      (result.attempt as any).disqualified ||
+      (!isAttemptPassed && (result.attempt.attemptNumber >= attemptsAllowed || attempts.length >= attemptsAllowed))
+    );
+    const isQuizCompletedNow = isAttemptPassed;
 
     return (
       <AppShell title={L(quiz.title)}>
@@ -360,15 +364,15 @@ function QuizPage() {
               "panel p-6 text-center",
               isAttemptPassed
                 ? "border-success/40 bg-success/5"
-                : isAttemptsExhausted
-                ? "border-primary/40 bg-primary/5"
+                : isSubmissionDisqualified
+                ? "border-destructive/40 bg-destructive/5"
                 : "border-destructive/30"
             )}
           >
             {isAttemptPassed ? (
               <CheckCircle2 className="mx-auto size-10 text-success" />
-            ) : isAttemptsExhausted ? (
-              <CheckCircle2 className="mx-auto size-10 text-primary" />
+            ) : isSubmissionDisqualified ? (
+              <ShieldAlert className="mx-auto size-12 text-destructive animate-pulse" />
             ) : (
               <TriangleAlert className="mx-auto size-10 text-destructive" />
             )}
@@ -376,8 +380,8 @@ function QuizPage() {
             <h2 className="mt-3 font-display text-2xl font-semibold">
               {isAttemptPassed
                 ? t("quiz.passed")
-                : isAttemptsExhausted
-                ? "Module Completed (3 Attempts Reached)"
+                : isSubmissionDisqualified
+                ? (fr ? "Disqualifié(e) de la cohorte" : "Disqualified from Cohort")
                 : t("quiz.failed")}
             </h2>
 
@@ -386,9 +390,23 @@ function QuizPage() {
               {passingScore}%
             </p>
 
-            {isAttemptsExhausted ? (
-              <div className="mt-3 rounded-lg border border-primary/20 bg-primary/10 p-3 text-sm text-foreground">
-                You have reached all 3 attempts. This module has been marked <strong>Complete</strong> and the next lesson is now <strong>unlocked</strong>! The correct answers are revealed below so you can review.
+            {isSubmissionDisqualified ? (
+              <div className="mt-4 rounded-xl border border-destructive/40 bg-destructive/10 p-5 text-destructive-foreground shadow-sm text-left">
+                <div className="flex items-start gap-3.5">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-destructive/20 text-destructive">
+                    <ShieldAlert className="size-5" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <h4 className="font-display text-base font-bold text-destructive">
+                      {fr ? "Avis de disqualification officiel" : "Official Disqualification Notice"}
+                    </h4>
+                    <p className="text-sm leading-relaxed text-destructive/90">
+                      {fr
+                        ? `Vous avez échoué à toutes les ${attemptsAllowed} tentatives accordées pour ce quiz (${result.attempt.percentage}% obtenu / ${passingScore}% requis). Conformément au règlement officiel du programme ILSI, vous avez été disqualifié(e) de cette cohorte et ne pouvez pas continuer le reste de la formation.`
+                        : `You have exhausted all ${attemptsAllowed} attempts for this quiz without reaching the passing score of ${passingScore}% (your score: ${result.attempt.percentage}%). In accordance with ILSI cohort learning policy, you have been disqualified from this cohort and cannot continue the rest of the coursework.`}
+                    </p>
+                  </div>
+                </div>
               </div>
             ) : isAttemptPassed ? (
               <p className="mt-2 text-sm text-success font-medium">
@@ -401,13 +419,13 @@ function QuizPage() {
             )}
 
             <div className="mt-6 flex flex-wrap justify-center gap-2">
-              {lessonId ? (
+              {!isSubmissionDisqualified && lessonId ? (
                 <Button asChild className="gap-2">
                   <Link to="/learn/$moduleId/$lessonId" params={{ moduleId, lessonId }}>
                     {fr ? "Retour à la leçon" : "Back to Lesson"} <ArrowRight className="size-4" />
                   </Link>
                 </Button>
-              ) : isQuizCompletedNow && nextLessonUrl ? (
+              ) : !isSubmissionDisqualified && isQuizCompletedNow && nextLessonUrl ? (
                 <Button asChild className="gap-2">
                   <Link to={nextLessonUrl}>
                     Continue to Next Lesson <ArrowRight className="size-4" />
@@ -416,7 +434,7 @@ function QuizPage() {
               ) : null}
 
               <Button asChild variant="outline">
-                {lessonId ? (
+                {lessonId && !isSubmissionDisqualified ? (
                   <Link to="/learn/$moduleId/$lessonId" params={{ moduleId, lessonId }}>
                     {fr ? "Retour à la leçon" : "Back to Lesson"}
                   </Link>
@@ -425,7 +443,7 @@ function QuizPage() {
                 )}
               </Button>
 
-              {!isAttemptPassed && attemptsLeft > 0 ? (
+              {!isAttemptPassed && !isSubmissionDisqualified && attemptsLeft > 0 ? (
                 <Button
                   onClick={() => {
                     setResult(null);
@@ -516,18 +534,47 @@ function QuizPage() {
       <AppShell title={L(quiz.title)}>
         <div className="panel mx-auto max-w-xl p-7 text-center space-y-4">
           <div className="flex justify-center">
-            <CheckCircle2 className={cn("size-12", hasPassed ? "text-success" : "text-primary")} />
+            {isDisqualified ? (
+              <ShieldAlert className="size-12 text-destructive animate-pulse" />
+            ) : (
+              <CheckCircle2 className="size-12 text-success" />
+            )}
           </div>
           <h2 className="font-display text-2xl font-semibold">{L(quiz.title)}</h2>
-          <Badge variant={hasPassed ? "outline" : "secondary"} className={cn("mx-auto text-sm", hasPassed ? "bg-success/15 text-success border-success/30" : "")}>
-            {hasPassed ? "Quiz Passed" : "Completed (3 attempts reached)"}
+          <Badge
+            variant={isDisqualified ? "destructive" : "outline"}
+            className={cn("mx-auto text-sm", !isDisqualified ? "bg-success/15 text-success border-success/30" : "")}
+          >
+            {isDisqualified
+              ? (fr ? "Disqualifié(e) (3 tentatives échouées)" : "Disqualified (3 Failed Attempts)")
+              : (fr ? "Quiz réussi" : "Quiz Passed")}
           </Badge>
 
-          <p className="text-sm text-muted-foreground">
-            {hasPassed
-              ? "You have successfully passed this module quiz."
-              : "You have used all 3 attempts. The module has been marked complete and the next lesson is unlocked."}
-          </p>
+          {isDisqualified ? (
+            <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-5 text-destructive-foreground shadow-sm text-left">
+              <div className="flex items-start gap-3.5">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-destructive/20 text-destructive">
+                  <ShieldAlert className="size-5" />
+                </div>
+                <div className="space-y-1.5">
+                  <h4 className="font-display text-base font-bold text-destructive">
+                    {fr ? "Avis de disqualification officiel" : "Official Disqualification Notice"}
+                  </h4>
+                  <p className="text-sm leading-relaxed text-destructive/90">
+                    {fr
+                      ? `Vous avez épuisé vos 3 tentatives à ce quiz sans obtenir le score requis (${passingScore}%). Conformément au règlement officiel du programme ILSI, vous avez été disqualifié(e) de cette cohorte et ne pouvez pas poursuivre le reste de la formation.`
+                      : `You have exhausted all 3 attempts for this quiz without achieving the passing score of ${passingScore}%. In accordance with ILSI cohort learning policy, you have been disqualified from this cohort and cannot continue the rest of the coursework.`}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {fr
+                ? "Vous avez validé ce quiz avec succès."
+                : "You have successfully passed this quiz."}
+            </p>
+          )}
 
           <dl className="grid grid-cols-3 gap-3 text-sm pt-2">
             <div className="rounded-lg border border-border p-3">
@@ -536,18 +583,20 @@ function QuizPage() {
             </div>
             <div className="rounded-lg border border-border p-3">
               <dt className="text-xs text-muted-foreground">{t("quiz.attempts")}</dt>
-              <dd className="font-semibold">
+              <dd className={cn("font-semibold", isDisqualified ? "text-destructive" : "")}>
                 {attempts.length}/{attemptsAllowed}
               </dd>
             </div>
             <div className="rounded-lg border border-border p-3">
               <dt className="text-xs text-muted-foreground">Status</dt>
-              <dd className="font-semibold text-success">Complete</dd>
+              <dd className={cn("font-semibold", isDisqualified ? "text-destructive" : "text-success")}>
+                {isDisqualified ? (fr ? "Disqualifié" : "Disqualified") : (fr ? "Réussi" : "Complete")}
+              </dd>
             </div>
           </dl>
 
           <div className="pt-4 space-y-2">
-            {nextLessonUrl ? (
+            {!isDisqualified && nextLessonUrl ? (
               <Button asChild className="w-full gap-2">
                 <Link to={nextLessonUrl}>
                   Continue to Next Lesson <ArrowRight className="size-4" />
@@ -564,7 +613,7 @@ function QuizPage() {
             </Button>
 
             <Button asChild variant="ghost" className="w-full">
-              {lessonId ? (
+              {lessonId && !isDisqualified ? (
                 <Link to="/learn/$moduleId/$lessonId" params={{ moduleId, lessonId }}>
                   {fr ? "Retour à la leçon" : "Back to Lesson"}
                 </Link>
