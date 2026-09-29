@@ -212,46 +212,127 @@ export const api = {
     sizeMb: number;
     mimeType: string;
   }> => {
-    return new Promise((resolve, reject) => {
-      const formData = new FormData();
-      formData.append("video", file);
+    // Attempt 1: Direct signed URL upload to Supabase Storage
+    // This bypasses reverse proxies (Render 100s timeout, Cloudflare 100MB body limits)
+    // and uploads 300MB+ files directly to Supabase CDN at full network speed.
+    try {
+      const initRes = await request<{
+        uploadUrl: string;
+        token: string;
+        storagePath: string;
+        fileName: string;
+      }>("/api/admin/request-video-upload-url", {
+        method: "POST",
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type || "video/mp4",
+          fileSize: file.size,
+        }),
+      });
 
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", `${API_BASE}/api/admin/upload-video`);
-      xhr.withCredentials = true;
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", initRes.uploadUrl);
+        xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
 
-      const token = getStoredSessionToken();
-      if (token) {
-        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      }
+        if (onProgress && xhr.upload) {
+          xhr.upload.addEventListener("progress", (e) => {
+            if (e.lengthComputable) {
+              const percent = Math.min(99, Math.round((e.loaded / e.total) * 100));
+              onProgress(percent);
+            }
+          });
+        }
 
-      if (onProgress && xhr.upload) {
-        xhr.upload.addEventListener("progress", (e) => {
-          if (e.lengthComputable) {
-            const percent = Math.round((e.loaded / e.total) * 100);
-            onProgress(percent);
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            if (onProgress) onProgress(100);
+            resolve();
+          } else {
+            let errorMsg = `Storage upload failed with status ${xhr.status}`;
+            try {
+              const body = JSON.parse(xhr.responseText || "{}");
+              if (body.message || body.error) {
+                errorMsg = body.message || body.error;
+              }
+            } catch {}
+            reject(new Error(errorMsg));
           }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error("Direct upload to Supabase Storage was interrupted."));
+        };
+
+        xhr.send(file);
+      });
+
+      // Confirm upload with backend and obtain signed playback URL
+      const confirmRes = await request<any>("/api/admin/confirm-video-upload", {
+        method: "POST",
+        body: JSON.stringify({
+          storagePath: initRes.storagePath,
+          fileName: initRes.fileName,
+          fileSizeBytes: file.size,
+          mimeType: file.type || "video/mp4",
+        }),
+      });
+
+      return confirmRes;
+    } catch (directErr: any) {
+      console.warn("[uploadVideo] Direct cloud upload failed or unsupported, trying fallback:", directErr?.message);
+
+      // If file is 50MB or smaller, attempt server-buffered upload fallback
+      if (file.size <= 50 * 1024 * 1024) {
+        return new Promise((resolve, reject) => {
+          const formData = new FormData();
+          formData.append("video", file);
+
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", `${API_BASE}/api/admin/upload-video`);
+          xhr.withCredentials = true;
+
+          const token = getStoredSessionToken();
+          if (token) {
+            xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+          }
+
+          if (onProgress && xhr.upload) {
+            xhr.upload.addEventListener("progress", (e) => {
+              if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                onProgress(percent);
+              }
+            });
+          }
+
+          xhr.onload = () => {
+            try {
+              const res = JSON.parse(xhr.responseText || "{}");
+              if (xhr.status >= 200 && xhr.status < 300 && res.success !== false) {
+                resolve(res.data);
+              } else {
+                const msg = formatHumanErrorMessage(res.error || res, "Video upload failed");
+                reject(new Error(msg));
+              }
+            } catch {
+              const msg = formatHumanErrorMessage(xhr.responseText, `Video upload failed with status ${xhr.status}`);
+              reject(new Error(msg));
+            }
+          };
+
+          xhr.onerror = () => reject(new Error("Network connection error during fallback video upload."));
+          xhr.send(formData);
         });
       }
 
-      xhr.onload = () => {
-        try {
-          const res = JSON.parse(xhr.responseText || "{}");
-          if (xhr.status >= 200 && xhr.status < 300 && res.success !== false) {
-            resolve(res.data);
-          } else {
-            const msg = formatHumanErrorMessage(res.error || res, "Video upload failed");
-            reject(new Error(msg));
-          }
-        } catch {
-          const msg = formatHumanErrorMessage(xhr.responseText, `Video upload failed with status ${xhr.status}`);
-          reject(new Error(msg));
-        }
-      };
-
-      xhr.onerror = () => reject(new Error("Network connection error during video upload. Please check your internet."));
-      xhr.send(formData);
-    });
+      throw new Error(
+        formatHumanErrorMessage(
+          directErr,
+          `Video upload failed (${Math.round(file.size / (1024 * 1024))}MB). Please check your internet connection.`
+        )
+      );
+    }
   },
   getCohortCurriculum: (cohortId: string) => request<any[]>(`/api/admin/cohorts/${cohortId}/curriculum`),
   updateLessonVideo: async (lessonId: string, data: { videoUrl: string; durationMinutes?: number }) => {

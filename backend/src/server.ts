@@ -34,6 +34,14 @@ async function startServer() {
     console.log(`====================================================`);
   });
 
+  // Ensure Node.js HTTP server does not terminate large video upload streams
+  server.timeout = 10 * 60 * 1000; // 10 minutes
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
+  if ("requestTimeout" in server) {
+    (server as any).requestTimeout = 10 * 60 * 1000;
+  }
+
   const shutdown = async () => {
     console.log("\n[Server] Shutting down gracefully...");
     server.close(async () => {
