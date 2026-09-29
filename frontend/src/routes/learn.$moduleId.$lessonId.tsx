@@ -320,11 +320,6 @@ function LessonPage() {
               </Link>
             </Button>
           ) : null}
-          <Button asChild variant="outline" size="sm" className={cn("w-full", lesson?.quiz ? "mt-2" : "mt-4")}>
-            <Link to="/learn/$moduleId/quiz" params={{ moduleId }}>
-              {t("course.takeQuiz")}
-            </Link>
-          </Button>
         </aside>
 
         {/* Lesson content */}
