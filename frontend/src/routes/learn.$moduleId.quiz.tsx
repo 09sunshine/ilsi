@@ -92,6 +92,8 @@ function QuizPage() {
                   prevAtt = res.previousAttempts;
                 }
               }
+            } else if (lRes?.quiz && (Array.isArray(lRes.quiz.questions) && lRes.quiz.questions.length > 0)) {
+              qData = lRes.quiz;
             }
           } catch (_) {}
         }
@@ -103,6 +105,27 @@ function QuizPage() {
           (m: any) => (m.module?.id || m.id) === moduleId
         );
         const mod = modEntry?.module || modEntry;
+
+        // 3b. Check if quiz is on a lesson within mod.lessons
+        if (!qData && lessonId && Array.isArray(mod?.lessons)) {
+          const matchedLesson = mod.lessons.find((l: any) => l.id === lessonId);
+          if (matchedLesson?.quiz) {
+            if (matchedLesson.quiz.id) {
+              try {
+                const res = await api.getQuiz(matchedLesson.quiz.id);
+                if (res) {
+                  qData = res.quiz || res;
+                  if (Array.isArray(res.previousAttempts)) {
+                    prevAtt = res.previousAttempts;
+                  }
+                }
+              } catch (_) {}
+            }
+            if (!qData && Array.isArray(matchedLesson.quiz.questions) && matchedLesson.quiz.questions.length > 0) {
+              qData = matchedLesson.quiz;
+            }
+          }
+        }
 
         if (!qData && mod?.quiz && (mod.quiz.questions?.length > 0 || mod.quiz.id)) {
           if (mod.quiz.questions?.length > 0) {
@@ -118,6 +141,10 @@ function QuizPage() {
               }
             } catch (_) {}
           }
+        }
+
+        if (dash?.isDisqualified && qData) {
+          qData = { ...qData, isDisqualified: true, disqualified: true };
         }
 
         if (mounted) {
@@ -226,6 +253,9 @@ function QuizPage() {
           graded: res.graded || [],
         });
         setPreviousAttempts((prev) => [...prev, res.attempt]);
+        if (res.isDisqualified || res.disqualified || (res.attempt as any)?.isDisqualified) {
+          setQuiz((prev: any) => ({ ...prev, isDisqualified: true, disqualified: true }));
+        }
         return;
       }
     } catch (err: any) {
@@ -245,28 +275,41 @@ function QuizPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  <Badge variant={hasPassed ? "outline" : "secondary"} className={hasPassed ? "bg-success/15 text-success border-success/30" : ""}>
-                    {hasPassed ? "Passed" : "Completed (3 attempts)"}
+                  <Badge
+                    variant={isDisqualified ? "destructive" : hasPassed ? "outline" : "secondary"}
+                    className={cn(
+                      isDisqualified
+                        ? "bg-destructive/15 text-destructive border-destructive/30"
+                        : hasPassed
+                        ? "bg-success/15 text-success border-success/30"
+                        : ""
+                    )}
+                  >
+                    {isDisqualified
+                      ? (fr ? "Disqualifié (3 tentatives)" : "Disqualified (3 attempts)")
+                      : hasPassed
+                      ? (fr ? "Réussi" : "Passed")
+                      : (fr ? "Terminé (3 tentatives)" : "Completed (3 attempts)")}
                   </Badge>
                   <span className="text-xs text-muted-foreground">
-                    {lessonId ? (fr ? "Quiz de leçon — Corrigé" : "Lesson Quiz — Answer Key") : "Answer Key & Review"}
+                    {lessonId ? (fr ? "Quiz de leçon — Corrigé" : "Lesson Quiz — Answer Key") : (fr ? "Corrigé et révision" : "Answer Key & Review")}
                   </span>
                 </div>
                 <h2 className="mt-1 font-display text-2xl font-semibold">{L(quiz.title)}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Review the correct answers and explanations below.
+                  {fr ? "Consultez les réponses correctes et explications ci-dessous." : "Review the correct answers and explanations below."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {nextLessonUrl ? (
+                {!isDisqualified && nextLessonUrl ? (
                   <Button asChild className="gap-2">
                     <Link to={nextLessonUrl}>
-                      Continue to Next Lesson <ArrowRight className="size-4" />
+                      {fr ? "Continuer vers la leçon suivante" : "Continue to Next Lesson"} <ArrowRight className="size-4" />
                     </Link>
                   </Button>
                 ) : null}
                 <Button asChild variant="outline">
-                  {lessonId ? (
+                  {lessonId && !isDisqualified ? (
                     <Link to="/learn/$moduleId/$lessonId" params={{ moduleId, lessonId }}>
                       {fr ? "Retour à la leçon" : "Back to Lesson"}
                     </Link>
@@ -275,7 +318,7 @@ function QuizPage() {
                   )}
                 </Button>
                 <Button variant="ghost" onClick={() => setReviewMode(false)}>
-                  Close
+                  {fr ? "Fermer" : "Close"}
                 </Button>
               </div>
             </div>
@@ -461,7 +504,7 @@ function QuizPage() {
             {questions.map((q, i) => {
               const g = result.graded.find((x) => x.questionId === q.id);
               const correctAnswer = getCorrectAnswerDisplay(q, g);
-              const showCorrect = isAttemptPassed || isAttemptsExhausted || !!correctAnswer;
+              const showCorrect = isAttemptPassed || attemptsExhausted || isSubmissionDisqualified || !attemptsLeft || !!correctAnswer;
 
               return (
                 <li key={q.id} className="panel p-5">
