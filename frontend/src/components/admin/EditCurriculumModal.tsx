@@ -122,6 +122,9 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
   const [questionExplanationEn, setQuestionExplanationEn] = useState("");
   const [questionExplanationFr, setQuestionExplanationFr] = useState("");
   const [questionPoints, setQuestionPoints] = useState(1);
+  const [questionType, setQuestionType] = useState<"MULTIPLE_CHOICE" | "TRUE_FALSE" | "FILL_BLANK">("MULTIPLE_CHOICE");
+  const [acceptableAnswerEn, setAcceptableAnswerEn] = useState("");
+  const [acceptableAnswerFr, setAcceptableAnswerFr] = useState("");
   const [questionOptions, setQuestionOptions] = useState<
     Array<{ textEn: string; textFr: string; isCorrect: boolean }>
   >([
@@ -518,7 +521,11 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       toast.error(formatHumanErrorMessage(err, "Failed to upload document"));
     } finally {
       setIsUploadingResource(null);
-      e.target.value = "";
+      if (e?.target) {
+        try {
+          e.target.value = "";
+        } catch {}
+      }
     }
   };
 
@@ -620,18 +627,55 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       toast.error(fr ? "Énoncé de question requis." : "Question text is required.");
       return;
     }
-    const validOptions = questionOptions.filter((o) => o.textEn.trim());
-    if (validOptions.length < 2) {
-      toast.error(fr ? "Au moins 2 options sont requises." : "At least 2 options are required.");
-      return;
-    }
-    if (!validOptions.some((o) => o.isCorrect)) {
-      toast.error(fr ? "Veuillez désigner au moins une bonne réponse." : "Please mark at least one correct option.");
-      return;
+
+    let finalOptions: any[] = [];
+    let correctTextVal: string | null = null;
+
+    if (questionType === "FILL_BLANK") {
+      if (!acceptableAnswerEn.trim()) {
+        toast.error(fr ? "Veuillez entrer la réponse correcte acceptée." : "Acceptable correct answer is required.");
+        return;
+      }
+      correctTextVal = acceptableAnswerEn.trim();
+      finalOptions = [
+        {
+          option_en: acceptableAnswerEn.trim(),
+          labelEn: acceptableAnswerEn.trim(),
+          option_fr: acceptableAnswerFr.trim() || acceptableAnswerEn.trim(),
+          labelFr: acceptableAnswerFr.trim() || acceptableAnswerEn.trim(),
+          is_correct: true,
+          correct: true,
+          order_index: 1,
+          orderIndex: 1,
+        },
+      ];
+    } else {
+      const validOptions = questionOptions.filter((o) => o.textEn.trim());
+      if (validOptions.length < 2) {
+        toast.error(fr ? "Au moins 2 options sont requises." : "At least 2 options are required.");
+        return;
+      }
+      if (!validOptions.some((o) => o.isCorrect)) {
+        toast.error(fr ? "Veuillez désigner au moins une bonne réponse." : "Please mark at least one correct option.");
+        return;
+      }
+      finalOptions = validOptions.map((o, idx) => ({
+        option_en: o.textEn.trim(),
+        labelEn: o.textEn.trim(),
+        option_fr: o.textFr.trim() || o.textEn.trim(),
+        labelFr: o.textFr.trim() || o.textEn.trim(),
+        is_correct: o.isCorrect,
+        correct: o.isCorrect,
+        order_index: idx + 1,
+        orderIndex: idx + 1,
+      }));
     }
 
     try {
       await api.addQuizQuestion(targetQuestionQuizId, {
+        type: questionType,
+        correctText: correctTextVal,
+        correct_text: correctTextVal,
         question_en: questionTextEn.trim(),
         promptEn: questionTextEn.trim(),
         question_fr: questionTextFr.trim() || questionTextEn.trim(),
@@ -641,22 +685,16 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
         explanation_fr: questionExplanationFr.trim() || null,
         explanationFr: questionExplanationFr.trim() || null,
         points: Number(questionPoints) || 1,
-        options: validOptions.map((o, idx) => ({
-          option_en: o.textEn.trim(),
-          labelEn: o.textEn.trim(),
-          option_fr: o.textFr.trim() || o.textEn.trim(),
-          labelFr: o.textFr.trim() || o.textEn.trim(),
-          is_correct: o.isCorrect,
-          correct: o.isCorrect,
-          order_index: idx + 1,
-          orderIndex: idx + 1,
-        })),
+        options: finalOptions,
       });
       toast.success(fr ? "Question ajoutée au quiz !" : "Question added to quiz!");
       setQuestionTextEn("");
       setQuestionTextFr("");
       setQuestionExplanationEn("");
       setQuestionExplanationFr("");
+      setAcceptableAnswerEn("");
+      setAcceptableAnswerFr("");
+      setQuestionType("MULTIPLE_CHOICE");
       setQuestionOptions([
         { textEn: "", textFr: "", isCorrect: true },
         { textEn: "", textFr: "", isCorrect: false },
@@ -1421,7 +1459,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                                   </div>
 
                                   {/* Resources list */}
-                                  {!lesson.resources || lesson.resources.length === 0 ? (
+                                  {!Array.isArray(lesson.resources) || lesson.resources.length === 0 ? (
                                     <div className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
                                       <Paperclip className="size-6 mx-auto mb-1 text-muted-foreground/60" />
                                       {fr
@@ -1430,45 +1468,54 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                                     </div>
                                   ) : (
                                     <div className="divide-y divide-border border rounded-xl overflow-hidden bg-muted/5">
-                                      {lesson.resources.map((res: any) => (
-                                        <div
-                                          key={res.id}
-                                          className="flex items-center justify-between p-3 text-xs hover:bg-muted/30"
-                                        >
-                                          <div className="flex items-center gap-2.5 min-w-0">
-                                            <FileCheck className="size-4 text-primary shrink-0" />
-                                            <div>
-                                              <p className="font-medium text-foreground truncate">
-                                                {res.nameEn}
-                                              </p>
-                                              <p className="text-[11px] text-muted-foreground">
-                                                {res.type} • {res.sizeKb} KB
-                                              </p>
+                                      {(lesson.resources || []).map((res: any, rIdx: number) => {
+                                        const resName = typeof res?.nameEn === "object"
+                                          ? (locale === "fr" ? res.nameEn?.fr || res.nameEn?.en : res.nameEn?.en || res.nameEn?.fr)
+                                          : (res?.nameEn || res?.name_en || res?.name || "Document");
+                                        const resType = res?.type || "PDF";
+                                        const resSize = res?.sizeKb ?? res?.size_kb ?? 0;
+                                        const docUrl = typeof res?.url === "string" ? res.url : (typeof res?.storagePath === "string" ? res.storagePath : "");
+
+                                        return (
+                                          <div
+                                            key={res?.id || `res-${rIdx}`}
+                                            className="flex items-center justify-between p-3 text-xs hover:bg-muted/30"
+                                          >
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                              <FileCheck className="size-4 text-primary shrink-0" />
+                                              <div>
+                                                <p className="font-medium text-foreground truncate">
+                                                  {String(resName)}
+                                                </p>
+                                                <p className="text-[11px] text-muted-foreground">
+                                                  {resType} • {resSize} KB
+                                                </p>
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                              {docUrl && (
+                                                <a
+                                                  href={resolveMediaUrl(docUrl)}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="inline-flex items-center justify-center size-7 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                                  title="View document"
+                                                >
+                                                  <ExternalLink className="size-3.5" />
+                                                </a>
+                                              )}
+                                              <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                onClick={() => handleDeleteResource(res.id)}
+                                                className="size-7 text-muted-foreground hover:text-destructive"
+                                              >
+                                                <Trash2 className="size-3.5" />
+                                              </Button>
                                             </div>
                                           </div>
-                                          <div className="flex items-center gap-1">
-                                            {res.url && (
-                                              <a
-                                                href={resolveMediaUrl(res.url)}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center justify-center size-7 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                                                title="View document"
-                                              >
-                                                <ExternalLink className="size-3.5" />
-                                              </a>
-                                            )}
-                                            <Button
-                                              size="icon"
-                                              variant="ghost"
-                                              onClick={() => handleDeleteResource(res.id)}
-                                              className="size-7 text-muted-foreground hover:text-destructive"
-                                            >
-                                              <Trash2 className="size-3.5" />
-                                            </Button>
-                                          </div>
-                                        </div>
-                                      ))}
+                                        );
+                                      })}
                                     </div>
                                   )}
 
@@ -1587,60 +1634,134 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                                         </div>
                                       ) : (
                                         <div className="space-y-3">
-                                          {lesson.quiz.questions.map((q: any, qIdx: number) => (
-                                            <div
-                                              key={q.id}
-                                              className="p-3.5 rounded-xl border border-border bg-card shadow-2xs space-y-2"
-                                            >
-                                              <div className="flex items-start justify-between gap-2">
-                                                <div className="flex items-start gap-2">
-                                                  <span className="size-5 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                                                    Q{qIdx + 1}
-                                                  </span>
-                                                  <div>
-                                                    <p className="text-xs font-semibold text-foreground">
-                                                      {q.questionEn}
-                                                    </p>
-                                                    {q.questionFr && q.questionFr !== q.questionEn && (
-                                                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                                                        {q.questionFr}
-                                                      </p>
-                                                    )}
-                                                  </div>
-                                                </div>
-                                                <Button
-                                                  size="icon"
-                                                  variant="ghost"
-                                                  onClick={() => handleDeleteQuestion(q.id)}
-                                                  className="size-6 text-muted-foreground hover:text-destructive shrink-0"
-                                                >
-                                                  <Trash2 className="size-3" />
-                                                </Button>
-                                              </div>
+                                          {lesson.quiz.questions.map((q: any, qIdx: number) => {
+                                            const isFillBlank =
+                                              q.type === "FILL_BLANK" ||
+                                              q.type === "FILL_IN_THE_BLANK";
+                                            const isTrueFalse =
+                                              q.type === "TRUE_FALSE" ||
+                                              (q.options?.length === 2 &&
+                                                q.options.some(
+                                                  (o: any) =>
+                                                    (o.optionEn || o.option_en) === "True" ||
+                                                    (o.optionEn || o.option_en) === "Vrai"
+                                                ));
+                                            const promptEn =
+                                              q.questionEn ||
+                                              q.promptEn ||
+                                              q.question_en ||
+                                              q.prompt_en ||
+                                              "Question";
+                                            const promptFr =
+                                              q.questionFr ||
+                                              q.promptFr ||
+                                              q.question_fr ||
+                                              q.prompt_fr;
+                                            const acceptedAnswer =
+                                              q.correctText ||
+                                              q.correct_text ||
+                                              q.options?.[0]?.optionEn ||
+                                              q.options?.[0]?.option_en;
 
-                                              {/* Options */}
-                                              <div className="grid gap-1.5 sm:grid-cols-2 pl-7 pt-1">
-                                                {q.options?.map((opt: any, optIdx: number) => (
-                                                  <div
-                                                    key={opt.id || optIdx}
-                                                    className={cn(
-                                                      "flex items-center gap-2 p-2 rounded-lg text-xs border",
-                                                      opt.isCorrect
-                                                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-medium"
-                                                        : "bg-muted/30 border-border text-muted-foreground"
-                                                    )}
-                                                  >
-                                                    {opt.isCorrect ? (
-                                                      <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                                    ) : (
-                                                      <div className="size-3.5 rounded-full border border-muted-foreground/30 shrink-0" />
-                                                    )}
-                                                    <span className="truncate">{opt.optionEn}</span>
+                                            return (
+                                              <div
+                                                key={q.id || qIdx}
+                                                className="p-3.5 rounded-xl border border-border bg-card shadow-2xs space-y-2"
+                                              >
+                                                <div className="flex items-start justify-between gap-2">
+                                                  <div className="flex items-start gap-2">
+                                                    <span className="size-5 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                                                      Q{qIdx + 1}
+                                                    </span>
+                                                    <div>
+                                                      <div className="flex items-center gap-1.5 mb-1">
+                                                        <Badge
+                                                          variant="outline"
+                                                          className="text-[9px] py-0 px-1.5 h-4"
+                                                        >
+                                                          {isFillBlank
+                                                            ? fr
+                                                              ? "Texte à trous"
+                                                              : "Fill in Blank"
+                                                            : isTrueFalse
+                                                            ? fr
+                                                              ? "Vrai / Faux"
+                                                              : "True / False"
+                                                            : fr
+                                                            ? "QCM"
+                                                            : "Multiple Choice"}
+                                                        </Badge>
+                                                      </div>
+                                                      <p className="text-xs font-semibold text-foreground">
+                                                        {promptEn}
+                                                      </p>
+                                                      {promptFr && promptFr !== promptEn && (
+                                                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                          {promptFr}
+                                                        </p>
+                                                      )}
+                                                    </div>
                                                   </div>
-                                                ))}
+                                                  <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    onClick={() => handleDeleteQuestion(q.id)}
+                                                    className="size-6 text-muted-foreground hover:text-destructive shrink-0"
+                                                  >
+                                                    <Trash2 className="size-3" />
+                                                  </Button>
+                                                </div>
+
+                                                {/* Options or Answer */}
+                                                {isFillBlank ? (
+                                                  <div className="pl-7 pt-1">
+                                                    <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800 dark:text-emerald-300">
+                                                      <span className="font-semibold">
+                                                        {fr ? "Réponse acceptée :" : "Acceptable Answer:"}
+                                                      </span>
+                                                      <code className="font-mono font-bold bg-background/90 px-1.5 py-0.5 rounded border border-border">
+                                                        {acceptedAnswer || "—"}
+                                                      </code>
+                                                    </div>
+                                                  </div>
+                                                ) : (
+                                                  <div className="grid gap-1.5 sm:grid-cols-2 pl-7 pt-1">
+                                                    {q.options?.map((opt: any, optIdx: number) => {
+                                                      const optText =
+                                                        opt.optionEn ||
+                                                        opt.option_en ||
+                                                        opt.labelEn ||
+                                                        opt.label_en ||
+                                                        opt.textEn ||
+                                                        "";
+                                                      const isCorrect =
+                                                        opt.isCorrect ||
+                                                        opt.is_correct ||
+                                                        opt.correct;
+                                                      return (
+                                                        <div
+                                                          key={opt.id || optIdx}
+                                                          className={cn(
+                                                            "flex items-center gap-2 p-2 rounded-lg text-xs border",
+                                                            isCorrect
+                                                              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-medium"
+                                                              : "bg-muted/30 border-border text-muted-foreground"
+                                                          )}
+                                                        >
+                                                          {isCorrect ? (
+                                                            <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                                          ) : (
+                                                            <div className="size-3.5 rounded-full border border-muted-foreground/30 shrink-0" />
+                                                          )}
+                                                          <span className="truncate">{optText}</span>
+                                                        </div>
+                                                      );
+                                                    })}
+                                                  </div>
+                                                )}
                                               </div>
-                                            </div>
-                                          ))}
+                                            );
+                                          })}
                                         </div>
                                       )}
                                     </div>
@@ -2216,104 +2337,284 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                 />
               </div>
 
-              {/* Options */}
-              <div className="space-y-2 pt-1">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-foreground">
-                    {fr ? "Options de réponse (Cochez la bonne)" : "Answer Options (Check correct)"}
-                  </label>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      setQuestionOptions((prev) => [
-                        ...prev,
-                        { textEn: "", textFr: "", isCorrect: false },
-                      ])
-                    }
-                    className="h-6 text-[11px] gap-1 text-primary hover:bg-primary/10"
+              {/* Question Type Selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">
+                  {fr ? "Type de question" : "Question Type"}
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuestionType("MULTIPLE_CHOICE");
+                      if (
+                        questionOptions.length < 2 ||
+                        (questionOptions[0].textEn === "True" &&
+                          questionOptions[1].textEn === "False")
+                      ) {
+                        setQuestionOptions([
+                          { textEn: "", textFr: "", isCorrect: true },
+                          { textEn: "", textFr: "", isCorrect: false },
+                        ]);
+                      }
+                    }}
+                    className={cn(
+                      "flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer",
+                      questionType === "MULTIPLE_CHOICE"
+                        ? "border-primary bg-primary/10 text-primary font-bold shadow-xs"
+                        : "border-border bg-card hover:bg-muted/40 text-muted-foreground"
+                    )}
                   >
-                    <Plus className="size-3" />
-                    {fr ? "Ajouter option" : "Add Option"}
-                  </Button>
-                </div>
+                    <span className="text-xs font-semibold">
+                      {fr ? "Choix multiple" : "Multiple Choice"}
+                    </span>
+                    <span className="text-[10px] opacity-75">
+                      {fr ? "QCM (2+ options)" : "MCQ (2+ options)"}
+                    </span>
+                  </button>
 
-                <div className="space-y-2">
-                  {questionOptions.map((opt, idx) => (
-                    <div
-                      key={idx}
-                      className={cn(
-                        "flex items-center gap-2 p-2 rounded-lg border text-xs",
-                        opt.isCorrect
-                          ? "bg-emerald-500/5 border-emerald-500/30"
-                          : "bg-background border-border"
-                      )}
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setQuestionOptions((prev) =>
-                            prev.map((o, i) => ({
-                              ...o,
-                              isCorrect: i === idx,
-                            }))
-                          )
-                        }
-                        className={cn(
-                          "size-4 rounded-full border flex items-center justify-center shrink-0 transition-colors",
-                          opt.isCorrect
-                            ? "bg-emerald-600 border-emerald-600 text-white"
-                            : "border-muted-foreground/40 hover:border-primary"
-                        )}
-                        title="Mark as correct answer"
-                      >
-                        {opt.isCorrect && <Check className="size-2.5 stroke-3" />}
-                      </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuestionType("TRUE_FALSE");
+                      setQuestionOptions([
+                        { textEn: "True", textFr: "Vrai", isCorrect: true },
+                        { textEn: "False", textFr: "Faux", isCorrect: false },
+                      ]);
+                    }}
+                    className={cn(
+                      "flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer",
+                      questionType === "TRUE_FALSE"
+                        ? "border-primary bg-primary/10 text-primary font-bold shadow-xs"
+                        : "border-border bg-card hover:bg-muted/40 text-muted-foreground"
+                    )}
+                  >
+                    <span className="text-xs font-semibold">
+                      {fr ? "Vrai / Faux" : "True / False"}
+                    </span>
+                    <span className="text-[10px] opacity-75">
+                      {fr ? "2 choix fixes" : "Binary choice"}
+                    </span>
+                  </button>
 
-                      <Input
-                        placeholder={`Option ${idx + 1} (English)`}
-                        value={opt.textEn}
-                        onChange={(e) =>
-                          setQuestionOptions((prev) =>
-                            prev.map((o, i) =>
-                              i === idx ? { ...o, textEn: e.target.value } : o
-                            )
-                          )
-                        }
-                        className="text-xs h-7 flex-1"
-                      />
-
-                      <Input
-                        placeholder={`Option ${idx + 1} (Français)`}
-                        value={opt.textFr}
-                        onChange={(e) =>
-                          setQuestionOptions((prev) =>
-                            prev.map((o, i) =>
-                              i === idx ? { ...o, textFr: e.target.value } : o
-                            )
-                          )
-                        }
-                        className="text-xs h-7 flex-1"
-                      />
-
-                      {questionOptions.length > 2 && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() =>
-                            setQuestionOptions((prev) =>
-                              prev.filter((_, i) => i !== idx)
-                            )
-                          }
-                          className="size-6 text-muted-foreground hover:text-destructive shrink-0"
-                        >
-                          <Trash2 className="size-3" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setQuestionType("FILL_BLANK")}
+                    className={cn(
+                      "flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer",
+                      questionType === "FILL_BLANK"
+                        ? "border-primary bg-primary/10 text-primary font-bold shadow-xs"
+                        : "border-border bg-card hover:bg-muted/40 text-muted-foreground"
+                    )}
+                  >
+                    <span className="text-xs font-semibold">
+                      {fr ? "Texte à trous" : "Fill the Blank"}
+                    </span>
+                    <span className="text-[10px] opacity-75">
+                      {fr ? "Saisie libre" : "Typed answer"}
+                    </span>
+                  </button>
                 </div>
               </div>
+
+              {/* Conditional Answer Inputs by Question Type */}
+              {questionType === "FILL_BLANK" ? (
+                <div className="space-y-3 p-3 rounded-xl border border-primary/20 bg-primary/5">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-foreground">
+                        {fr
+                          ? "Réponse attendue exacte (Anglais) *"
+                          : "Acceptable Answer (English) *"}
+                      </label>
+                      <span className="text-[10px] text-muted-foreground">
+                        {fr ? "Non sensible à la casse" : "Case-insensitive"}
+                      </span>
+                    </div>
+                    <Input
+                      placeholder={
+                        fr
+                          ? "ex. Community Engagement"
+                          : "e.g. Community Engagement"
+                      }
+                      value={acceptableAnswerEn}
+                      onChange={(e) => setAcceptableAnswerEn(e.target.value)}
+                      className="mt-1 text-xs bg-background"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-foreground">
+                      {fr
+                        ? "Réponse attendue (Français, optionnel)"
+                        : "Acceptable Answer (French, optional)"}
+                    </label>
+                    <Input
+                      placeholder={
+                        fr
+                          ? "ex. Engagement communautaire"
+                          : "e.g. Engagement communautaire"
+                      }
+                      value={acceptableAnswerFr}
+                      onChange={(e) => setAcceptableAnswerFr(e.target.value)}
+                      className="mt-1 text-xs bg-background"
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    {fr
+                      ? "💡 Conseil : Indiquez l'emplacement du mot manquant dans la question ci-dessus en utilisant '___' ou [crochets]."
+                      : "💡 Tip: Indicate where the blank goes in your question prompt above using '___' or [brackets]."}
+                  </p>
+                </div>
+              ) : questionType === "TRUE_FALSE" ? (
+                <div className="space-y-2 pt-1">
+                  <label className="text-xs font-semibold text-foreground">
+                    {fr ? "Bonne réponse" : "Correct Answer"}
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {questionOptions.slice(0, 2).map((opt, idx) => {
+                      const isTrue = idx === 0;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() =>
+                            setQuestionOptions((prev) =>
+                              prev.map((o, i) => ({
+                                ...o,
+                                isCorrect: i === idx,
+                              }))
+                            )
+                          }
+                          className={cn(
+                            "flex items-center justify-between p-3 rounded-xl border text-sm font-semibold transition-all cursor-pointer",
+                            opt.isCorrect
+                              ? "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20"
+                              : "border-border bg-card text-muted-foreground hover:bg-muted/30"
+                          )}
+                        >
+                          <span>
+                            {fr
+                              ? isTrue
+                                ? "Vrai (True)"
+                                : "Faux (False)"
+                              : isTrue
+                              ? "True"
+                              : "False"}
+                          </span>
+                          {opt.isCorrect ? (
+                            <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                          ) : (
+                            <div className="size-4 rounded-full border border-muted-foreground/30" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                /* Multiple Choice Options */
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-foreground">
+                      {fr
+                        ? "Options de réponse (Cochez la bonne)"
+                        : "Answer Options (Check correct)"}
+                    </label>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        setQuestionOptions((prev) => [
+                          ...prev,
+                          { textEn: "", textFr: "", isCorrect: false },
+                        ])
+                      }
+                      className="h-6 text-[11px] gap-1 text-primary hover:bg-primary/10"
+                    >
+                      <Plus className="size-3" />
+                      {fr ? "Ajouter option" : "Add Option"}
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {questionOptions.map((opt, idx) => (
+                      <div
+                        key={idx}
+                        className={cn(
+                          "flex items-center gap-2 p-2 rounded-lg border text-xs",
+                          opt.isCorrect
+                            ? "bg-emerald-500/5 border-emerald-500/30"
+                            : "bg-background border-border"
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setQuestionOptions((prev) =>
+                              prev.map((o, i) => ({
+                                ...o,
+                                isCorrect: i === idx,
+                              }))
+                            )
+                          }
+                          className={cn(
+                            "size-4 rounded-full border flex items-center justify-center shrink-0 transition-colors cursor-pointer",
+                            opt.isCorrect
+                              ? "bg-emerald-600 border-emerald-600 text-white"
+                              : "border-muted-foreground/40 hover:border-primary"
+                          )}
+                          title="Mark as correct answer"
+                        >
+                          {opt.isCorrect && (
+                            <Check className="size-2.5 stroke-3" />
+                          )}
+                        </button>
+
+                        <Input
+                          placeholder={`Option ${idx + 1} (English)`}
+                          value={opt.textEn}
+                          onChange={(e) =>
+                            setQuestionOptions((prev) =>
+                              prev.map((o, i) =>
+                                i === idx ? { ...o, textEn: e.target.value } : o
+                              )
+                            )
+                          }
+                          className="text-xs h-7 flex-1"
+                        />
+
+                        <Input
+                          placeholder={`Option ${idx + 1} (Français)`}
+                          value={opt.textFr}
+                          onChange={(e) =>
+                            setQuestionOptions((prev) =>
+                              prev.map((o, i) =>
+                                i === idx ? { ...o, textFr: e.target.value } : o
+                              )
+                            )
+                          }
+                          className="text-xs h-7 flex-1"
+                        />
+
+                        {questionOptions.length > 2 && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() =>
+                              setQuestionOptions((prev) =>
+                                prev.filter((_, i) => i !== idx)
+                              )
+                            }
+                            className="size-6 text-muted-foreground hover:text-destructive shrink-0"
+                          >
+                            <Trash2 className="size-3" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Explanation */}
               <div>

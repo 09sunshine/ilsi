@@ -5,17 +5,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function resolveMediaUrl(url?: string | null): string {
-  if (!url) return "";
+export function resolveMediaUrl(url?: string | null | any): string {
+  if (!url || typeof url !== "string") return "";
+  const trimmed = url.trim();
   if (
-    url.startsWith("http://") ||
-    url.startsWith("https://") ||
-    url.startsWith("data:") ||
-    url.startsWith("blob:")
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("data:") ||
+    trimmed.startsWith("blob:")
   ) {
-    return url;
+    return trimmed;
   }
   const apiBase = ((import.meta.env as any).VITE_BACKEND_URL || "http://localhost:4000").replace(/\/+$/, "");
-  const cleanPath = url.startsWith("/") ? url : `/${url}`;
+  const cleanPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
   return `${apiBase}${cleanPath}`;
 }

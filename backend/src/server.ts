@@ -4,11 +4,22 @@ import { pool } from "./database/pool.js";
 
 async function startServer() {
   try {
-    // Verify database connection
+    // Verify database connection and ensure compatibility columns exist
     console.log("[Server] Testing database connection...");
     const client = await pool.connect();
-    console.log("[Server] Database connection verified successfully.");
-    client.release();
+    try {
+      await client.query(`
+        ALTER TABLE IF EXISTS videos ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+        ALTER TABLE IF EXISTS resources ADD COLUMN IF NOT EXISTS status VARCHAR(50) NOT NULL DEFAULT 'PUBLISHED';
+        ALTER TABLE IF EXISTS resources ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT TRUE;
+        ALTER TABLE IF EXISTS resources ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+        ALTER TABLE IF EXISTS quiz_questions ADD COLUMN IF NOT EXISTS correct_text TEXT;
+        ALTER TABLE IF EXISTS quiz_questions ADD COLUMN IF NOT EXISTS type VARCHAR(50) NOT NULL DEFAULT 'MULTIPLE_CHOICE';
+      `);
+      console.log("[Server] Database connection & schema compatibility verified successfully.");
+    } finally {
+      client.release();
+    }
   } catch (err: any) {
     console.warn("[Server] Warning: Could not connect to PostgreSQL database directly:", err.message);
     console.warn("[Server] Continuing server startup (ensure DATABASE_URL in .env points to your Supabase instance).");

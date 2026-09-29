@@ -3019,7 +3019,7 @@ router.patch("/lessons/:id/video", async (req: Request, res: Response, next: Nex
         await pool.query(
           `INSERT INTO videos (lesson_id, storage_path, file_name, mime_type, status)
            VALUES ($1, $2, $3, 'video/mp4', 'READY')
-           ON CONFLICT (lesson_id) DO UPDATE SET storage_path = EXCLUDED.storage_path, status = 'READY', updated_at = NOW()`,
+           ON CONFLICT (lesson_id) DO UPDATE SET storage_path = EXCLUDED.storage_path, status = 'READY'`,
           [id, videoUrl, `${lessonRes.rows[0].title_en || "lesson"}.mp4`]
         );
       }
@@ -3908,29 +3908,65 @@ router.post("/resources", async (req: Request, res: Response, next: NextFunction
     const status = req.body.status || "PUBLISHED";
     const isPublished = req.body.isPublished !== undefined ? Boolean(req.body.isPublished) : (req.body.is_published !== undefined ? Boolean(req.body.is_published) : true);
 
-    const result = await pool.query(
-      `INSERT INTO resources (
-         lesson_id, module_id, name_en, name_fr, type,
-         storage_path, url, size_kb, downloadable, status, is_published
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       RETURNING *`,
-      [
-        lessonId,
-        moduleId,
-        nameEn,
-        nameFr,
-        type,
-        storagePath,
-        url,
-        sizeKb,
-        downloadable,
-        status,
-        isPublished,
-      ]
-    );
+    let result;
+    try {
+      result = await pool.query(
+        `INSERT INTO resources (
+           lesson_id, module_id, name_en, name_fr, type,
+           storage_path, url, size_kb, downloadable, status, is_published
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING *`,
+        [
+          lessonId,
+          moduleId,
+          nameEn,
+          nameFr,
+          type,
+          storagePath,
+          url,
+          sizeKb,
+          downloadable,
+          status,
+          isPublished,
+        ]
+      );
+    } catch {
+      result = await pool.query(
+        `INSERT INTO resources (
+           lesson_id, module_id, name_en, name_fr, type,
+           storage_path, url, size_kb, downloadable
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
+        [
+          lessonId,
+          moduleId,
+          nameEn,
+          nameFr,
+          type,
+          storagePath,
+          url,
+          sizeKb,
+          downloadable,
+        ]
+      );
+    }
 
-    res.status(201).json({ success: true, data: result.rows[0], message: "Resource attached successfully" });
+    const row = result.rows[0];
+    const data = {
+      ...row,
+      id: row.id,
+      lessonId: row.lesson_id,
+      moduleId: row.module_id,
+      nameEn: row.name_en,
+      nameFr: row.name_fr,
+      storagePath: row.storage_path,
+      sizeKb: row.size_kb,
+      downloadable: row.downloadable,
+    };
+
+    res.status(201).json({ success: true, data, message: "Resource attached successfully" });
   } catch (error) {
     next(error);
   }
