@@ -264,7 +264,7 @@ export function QuizLongAnswersModal({
                         {sub.promptEn || sub.promptFr || (fr ? "Question rédigée" : "Written question")}
                       </p>
 
-                      <p className="text-[11px] text-foreground/80 line-clamp-2 italic bg-muted/30 p-1.5 rounded">
+                      <p className="text-[11px] text-foreground/80 line-clamp-2 italic bg-muted/30 p-1.5 rounded break-words break-all [overflow-wrap:anywhere]">
                         "{sub.givenAnswer || "—"}"
                       </p>
 
@@ -335,11 +335,11 @@ export function QuizLongAnswersModal({
                     <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
                       {fr ? "Énoncé de la question :" : "Question Prompt:"}
                     </span>
-                    <p className="text-xs font-semibold text-foreground leading-relaxed">
+                    <p className="text-xs font-semibold text-foreground leading-relaxed break-words [overflow-wrap:anywhere]">
                       {selectedSubmission.promptEn}
                     </p>
                     {selectedSubmission.promptFr && selectedSubmission.promptFr !== selectedSubmission.promptEn && (
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-[11px] text-muted-foreground break-words [overflow-wrap:anywhere]">
                         {selectedSubmission.promptFr}
                       </p>
                     )}
@@ -357,7 +357,7 @@ export function QuizLongAnswersModal({
                       </span>
                     </div>
 
-                    <div className="p-4 rounded-xl border border-border bg-muted/20 text-xs text-foreground font-normal leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto select-text shadow-inner">
+                    <div className="p-4 rounded-xl border border-border bg-muted/20 text-xs text-foreground font-normal leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto select-text shadow-inner break-words break-all [overflow-wrap:anywhere] max-w-full">
                       {selectedSubmission.givenAnswer || (fr ? "Aucune réponse saisie." : "No answer provided.")}
                     </div>
                   </div>

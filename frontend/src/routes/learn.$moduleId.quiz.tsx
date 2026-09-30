@@ -575,8 +575,8 @@ function QuizPage() {
               const showCorrect = isAttemptPassed || attemptsExhausted || isSubmissionDisqualified || !attemptsLeft || !!correctAnswer;
 
               return (
-                <li key={q.id} className="panel p-5">
-                  <div className="flex items-start gap-3">
+                <li key={q.id} className="panel p-5 overflow-hidden">
+                  <div className="flex items-start gap-3 min-w-0 max-w-full">
                     {g?.correct === null || q.type === "LONG_ANSWER" ? (
                       <Badge variant="outline" className="shrink-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[10px] font-semibold">
                         {fr ? "Évaluation manuelle" : "Manual Review"}
@@ -586,23 +586,23 @@ function QuizPage() {
                     ) : (
                       <XCircle className="mt-0.5 size-5 shrink-0 text-destructive" />
                     )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">
+                    <div className="min-w-0 flex-1 max-w-full overflow-hidden">
+                      <p className="text-sm font-medium break-words [overflow-wrap:anywhere]">
                         {i + 1}. {L(q.prompt)}
                       </p>
 
                       {q.type === "LONG_ANSWER" ? (
-                        <div className="mt-3 space-y-2.5">
+                        <div className="mt-3 space-y-2.5 max-w-full">
                           <div className="text-xs font-semibold text-muted-foreground">
                             {fr ? "Votre réponse rédigée :" : "Your submitted response:"}
                           </div>
-                          <div className="rounded-xl border border-border bg-muted/20 p-3.5 text-xs text-foreground font-normal leading-relaxed whitespace-pre-wrap select-text">
+                          <div className="rounded-xl border border-border bg-muted/20 p-3.5 text-xs text-foreground font-normal leading-relaxed whitespace-pre-wrap break-words break-all [overflow-wrap:anywhere] max-w-full overflow-hidden select-text">
                             {g?.given || "—"}
                           </div>
 
                           {/* Manual Grade / Appreciation Feedback if provided by instructor */}
                           {(g as any)?.manualRating || (g as any)?.manualScore !== undefined || (g as any)?.manualFeedback ? (
-                            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3.5 space-y-2 text-xs">
+                            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3.5 space-y-2 text-xs max-w-full">
                               <div className="flex items-center justify-between gap-2">
                                 <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
                                   <span>🌟</span>
@@ -622,7 +622,7 @@ function QuizPage() {
                                 </div>
                               </div>
                               {(g as any)?.manualFeedback && (
-                                <p className="text-muted-foreground text-xs leading-relaxed italic bg-background/80 p-2.5 rounded-lg border border-border/60">
+                                <p className="text-muted-foreground text-xs leading-relaxed italic bg-background/80 p-2.5 rounded-lg border border-border/60 break-words break-all [overflow-wrap:anywhere] max-w-full">
                                   "{(g as any).manualFeedback}"
                                 </p>
                               )}
@@ -639,11 +639,11 @@ function QuizPage() {
                           )}
                         </div>
                       ) : (
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs max-w-full">
                           <span className="text-muted-foreground">Your answer:</span>
                           <span
                             className={cn(
-                              "rounded px-2 py-0.5 font-medium",
+                              "rounded px-2 py-0.5 font-medium break-words break-all [overflow-wrap:anywhere] max-w-full",
                               g?.correct
                                 ? "bg-success/15 text-success"
                                 : "bg-destructive/15 text-destructive"
@@ -660,19 +660,19 @@ function QuizPage() {
 
                       {/* Display correct answer when attempts are exhausted or passed */}
                       {showCorrect && correctAnswer ? (
-                        <div className="mt-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs">
+                        <div className="mt-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs max-w-full">
                           <span className="font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5 mb-1">
                             <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400 inline" />
                             Correct Answer:
                           </span>
-                          <span className="font-medium text-foreground">
+                          <span className="font-medium text-foreground break-words break-all [overflow-wrap:anywhere] max-w-full">
                             {correctAnswer}
                           </span>
                         </div>
                       ) : null}
 
                       {q.explanation || (g as any)?.explanation ? (
-                        <p className="mt-2 rounded-md bg-surface p-3 text-xs leading-relaxed text-muted-foreground">
+                        <p className="mt-2 rounded-md bg-surface p-3 text-xs leading-relaxed text-muted-foreground break-words [overflow-wrap:anywhere] max-w-full">
                           <span className="font-semibold">{t("quiz.explanation")}: </span>
                           {L(q.explanation || (g as any)?.explanation)}
                         </p>

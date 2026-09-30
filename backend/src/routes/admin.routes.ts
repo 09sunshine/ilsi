@@ -4074,10 +4074,10 @@ router.get("/quiz-submissions/long-answers", async (req: Request, res: Response,
         m.title_en as "moduleTitleEn",
         m.title_fr as "moduleTitleFr",
         att.user_id as "userId",
-        att.cohort_id as "cohortId",
+        COALESCE(att.cohort_id, m.cohort_id) as "cohortId",
         att.attempt_number as "attemptNumber",
         att.submitted_at as "submittedAt",
-        u.full_name as "userName",
+        COALESCE(u.name, u.email) as "userName",
         u.email as "userEmail",
         c.name as "cohortName"
       FROM quiz_answers qa
@@ -4087,7 +4087,7 @@ router.get("/quiz-submissions/long-answers", async (req: Request, res: Response,
       LEFT JOIN lessons l ON l.id = q.lesson_id
       LEFT JOIN modules m ON m.id = q.module_id OR m.id = l.module_id
       JOIN users u ON u.id = att.user_id
-      LEFT JOIN cohorts c ON c.id = att.cohort_id
+      LEFT JOIN cohorts c ON c.id = COALESCE(att.cohort_id, m.cohort_id)
       WHERE (qq.type = 'LONG_ANSWER' OR qq.type = 'WRITTEN' OR qq.type = 'REFLECTION')
     `;
 
@@ -4098,7 +4098,7 @@ router.get("/quiz-submissions/long-answers", async (req: Request, res: Response,
     }
     if (cohortId) {
       params.push(cohortId);
-      query += ` AND att.cohort_id = $${params.length}`;
+      query += ` AND (att.cohort_id = $${params.length} OR m.cohort_id = $${params.length})`;
     }
     if (status === "PENDING") {
       query += ` AND qa.graded_at IS NULL AND qa.manual_score IS NULL AND qa.manual_rating IS NULL`;
@@ -4108,11 +4108,11 @@ router.get("/quiz-submissions/long-answers", async (req: Request, res: Response,
     if (search && search.trim()) {
       params.push(`%${search.trim().toLowerCase()}%`);
       query += ` AND (
-        LOWER(u.full_name) LIKE $${params.length} OR 
-        LOWER(u.email) LIKE $${params.length} OR 
-        LOWER(qa.given_answer) LIKE $${params.length} OR 
-        LOWER(qq.prompt_en) LIKE $${params.length} OR 
-        LOWER(qq.prompt_fr) LIKE $${params.length}
+        LOWER(COALESCE(u.name, '')) LIKE $${params.length} OR 
+        LOWER(COALESCE(u.email, '')) LIKE $${params.length} OR 
+        LOWER(COALESCE(qa.given_answer, '')) LIKE $${params.length} OR 
+        LOWER(COALESCE(qq.prompt_en, '')) LIKE $${params.length} OR 
+        LOWER(COALESCE(qq.prompt_fr, '')) LIKE $${params.length}
       )`;
     }
 
@@ -4133,7 +4133,7 @@ router.post("/quiz-answers/:id/grade", async (req: Request, res: Response, next:
   try {
     const { id } = req.params;
     const { manualScore, manualRating, manualFeedback } = req.body;
-    const gradedBy = (req as any).user?.fullName || (req as any).user?.email || "Admin";
+    const gradedBy = (req as any).user?.name || (req as any).user?.fullName || (req as any).user?.email || "Admin";
 
     const updateRes = await pool.query(
       `UPDATE quiz_answers

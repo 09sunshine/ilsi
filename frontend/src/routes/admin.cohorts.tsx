@@ -378,6 +378,17 @@ function AdminCohorts() {
           fetchCohorts();
         }}
       />
+
+      {/* Review & Grade Long Answers Modal */}
+      <QuizLongAnswersModal
+        isOpen={isAllGradingOpen || !!gradingCohort}
+        onClose={() => {
+          setIsAllGradingOpen(false);
+          setGradingCohort(null);
+        }}
+        initialCohortId={gradingCohort?.id || null}
+        quizTitle={gradingCohort ? L(gradingCohort.name) : undefined}
+      />
     </AppShell>
   );
 }
