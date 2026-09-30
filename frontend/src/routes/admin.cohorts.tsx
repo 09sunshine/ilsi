@@ -387,7 +387,7 @@ function AdminCohorts() {
           setGradingCohort(null);
         }}
         initialCohortId={gradingCohort?.id || null}
-        quizTitle={gradingCohort ? L(gradingCohort.name) : undefined}
+        quizTitle={gradingCohort ? L(gradingCohort.name) : null}
       />
     </AppShell>
   );

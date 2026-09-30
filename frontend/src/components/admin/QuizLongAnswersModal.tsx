@@ -29,9 +29,9 @@ import { formatLocalizedDateTime } from "@/lib/timezone";
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  initialCohortId?: string | null;
-  initialQuizId?: string | null;
-  quizTitle?: string | null;
+  initialCohortId?: string | null | undefined;
+  initialQuizId?: string | null | undefined;
+  quizTitle?: string | null | undefined;
 }
 
 export function QuizLongAnswersModal({
