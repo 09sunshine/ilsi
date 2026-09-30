@@ -100,7 +100,8 @@ export class QuizEngineService {
 
     let lastAttemptDetails = null;
     if (attemptsRes.rows.length > 0) {
-      const latestAttempt = attemptsRes.rows[0];
+      const sortedAttempts = [...attemptsRes.rows].sort((a, b) => b.attempt_number - a.attempt_number);
+      const latestAttempt = sortedAttempts[0];
       const answersRes = await pool.query(
         `SELECT qa.question_id, qa.given_answer, qa.correct, qa.earned_points,
                 qa.manual_score, qa.manual_rating, qa.manual_feedback, qa.graded_at

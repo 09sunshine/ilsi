@@ -66,15 +66,37 @@ function QuizPage() {
         let qData: any = null;
         let prevAtt: any[] = [];
 
+        // Helper to extract quiz data, previous attempts, and lastAttempt graded answers
+        const applyQuizResponse = (res: any) => {
+          if (!res) return null;
+          const q = res.quiz || res;
+          if (Array.isArray(res.previousAttempts)) {
+            prevAtt = res.previousAttempts;
+          }
+          if (res.lastAttempt?.attempt && Array.isArray(res.lastAttempt.answers)) {
+            setResult({
+              attempt: res.lastAttempt.attempt,
+              graded: res.lastAttempt.answers.map((a: any) => ({
+                questionId: a.questionId,
+                given: a.given,
+                correct: a.correct,
+                earned: a.earned,
+                manualScore: a.manualScore,
+                manualRating: a.manualRating,
+                manualFeedback: a.manualFeedback,
+                gradedAt: a.gradedAt,
+              })),
+            });
+          }
+          return q;
+        };
+
         // 1. Fetch quiz directly by quizId, lessonId, or moduleId
         const targetLookupId = quizId || lessonId || moduleId;
         try {
           const res = await api.getQuiz(targetLookupId);
           if (res) {
-            qData = res.quiz || res;
-            if (Array.isArray(res.previousAttempts)) {
-              prevAtt = res.previousAttempts;
-            }
+            qData = applyQuizResponse(res);
           }
         } catch (err: any) {
           console.warn("Direct getQuiz lookup failed:", err);
@@ -98,10 +120,7 @@ function QuizPage() {
             if (lRes?.quiz?.id) {
               const res = await api.getQuiz(lRes.quiz.id);
               if (res) {
-                qData = res.quiz || res;
-                if (Array.isArray(res.previousAttempts)) {
-                  prevAtt = res.previousAttempts;
-                }
+                qData = applyQuizResponse(res);
               }
             } else if (lRes?.quiz && (Array.isArray(lRes.quiz.questions) && lRes.quiz.questions.length > 0)) {
               qData = lRes.quiz;
@@ -137,25 +156,7 @@ function QuizPage() {
               try {
                 const res = await api.getQuiz(matchedLesson.quiz.id);
                 if (res) {
-                  qData = res.quiz || res;
-                  if (Array.isArray(res.previousAttempts)) {
-                    prevAtt = res.previousAttempts;
-                  }
-                  if (res.lastAttempt?.attempt && Array.isArray(res.lastAttempt.answers)) {
-                    setResult({
-                      attempt: res.lastAttempt.attempt,
-                      graded: res.lastAttempt.answers.map((a: any) => ({
-                        questionId: a.questionId,
-                        given: a.given,
-                        correct: a.correct,
-                        earned: a.earned,
-                        manualScore: a.manualScore,
-                        manualRating: a.manualRating,
-                        manualFeedback: a.manualFeedback,
-                        gradedAt: a.gradedAt,
-                      })),
-                    });
-                  }
+                  qData = applyQuizResponse(res);
                 }
               } catch (_) {}
             }
@@ -172,10 +173,7 @@ function QuizPage() {
             try {
               const res = await api.getQuiz(mod.quiz.id);
               if (res) {
-                qData = res.quiz || res;
-                if (Array.isArray(res.previousAttempts)) {
-                  prevAtt = res.previousAttempts;
-                }
+                qData = applyQuizResponse(res);
               }
             } catch (_) {}
           }
@@ -365,7 +363,9 @@ function QuizPage() {
                 </div>
                 <h2 className="mt-1 font-display text-2xl font-semibold">{L(quiz.title)}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {fr ? "Consultez les réponses correctes et explications ci-dessous." : "Review the correct answers and explanations below."}
+                  {fr
+                    ? "Consultez vos réponses soumises, les évaluations du formateur et les corrections détaillées ci-dessous."
+                    : "Review your submitted answers, instructor ratings and detailed answer key below."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -394,43 +394,144 @@ function QuizPage() {
 
           <ol className="space-y-4">
             {questions.map((q, i) => {
-              const correctAnswer = getCorrectAnswerDisplay(q);
+              const g = result?.graded?.find((x) => x.questionId === q.id);
+              const submittedText = g?.given || answers[q.id];
+              const correctAnswer = getCorrectAnswerDisplay(q, g);
               return (
-                <li key={q.id} className="panel p-5 space-y-3">
-                  <p className="text-sm font-semibold">
-                    {i + 1}. {L(q.prompt)}
-                  </p>
+                <li key={q.id} className="panel p-5 space-y-3 overflow-hidden">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-semibold break-words [overflow-wrap:anywhere]">
+                      {i + 1}. {L(q.prompt)}
+                    </p>
+                    {q.type === "LONG_ANSWER" ? (
+                      <Badge variant="outline" className="shrink-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[10px] font-semibold">
+                        {fr ? "Évaluation manuelle" : "Manual Review"}
+                      </Badge>
+                    ) : g ? (
+                      g.correct ? (
+                        <Badge variant="outline" className="gap-1 text-[10px] font-semibold bg-success/15 text-success border-success/30 shrink-0">
+                          <CheckCircle2 className="size-3" /> Correct
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="gap-1 text-[10px] font-semibold bg-destructive/15 text-destructive border-destructive/30 shrink-0">
+                          <XCircle className="size-3" /> Incorrect
+                        </Badge>
+                      )
+                    ) : null}
+                  </div>
 
-                  {q.options && q.options.length > 0 ? (
-                    <div className="space-y-2">
-                      {q.options.map((o: any) => (
-                        <div
-                          key={o.id}
-                          className={cn(
-                            "flex items-center justify-between rounded-lg border p-3 text-sm",
-                            o.correct
-                              ? "border-emerald-500 bg-emerald-500/10 font-medium text-emerald-950 dark:text-emerald-200"
-                              : "border-border bg-card text-muted-foreground"
+                  {q.type === "LONG_ANSWER" ? (
+                    <div className="space-y-3 pt-1 max-w-full">
+                      <div className="space-y-1.5">
+                        <div className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
+                          <span>{fr ? "Votre réponse rédigée :" : "Your submitted response:"}</span>
+                          {submittedText && (
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              {submittedText.length} {fr ? "caractères" : "characters"}
+                            </span>
                           )}
-                        >
-                          <span>{L(o.label)}</span>
-                          {o.correct ? (
-                            <Badge variant="outline" className="gap-1 text-xs bg-success/15 text-success border-success/30">
-                              <CheckCircle2 className="size-3" /> Correct
-                            </Badge>
-                          ) : null}
                         </div>
-                      ))}
+                        <div className="rounded-xl border border-border bg-muted/20 p-4 text-xs text-foreground font-normal leading-relaxed whitespace-pre-wrap break-words break-all [overflow-wrap:anywhere] max-w-full overflow-hidden select-text shadow-inner">
+                          {submittedText || (fr ? "Aucune réponse saisie pour cette question." : "No answer was recorded for this question.")}
+                        </div>
+                      </div>
+
+                      {/* Instructor manual evaluation / appreciation / score / feedback */}
+                      {(g as any)?.manualRating || (g as any)?.manualScore !== undefined || (g as any)?.manualFeedback ? (
+                        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2.5 text-xs max-w-full">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                              <span>🌟</span>
+                              {fr ? "Évaluation & Mention du formateur :" : "Instructor Evaluation & Rating:"}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              {(g as any)?.manualRating && (
+                                <Badge className="bg-emerald-600 text-white font-semibold text-[10px] px-2 py-0.5">
+                                  {(g as any).manualRating}
+                                </Badge>
+                              )}
+                              {(g as any)?.manualScore !== undefined && (g as any)?.manualScore !== null && (
+                                <span className="font-bold text-emerald-700 dark:text-emerald-300 font-mono text-xs">
+                                  {(g as any).manualScore} pts
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {(g as any)?.manualFeedback && (
+                            <p className="text-muted-foreground text-xs leading-relaxed italic bg-background/80 p-3 rounded-lg border border-border/60 break-words break-all [overflow-wrap:anywhere] max-w-full">
+                              "{(g as any).manualFeedback}"
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                          <span className="text-base">⏳</span>
+                          <span>
+                            {fr
+                              ? "Cette réponse est en attente d'évaluation qualitative personnalisée par votre formateur. Elle n'affecte pas votre score automatique."
+                              : "This response is awaiting qualitative evaluation by your instructor. It does not affect your automated quiz score."}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  ) : correctAnswer ? (
-                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
-                      <span className="font-semibold text-emerald-800 dark:text-emerald-300">Correct Answer: </span>
-                      <span>{correctAnswer}</span>
-                    </div>
-                  ) : null}
+                  ) : (
+                    <>
+                      {/* Show user's given answer if available */}
+                      {submittedText ? (
+                        <div className="flex flex-wrap items-center gap-2 text-xs py-1">
+                          <span className="text-muted-foreground font-medium">{fr ? "Votre réponse :" : "Your answer:"}</span>
+                          <span
+                            className={cn(
+                              "rounded px-2.5 py-1 font-medium break-words break-all [overflow-wrap:anywhere]",
+                              g?.correct ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"
+                            )}
+                          >
+                            {q.options?.find((o: any) => o.id === submittedText)
+                              ? L(q.options.find((o: any) => o.id === submittedText)!.label)
+                              : submittedText}
+                          </span>
+                        </div>
+                      ) : null}
+
+                      {/* Display options / answer key */}
+                      {q.options && q.options.length > 0 ? (
+                        <div className="space-y-2 pt-1">
+                          {q.options.map((o: any) => (
+                            <div
+                              key={o.id}
+                              className={cn(
+                                "flex items-center justify-between rounded-lg border p-3 text-sm",
+                                o.correct
+                                  ? "border-emerald-500 bg-emerald-500/10 font-medium text-emerald-950 dark:text-emerald-200"
+                                  : submittedText === o.id
+                                  ? "border-destructive/40 bg-destructive/5 text-destructive"
+                                  : "border-border bg-card text-muted-foreground"
+                              )}
+                            >
+                              <span>{L(o.label)}</span>
+                              {o.correct ? (
+                                <Badge variant="outline" className="gap-1 text-xs bg-success/15 text-success border-success/30">
+                                  <CheckCircle2 className="size-3" /> Correct
+                                </Badge>
+                              ) : submittedText === o.id ? (
+                                <Badge variant="outline" className="gap-1 text-xs bg-destructive/15 text-destructive border-destructive/30">
+                                  <XCircle className="size-3" /> {fr ? "Votre choix" : "Your pick"}
+                                </Badge>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : correctAnswer ? (
+                        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs">
+                          <span className="font-semibold text-emerald-800 dark:text-emerald-300">Correct Answer: </span>
+                          <span className="font-medium text-foreground">{correctAnswer}</span>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
 
                   {q.explanation ? (
-                    <div className="rounded-md bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground">
+                    <div className="rounded-md bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground break-words [overflow-wrap:anywhere] max-w-full">
                       <span className="font-semibold text-foreground">{t("quiz.explanation")}: </span>
                       {L(q.explanation)}
                     </div>
@@ -755,6 +856,23 @@ function QuizPage() {
             </div>
           </dl>
 
+          {/* Highlight instructor evaluation if available */}
+          {result?.graded?.some((x: any) => x.manualRating || x.manualScore !== undefined || x.manualFeedback) ? (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-left space-y-1.5 shadow-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🌟</span>
+                <span className="font-bold text-xs text-emerald-800 dark:text-emerald-300">
+                  {fr ? "Évaluation du formateur disponible" : "Instructor Evaluation & Feedback Available"}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {fr
+                  ? "Votre formateur a évalué votre réponse rédigée et vous a attribué une mention et des remarques personnalisées. Cliquez ci-dessous pour les consulter !"
+                  : "Your instructor has reviewed your written submission with personalized feedback and an appreciation rating. Click below to view!"}
+              </p>
+            </div>
+          ) : null}
+
           <div className="pt-4 space-y-2">
             {!isDisqualified && nextLessonUrl ? (
               <Button asChild className="w-full gap-2">
@@ -766,10 +884,10 @@ function QuizPage() {
 
             <Button
               variant="outline"
-              className="w-full gap-2"
+              className="w-full gap-2 font-medium"
               onClick={() => setReviewMode(true)}
             >
-              <BookOpen className="size-4" /> Review Questions & Correct Answers
+              <BookOpen className="size-4" /> {fr ? "Consulter vos réponses & le corrigé" : "Review Submitted Answers & Evaluation"}
             </Button>
 
             <Button asChild variant="ghost" className="w-full">
