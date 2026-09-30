@@ -617,8 +617,12 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
     )
       return;
     try {
-      await api.deleteQuiz(quizId);
-      toast.success(fr ? "Quiz supprimé/archivé." : "Quiz deleted/archived.");
+      const res = await api.deleteQuiz(quizId);
+      toast.success(
+        res?.archived
+          ? (fr ? "Quiz archivé du programme avec succès." : "Quiz safely archived from curriculum.")
+          : (fr ? "Quiz supprimé avec succès." : "Quiz deleted successfully.")
+      );
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {

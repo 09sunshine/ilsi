@@ -2172,7 +2172,9 @@ router.get("/cohorts/:id/curriculum", async (req: Request, res: Response, next: 
         pool.query(
           `SELECT DISTINCT ON (lesson_id)
                   id, lesson_id, title_en, title_fr, description_en, description_fr, passing_score, time_limit_minutes, attempts_allowed, published, status
-           FROM quizzes WHERE lesson_id = ANY($1::uuid[]) ORDER BY lesson_id, created_at DESC`,
+           FROM quizzes 
+           WHERE lesson_id = ANY($1::uuid[]) AND (status IS NULL OR status != 'ARCHIVED') 
+           ORDER BY lesson_id, created_at DESC`,
           [lessonIds]
         ),
       ]);
@@ -2900,7 +2902,7 @@ router.get("/lessons/:id", async (req: Request, res: Response, next: NextFunctio
 
     const quizzesRes = await pool.query(
       `SELECT id, title_en, title_fr, passing_score, time_limit_minutes, attempts_allowed, status
-       FROM quizzes WHERE lesson_id = $1`,
+       FROM quizzes WHERE lesson_id = $1 AND (status IS NULL OR status != 'ARCHIVED')`,
       [id]
     );
 
@@ -3905,10 +3907,19 @@ router.delete("/quiz-questions/:id", async (req: Request, res: Response, next: N
 router.delete("/quizzes/:id", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
+    const force = req.query.force === "true" || req.query.force === "1";
     const attemptsRes = await pool.query(`SELECT 1 FROM quiz_attempts WHERE quiz_id = $1 LIMIT 1`, [id]);
-    if (attemptsRes.rows.length > 0) {
-      await pool.query(`UPDATE quizzes SET status = 'ARCHIVED', published = FALSE, updated_at = NOW() WHERE id = $1`, [id]);
-      res.json({ success: true, archived: true, message: "Quiz has student attempts and was safely archived." });
+
+    if (attemptsRes.rows.length > 0 && !force) {
+      await pool.query(
+        `UPDATE quizzes SET status = 'ARCHIVED', published = FALSE, updated_at = NOW() WHERE id = $1`,
+        [id]
+      );
+      res.json({
+        success: true,
+        archived: true,
+        message: "Quiz has student attempts and was safely archived from curriculum.",
+      });
       return;
     }
 
@@ -3919,6 +3930,10 @@ router.delete("/quizzes/:id", async (req: Request, res: Response, next: NextFunc
         `DELETE FROM quiz_options WHERE question_id IN (SELECT id FROM quiz_questions WHERE quiz_id = $1)`,
         [id]
       );
+      await client.query(
+        `DELETE FROM quiz_answers WHERE attempt_id IN (SELECT id FROM quiz_attempts WHERE quiz_id = $1)`
+      );
+      await client.query(`DELETE FROM quiz_attempts WHERE quiz_id = $1`, [id]);
       await client.query(`DELETE FROM quiz_questions WHERE quiz_id = $1`, [id]);
       await client.query(`DELETE FROM quizzes WHERE id = $1`, [id]);
       await client.query("COMMIT");

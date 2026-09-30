@@ -217,7 +217,9 @@ CREATE TABLE IF NOT EXISTS quizzes (
     passing_score INT NOT NULL DEFAULT 70,
     attempts_allowed INT NOT NULL DEFAULT 3,
     published BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    status VARCHAR(50) NOT NULL DEFAULT 'PUBLISHED',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_quizzes_module_unique ON quizzes(module_id) WHERE module_id IS NOT NULL AND lesson_id IS NULL;

@@ -424,8 +424,8 @@ export const api = {
     request<any>(`/api/admin/quizzes/${id}`),
   updateQuiz: (id: string, data: any) =>
     request<any>(`/api/admin/quizzes/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  deleteQuiz: (id: string) =>
-    request<any>(`/api/admin/quizzes/${id}`, { method: "DELETE" }),
+  deleteQuiz: (id: string, force?: boolean) =>
+    request<any>(`/api/admin/quizzes/${id}${force ? "?force=true" : ""}`, { method: "DELETE" }),
   addQuizQuestion: (quizId: string, data: any) =>
     request<any>(`/api/admin/quizzes/${quizId}/questions`, { method: "POST", body: JSON.stringify(data) }),
   deleteQuizQuestion: (id: string) =>
