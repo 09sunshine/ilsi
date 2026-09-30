@@ -430,8 +430,23 @@ export const api = {
     request<any>(`/api/admin/quizzes/${quizId}/questions`, { method: "POST", body: JSON.stringify(data) }),
   deleteQuizQuestion: (id: string) =>
     request<any>(`/api/admin/quiz-questions/${id}`, { method: "DELETE" }),
-  getQuizLongAnswers: (params?: { quizId?: string | undefined; cohortId?: string | undefined; status?: string | undefined; search?: string | undefined }) => {
-    const q = params ? `?${new URLSearchParams(params as any).toString()}` : "";
+  getQuizLongAnswers: (params?: { quizId?: string | null | undefined; cohortId?: string | null | undefined; status?: string | null | undefined; search?: string | null | undefined }) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      if (params.cohortId && params.cohortId !== "undefined" && params.cohortId !== "null") {
+        searchParams.set("cohortId", params.cohortId);
+      }
+      if (params.quizId && params.quizId !== "undefined" && params.quizId !== "null") {
+        searchParams.set("quizId", params.quizId);
+      }
+      if (params.status && params.status !== "undefined" && params.status !== "ALL") {
+        searchParams.set("status", params.status);
+      }
+      if (params.search && params.search.trim() && params.search !== "undefined") {
+        searchParams.set("search", params.search.trim());
+      }
+    }
+    const q = searchParams.toString() ? `?${searchParams.toString()}` : "";
     return request<any[]>(`/api/admin/quiz-submissions/long-answers${q}`);
   },
   gradeQuizAnswer: (answerId: string, data: { manualScore?: number | null; manualRating?: string | null; manualFeedback?: string | null }) =>

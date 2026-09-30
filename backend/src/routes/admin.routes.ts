@@ -4093,22 +4093,29 @@ router.get("/quiz-submissions/long-answers", async (req: Request, res: Response,
       WHERE (qq.type = 'LONG_ANSWER' OR qq.type = 'WRITTEN' OR qq.type = 'REFLECTION')
     `;
 
+    const cleanQuizId = quizId && quizId !== "undefined" && quizId !== "null" ? quizId.trim() : null;
+    const cleanCohortId = cohortId && cohortId !== "undefined" && cohortId !== "null" ? cohortId.trim() : null;
+    const cleanStatus = status && status !== "undefined" && status !== "ALL" ? status.trim() : null;
+    const cleanSearch = search && search !== "undefined" && search !== "null" && search.trim() ? search.trim() : null;
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
     const params: any[] = [];
-    if (quizId) {
-      params.push(quizId);
+    if (cleanQuizId && uuidRegex.test(cleanQuizId)) {
+      params.push(cleanQuizId);
       query += ` AND q.id = $${params.length}`;
     }
-    if (cohortId) {
-      params.push(cohortId);
+    if (cleanCohortId && uuidRegex.test(cleanCohortId)) {
+      params.push(cleanCohortId);
       query += ` AND (att.cohort_id = $${params.length} OR m.cohort_id = $${params.length})`;
     }
-    if (status === "PENDING") {
+    if (cleanStatus === "PENDING") {
       query += ` AND qa.graded_at IS NULL AND qa.manual_score IS NULL AND qa.manual_rating IS NULL`;
-    } else if (status === "GRADED") {
+    } else if (cleanStatus === "GRADED") {
       query += ` AND (qa.graded_at IS NOT NULL OR qa.manual_score IS NOT NULL OR qa.manual_rating IS NOT NULL)`;
     }
-    if (search && search.trim()) {
-      params.push(`%${search.trim().toLowerCase()}%`);
+    if (cleanSearch) {
+      params.push(`%${cleanSearch.toLowerCase()}%`);
       query += ` AND (
         LOWER(COALESCE(u.name, '')) LIKE $${params.length} OR 
         LOWER(COALESCE(u.email, '')) LIKE $${params.length} OR 
