@@ -39,7 +39,8 @@ export class AdminDashboardService {
            COUNT(*) FILTER (WHERE status = 'ACTIVE') as active_students,
            COUNT(*) FILTER (WHERE payment_status = 'PAID') as paid_students,
            COUNT(*) FILTER (WHERE payment_status = 'PENDING') as pending_payment_students,
-           COUNT(*) FILTER (WHERE status = 'COMPLETED') as completed_students
+           COUNT(*) FILTER (WHERE status = 'COMPLETED') as completed_students,
+           COUNT(*) FILTER (WHERE status = 'DISQUALIFIED') as disqualified_students
          FROM enrollments
          WHERE cohort_id = $1`
       : `SELECT 
@@ -47,7 +48,8 @@ export class AdminDashboardService {
            COUNT(*) FILTER (WHERE status = 'ACTIVE') as active_students,
            COUNT(*) FILTER (WHERE payment_status = 'PAID') as paid_students,
            COUNT(*) FILTER (WHERE payment_status = 'PENDING') as pending_payment_students,
-           COUNT(*) FILTER (WHERE status = 'COMPLETED') as completed_students
+           COUNT(*) FILTER (WHERE status = 'COMPLETED') as completed_students,
+           COUNT(*) FILTER (WHERE status = 'DISQUALIFIED') as disqualified_students
          FROM enrollments`;
 
     const studentCountRes = await pool.query(studentQuery, cohortFilterParam);
@@ -167,6 +169,7 @@ export class AdminDashboardService {
         activeCohorts: parseInt(cohortRes.rows[0]?.active_cohorts || 0, 10),
         totalStudents,
         activeStudents: parseInt(studentCountRes.rows[0]?.active_students || 0, 10),
+        disqualifiedStudents: parseInt(studentCountRes.rows[0]?.disqualified_students || 0, 10),
         paidStudents: parseInt(studentCountRes.rows[0]?.paid_students || 0, 10),
         pendingPayments: parseInt(studentCountRes.rows[0]?.pending_payment_students || paymentRes.rows[0]?.pending_payments || 0, 10),
         completionRate,

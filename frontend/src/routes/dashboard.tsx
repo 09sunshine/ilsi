@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
-import { ArrowRight, CalendarDays, Clock, Layers, Radio, Search, Video } from "lucide-react";
+import { ArrowRight, CalendarDays, Clock, Layers, Radio, Search, ShieldAlert, Video } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import {
   CompletionBar,
@@ -240,6 +240,34 @@ function DashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Prominent Official Disqualification Banner */}
+        {dashData?.isDisqualified && (
+          <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-5 shadow-sm text-left">
+            <div className="flex items-start gap-3.5">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-destructive/20 text-destructive">
+                <ShieldAlert className="size-6" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display text-base font-bold text-destructive">
+                    {fr ? "Statut : Disqualifié(e) de la cohorte" : "Status: Disqualified from Cohort"}
+                  </h3>
+                  <Badge variant="destructive" className="bg-destructive/15 text-destructive border-destructive/30 text-[10px] font-bold">
+                    {fr ? "ACCÈS AUX LEÇONS BLOQUÉ" : "COURSE ACCESS LOCKED"}
+                  </Badge>
+                </div>
+                <p className="text-sm text-destructive/90 leading-relaxed">
+                  {dashData.disqualificationMessage
+                    ? L(dashData.disqualificationMessage)
+                    : fr
+                    ? "Vous avez été disqualifié(e) de cette cohorte après avoir épuisé toutes les tentatives accordées pour le quiz. Conformément au règlement officiel du programme ILSI, vous ne pouvez plus continuer la formation."
+                    : "You have been disqualified from this cohort after exhausting all allowed quiz attempts. In accordance with ILSI cohort learning policy, you have been disqualified and cannot continue the rest of the coursework."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* KPI row */}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

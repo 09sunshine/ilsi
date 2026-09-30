@@ -140,10 +140,21 @@ export function CompletionBar({ value, color = "var(--chart-1)" }: { value: numb
   );
 }
 
-export function SectionHeading({ title, right }: { title: string; right?: ReactNode }) {
+export function SectionHeading({
+  title,
+  description,
+  right,
+}: {
+  title: string;
+  description?: ReactNode;
+  right?: ReactNode;
+}) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <h2 className="font-display text-lg font-semibold tracking-tight">{title}</h2>
+      <div>
+        <h2 className="font-display text-lg font-semibold tracking-tight">{title}</h2>
+        {description ? <p className="text-xs text-muted-foreground mt-0.5">{description}</p> : null}
+      </div>
       {right}
     </div>
   );

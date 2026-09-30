@@ -7,7 +7,8 @@ import { useLearning } from "@/features/learning/LearningProvider";
 import { api } from "@/lib/api";
 import { NOW } from "@/lib/clock";
 import { cn, resolveMediaUrl } from "@/lib/utils";
-import { GraduationCap, Layers } from "lucide-react";
+import { GraduationCap, Layers, ShieldAlert } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/learn/")({
   validateSearch: (search: Record<string, unknown>): { cohortId?: string | undefined } => {
@@ -75,6 +76,34 @@ function LearnIndex() {
   return (
     <AppShell title={t("nav.myCourse")}>
       <div className="mx-auto max-w-5xl space-y-6">
+        {/* Prominent Official Disqualification Banner */}
+        {dashData?.isDisqualified && (
+          <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-5 shadow-sm text-left">
+            <div className="flex items-start gap-3.5">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-destructive/20 text-destructive">
+                <ShieldAlert className="size-6" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display text-base font-bold text-destructive">
+                    {fr ? "Disqualifié(e) de la cohorte" : "Disqualified from Cohort"}
+                  </h3>
+                  <Badge variant="destructive" className="bg-destructive/15 text-destructive border-destructive/30 text-[10px] font-bold">
+                    {fr ? "ACCÈS AUX LEÇONS BLOQUÉ" : "COURSE ACCESS LOCKED"}
+                  </Badge>
+                </div>
+                <p className="text-sm text-destructive/90 leading-relaxed">
+                  {dashData.disqualificationMessage
+                    ? L(dashData.disqualificationMessage)
+                    : fr
+                    ? "Vous avez été disqualifié(e) de cette cohorte après avoir épuisé toutes les tentatives de quiz et ne pouvez plus poursuivre le reste de la formation."
+                    : "You have been disqualified from this cohort after failing all quiz attempts and cannot continue the rest of the cohort."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Multi-cohort switcher tabs if student is in >1 cohort */}
         {enrolledCohorts.length > 1 && (
           <div className="rounded-2xl border border-border bg-card p-3.5 sm:p-4 shadow-sm">

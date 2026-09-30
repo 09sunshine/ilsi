@@ -1430,7 +1430,8 @@ router.get("/participants", async (req: Request, res: Response, next: NextFuncti
         suspended: r.status === "SUSPENDED",
         firstLogin: r.first_login,
         isDisqualified: cohorts.some((c) => c.enrollStatus === "DISQUALIFIED") || r.status === "DISQUALIFIED",
-        enrollStatus: primary?.enrollStatus || (r.status === "DISQUALIFIED" ? "DISQUALIFIED" : "ACTIVE"),
+        enrollStatus: (cohorts.some((c) => c.enrollStatus === "DISQUALIFIED") || r.status === "DISQUALIFIED") ? "DISQUALIFIED" : (primary?.enrollStatus || "ACTIVE"),
+        status: (cohorts.some((c) => c.enrollStatus === "DISQUALIFIED") || r.status === "DISQUALIFIED") ? "DISQUALIFIED" : r.status,
         joinedAt: r.created_at ? r.created_at.toISOString() : new Date().toISOString(),
       };
     });

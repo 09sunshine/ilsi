@@ -23,15 +23,6 @@ export class QuizEngineService {
 
     const quiz = quizRes.rows[0];
 
-    if (!isAdmin) {
-      if (quiz.lesson_id) {
-        await LessonAccessService.assertAccess(userId, quiz.lesson_id, targetCohortId);
-      }
-      if (quiz.module_id) {
-        await ModuleAccessService.assertAccess(userId, quiz.module_id);
-      }
-    }
-
     // Fetch user's previous attempts first to check completion / attempt status
     const attemptsRes = await pool.query(
       `SELECT id, attempt_number, score, percentage, passed, started_at, submitted_at
@@ -46,17 +37,31 @@ export class QuizEngineService {
     const attemptsExhausted = attemptsRes.rows.length >= attemptsAllowed;
     const isDisqualified = attemptsExhausted && !hasPassed;
 
-    // Check if participant enrollment is already DISQUALIFIED
+    // Check if participant enrollment or user is already DISQUALIFIED
     const enrollRes = await pool.query(
       `SELECT status FROM enrollments WHERE user_id = $1 ORDER BY (status = 'DISQUALIFIED') DESC, enrolled_at DESC LIMIT 1`,
       [userId]
     );
-    const enrollmentDisqualified = enrollRes.rows[0]?.status === "DISQUALIFIED";
+    const userRes = await pool.query(
+      `SELECT status FROM users WHERE id = $1`,
+      [userId]
+    );
+    const enrollmentDisqualified =
+      enrollRes.rows[0]?.status === "DISQUALIFIED" || userRes.rows[0]?.status === "DISQUALIFIED";
     const disqualified = isDisqualified || enrollmentDisqualified;
 
-    const revealAnswers = isAdmin || hasPassed || attemptsExhausted;
+    if (!isAdmin && !disqualified) {
+      if (quiz.lesson_id) {
+        await LessonAccessService.assertAccess(userId, quiz.lesson_id, targetCohortId);
+      }
+      if (quiz.module_id) {
+        await ModuleAccessService.assertAccess(userId, quiz.module_id);
+      }
+    }
 
-    // Fetch questions and options (include correct answers if attempts are exhausted or passed)
+    const revealAnswers = isAdmin || hasPassed || attemptsExhausted || disqualified;
+
+    // Fetch questions and options (include correct answers if attempts are exhausted, passed, or disqualified)
     const questionsRes = await pool.query(
       `SELECT id, order_index, type, prompt_en, prompt_fr, points, required,
               correct_text, explanation_en, explanation_fr
@@ -142,14 +147,22 @@ export class QuizEngineService {
       const actualQuizId = quiz.id;
 
       let resolvedCohortId = targetCohortId;
+      let resolvedModuleId = quiz.module_id;
+      if (!resolvedModuleId && quiz.lesson_id) {
+        const lRes = await client.query(
+          `SELECT module_id FROM lessons WHERE id = $1`,
+          [quiz.lesson_id]
+        );
+        resolvedModuleId = lRes.rows[0]?.module_id || null;
+      }
       if (quiz.lesson_id) {
         const evalAccess = await LessonAccessService.assertAccess(userId, quiz.lesson_id, targetCohortId);
         resolvedCohortId = resolvedCohortId || evalAccess.cohortId;
       }
-      if (quiz.module_id) {
-        await ModuleAccessService.assertAccess(userId, quiz.module_id);
+      if (resolvedModuleId) {
+        await ModuleAccessService.assertAccess(userId, resolvedModuleId);
         if (!resolvedCohortId) {
-          const modRes = await client.query(`SELECT cohort_id FROM modules WHERE id = $1`, [quiz.module_id]);
+          const modRes = await client.query(`SELECT cohort_id FROM modules WHERE id = $1`, [resolvedModuleId]);
           resolvedCohortId = modRes.rows[0]?.cohort_id || null;
         }
       }
@@ -168,19 +181,25 @@ export class QuizEngineService {
         resolvedCohortId = eRes.rows[0]?.cohort_id || null;
       }
 
-      // Check if participant is already disqualified
-      if (resolvedCohortId) {
-        const checkEnroll = await client.query(
-          `SELECT status FROM enrollments WHERE user_id = $1 AND cohort_id = $2`,
-          [userId, resolvedCohortId]
+      // Check if participant is already disqualified globally or in cohort
+      const checkUser = await client.query(`SELECT status FROM users WHERE id = $1`, [userId]);
+      if (checkUser.rows[0]?.status === "DISQUALIFIED") {
+        throw new AppError(
+          403,
+          ErrorCodes.DISQUALIFIED,
+          "You have been disqualified from this cohort and cannot submit quiz attempts."
         );
-        if (checkEnroll.rows.length > 0 && checkEnroll.rows[0].status === "DISQUALIFIED") {
-          throw new AppError(
-            403,
-            ErrorCodes.DISQUALIFIED,
-            "You have been disqualified from this cohort and cannot submit quiz attempts."
-          );
-        }
+      }
+      const checkEnroll = await client.query(
+        `SELECT status FROM enrollments WHERE user_id = $1 AND (cohort_id = $2 OR $2 IS NULL) AND status = 'DISQUALIFIED'`,
+        [userId, resolvedCohortId || null]
+      );
+      if (checkEnroll.rows.length > 0) {
+        throw new AppError(
+          403,
+          ErrorCodes.DISQUALIFIED,
+          "You have been disqualified from this cohort and cannot submit quiz attempts."
+        );
       }
 
       // Rapid multi-click deduplication (within 3 seconds)
@@ -198,7 +217,7 @@ export class QuizEngineService {
           attempt: {
             id: lastAttempt.id,
             quizId: actualQuizId,
-            moduleId: quiz.module_id,
+            moduleId: resolvedModuleId,
             participantId: userId,
             attemptNumber: lastAttempt.attempt_number,
             score: lastAttempt.score,
@@ -313,7 +332,7 @@ export class QuizEngineService {
          RETURNING id, started_at, submitted_at`,
         [
           actualQuizId,
-          quiz.module_id || null,
+          resolvedModuleId || null,
           quiz.lesson_id || null,
           resolvedCohortId || null,
           userId,
@@ -326,7 +345,7 @@ export class QuizEngineService {
 
       const attemptId = attemptRes.rows[0].id;
 
-      // If participant fails across all attempts allowed, disqualify in database
+      // If participant fails across all attempts allowed, permanently disqualify in database
       if (isDisqualified) {
         if (resolvedCohortId) {
           await client.query(
@@ -343,6 +362,12 @@ export class QuizEngineService {
             [userId]
           );
         }
+        await client.query(
+          `UPDATE users 
+           SET status = 'DISQUALIFIED', updated_at = NOW() 
+           WHERE id = $1`,
+          [userId]
+        );
       }
 
       // Notify student of quiz result / disqualification
@@ -386,7 +411,7 @@ export class QuizEngineService {
       }
 
       // 6. Update lesson_progress if attached to a lesson
-      if (quiz.lesson_id) {
+      if (quiz.lesson_id && resolvedModuleId) {
         const markLessonDone = passed;
         await client.query(
           `INSERT INTO lesson_progress (
@@ -397,21 +422,21 @@ export class QuizEngineService {
              completed = EXCLUDED.completed OR lesson_progress.completed,
              completed_at = CASE WHEN (EXCLUDED.completed OR lesson_progress.completed) AND lesson_progress.completed_at IS NULL THEN NOW() ELSE lesson_progress.completed_at END,
              updated_at = NOW()`,
-          [userId, resolvedCohortId || null, quiz.lesson_id, quiz.module_id || null, markLessonDone]
+          [userId, resolvedCohortId || null, quiz.lesson_id, resolvedModuleId, markLessonDone]
         );
       }
 
       // 7. Update module_progress if attached to a module
-      if (quiz.module_id) {
+      if (resolvedModuleId) {
         const bestScoreRes = await client.query(
           `SELECT MAX(percentage) as best_score, BOOL_OR(passed) as has_passed
            FROM quiz_attempts
            WHERE module_id = $1 AND user_id = $2`,
-          [quiz.module_id, userId]
+          [resolvedModuleId, userId]
         );
 
-        const bestScore = bestScoreRes.rows[0].best_score || percentage;
-        const modulePassed = bestScoreRes.rows[0].has_passed || passed;
+        const bestScore = bestScoreRes.rows[0]?.best_score || percentage;
+        const modulePassed = bestScoreRes.rows[0]?.has_passed || passed;
 
         // Check if all lessons are done to update completed flag
         const lessonsRes = await client.query(
@@ -419,7 +444,7 @@ export class QuizEngineService {
            FROM lessons l
            LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = $1
            WHERE l.module_id = $2`,
-          [userId, quiz.module_id]
+          [userId, resolvedModuleId]
         );
 
         const allMandatoryDone = lessonsRes.rows.filter((l) => l.mandatory).every((l) => l.done);
@@ -441,7 +466,7 @@ export class QuizEngineService {
              updated_at = NOW()`,
           [
             userId,
-            quiz.module_id,
+            resolvedModuleId,
             moduleCompleted,
             doneCount,
             lessonPercent,

@@ -78,6 +78,17 @@ function QuizPage() {
           }
         } catch (err: any) {
           console.warn("Direct getQuiz lookup failed:", err);
+          if (err?.code === "DISQUALIFIED" || err?.message?.toLowerCase().includes("disqualif")) {
+            qData = {
+              id: targetLookupId,
+              title: { en: "Quiz", fr: "Quiz" },
+              isDisqualified: true,
+              disqualified: true,
+              attemptsAllowed: 3,
+              attemptsExhausted: true,
+              questions: [],
+            };
+          }
         }
 
         // 2. If lessonId provided and quiz not resolved yet, fetch from lesson details
@@ -95,7 +106,19 @@ function QuizPage() {
             } else if (lRes?.quiz && (Array.isArray(lRes.quiz.questions) && lRes.quiz.questions.length > 0)) {
               qData = lRes.quiz;
             }
-          } catch (_) {}
+          } catch (err: any) {
+            if (err?.code === "DISQUALIFIED" || err?.message?.toLowerCase().includes("disqualif")) {
+              qData = {
+                id: targetLookupId,
+                title: { en: "Quiz", fr: "Quiz" },
+                isDisqualified: true,
+                disqualified: true,
+                attemptsAllowed: 3,
+                attemptsExhausted: true,
+                questions: [],
+              };
+            }
+          }
         }
 
         // 3. Fetch student dashboard to get module list and metadata
@@ -143,8 +166,20 @@ function QuizPage() {
           }
         }
 
-        if (dash?.isDisqualified && qData) {
-          qData = { ...qData, isDisqualified: true, disqualified: true };
+        if (dash?.isDisqualified) {
+          if (qData) {
+            qData = { ...qData, isDisqualified: true, disqualified: true };
+          } else {
+            qData = {
+              id: targetLookupId,
+              title: { en: "Quiz", fr: "Quiz" },
+              isDisqualified: true,
+              disqualified: true,
+              attemptsAllowed: 3,
+              attemptsExhausted: true,
+              questions: [],
+            };
+          }
         }
 
         if (mounted) {
@@ -244,6 +279,7 @@ function QuizPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDisqualified) return;
     setSubmitting(true);
     try {
       const res = await api.submitQuizAttempt(quiz.id || moduleId, answers);
@@ -259,11 +295,28 @@ function QuizPage() {
         return;
       }
     } catch (err: any) {
+      if (err?.code === "DISQUALIFIED" || err?.message?.toLowerCase().includes("disqualif")) {
+        setQuiz((prev: any) => ({ ...prev, isDisqualified: true, disqualified: true }));
+        setResult({
+          attempt: {
+            id: `att-disq-${Date.now()}`,
+            quizId: quiz.id || moduleId,
+            attemptNumber: attemptsAllowed,
+            score: 0,
+            percentage: 0,
+            passed: false,
+            isDisqualified: true,
+            disqualified: true,
+          } as any,
+          graded: [],
+        });
+        return;
+      }
       console.warn("Backend quiz submission error, falling back to local grading:", err);
+      setResult(gradeQuiz(quiz, answers));
     } finally {
       setSubmitting(false);
     }
-    setResult(gradeQuiz(quiz, answers));
   };
 
   // Review screen for questions & correct answers
@@ -572,7 +625,7 @@ function QuizPage() {
   }
 
   // Completed State view when returning to quiz after passing or 3 attempts
-  if (!started && isCompleted) {
+  if (isDisqualified || (!started && isCompleted)) {
     return (
       <AppShell title={L(quiz.title)}>
         <div className="panel mx-auto max-w-xl p-7 text-center space-y-4">
@@ -700,7 +753,7 @@ function QuizPage() {
           </dl>
           <Button
             className="mt-6 w-full"
-            disabled={attemptsLeft <= 0}
+            disabled={attemptsLeft <= 0 || isDisqualified}
             onClick={() => setStarted(true)}
           >
             {t("quiz.start")}
