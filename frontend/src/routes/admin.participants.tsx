@@ -210,6 +210,10 @@ function AdminParticipants() {
         firstLogin: true,
         locale: "en",
         joinedAt: new Date().toISOString().split("T")[0]!,
+        progress: 0,
+        overallProgress: 0,
+        completedLessons: 0,
+        totalLessons: 0,
       };
 
       setRows((prev) => [newParticipant, ...prev]);
@@ -359,7 +363,7 @@ function AdminParticipants() {
                   <th className="p-4">{fr ? "Cohortes" : "Cohorts"}</th>
                   <th className="p-4">{fr ? "Localisation" : "Location"}</th>
                   <th className="p-4">{fr ? "Statut Paiement" : "Payment"}</th>
-                  <th className="p-4">{fr ? "Progression" : "Certification"}</th>
+                  <th className="p-4">{fr ? "Progression" : "Progress"}</th>
                   <th className="p-4">{fr ? "Accès" : "Access State"}</th>
                   <th className="p-4 text-right">{fr ? "Actions" : "Actions"}</th>
                 </tr>
@@ -368,11 +372,29 @@ function AdminParticipants() {
                 {visible.map((p) => {
                   const isDisqualified = isParticipantDisqualified(p);
                   // Support both old (single cohort) and new (multi-cohort) shape
-                  const allCohorts: Array<{ cohortId: string; name: { en: string; fr: string }; paymentStatus: string; enrollStatus?: string }> =
+                  const allCohorts: Array<{
+                    cohortId: string;
+                    name: { en: string; fr: string };
+                    paymentStatus: string;
+                    enrollStatus?: string;
+                    progress?: number;
+                    completedLessons?: number;
+                    totalLessons?: number;
+                  }> =
                     (p as any).cohorts?.length
                       ? (p as any).cohorts
                       : (p as any).cohortName
-                        ? [{ cohortId: (p as any).cohortId, name: (p as any).cohortName, paymentStatus: p.paymentStatus, enrollStatus: (p as any).enrollStatus }]
+                        ? [
+                            {
+                              cohortId: (p as any).cohortId,
+                              name: (p as any).cohortName,
+                              paymentStatus: p.paymentStatus,
+                              enrollStatus: (p as any).enrollStatus,
+                              progress: p.progress,
+                              completedLessons: p.completedLessons,
+                              totalLessons: p.totalLessons,
+                            },
+                          ]
                         : [];
 
                   return (
@@ -443,9 +465,80 @@ function AdminParticipants() {
                         </Badge>
                       </td>
                       <td className="p-4">
-                        <Badge variant={p.suspended ? "destructive" : "secondary"}>
-                          {p.certification.replace("_", " ")}
-                        </Badge>
+                        {allCohorts.length > 1 ? (
+                          <div className="flex flex-col gap-2 min-w-[130px]">
+                            {allCohorts.map((c, idx) => {
+                              const prog = typeof c.progress === "number" ? c.progress : (p.progress ?? 0);
+                              const done = c.completedLessons ?? p.completedLessons ?? 0;
+                              const tot = c.totalLessons ?? p.totalLessons ?? 0;
+                              return (
+                                <div key={c.cohortId || idx} className="space-y-1">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="font-semibold text-foreground">{prog}%</span>
+                                    <span className="text-[10px] text-muted-foreground">
+                                      {done}/{tot} {fr ? "leçons" : "lessons"}
+                                    </span>
+                                  </div>
+                                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                    <div
+                                      className={cn(
+                                        "h-full rounded-full transition-all duration-300",
+                                        prog === 100
+                                          ? "bg-emerald-500"
+                                          : prog > 0
+                                          ? "bg-primary"
+                                          : "bg-muted-foreground/20"
+                                      )}
+                                      style={{ width: `${Math.min(100, Math.max(0, prog))}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : allCohorts.length === 1 && allCohorts[0] ? (
+                          (() => {
+                            const c = allCohorts[0];
+                            const prog = typeof c?.progress === "number" ? c.progress : (p.progress ?? 0);
+                            const done = c?.completedLessons ?? p.completedLessons ?? 0;
+                            const tot = c?.totalLessons ?? p.totalLessons ?? 0;
+                            return (
+                              <div className="flex flex-col gap-1 min-w-[130px] max-w-[160px]">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-bold text-foreground">{prog}%</span>
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {done}/{tot} {fr ? "leçons" : "lessons"}
+                                  </span>
+                                </div>
+                                <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                  <div
+                                    className={cn(
+                                      "h-full rounded-full transition-all duration-300",
+                                      prog === 100
+                                        ? "bg-emerald-500"
+                                        : prog > 0
+                                        ? "bg-primary"
+                                        : "bg-muted-foreground/20"
+                                    )}
+                                    style={{ width: `${Math.min(100, Math.max(0, prog))}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          <div className="flex flex-col gap-1 min-w-[130px] max-w-[160px]">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-muted-foreground">0%</span>
+                              <span className="text-[11px] italic text-muted-foreground">
+                                {fr ? "Non assigné" : "Unassigned"}
+                              </span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                              <div className="h-full rounded-full bg-muted-foreground/20" style={{ width: "0%" }} />
+                            </div>
+                          </div>
+                        )}
                       </td>
                       <td className="p-4">
                         {isDisqualified ? (

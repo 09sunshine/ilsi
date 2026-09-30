@@ -1362,8 +1362,25 @@ router.get("/participants", async (req: Request, res: Response, next: NextFuncti
   try {
     const { cohortId } = req.query;
 
-    // Aggregate all cohorts per user into a JSON array so each user appears exactly once
+    // Aggregate all cohorts per user into a JSON array so each user appears exactly once,
+    // including accurate lesson progress matching the StudentDashboardService calculation
     let query = `
+      WITH cohort_lesson_counts AS (
+        SELECT c.id as cohort_id, COUNT(l.id)::int as total_lessons
+        FROM cohorts c
+        JOIN modules m ON (m.cohort_id = c.id OR (m.program_id = c.program_id AND m.cohort_id IS NULL)) AND m.status = 'PUBLISHED'
+        JOIN lessons l ON l.module_id = m.id AND l.status = 'PUBLISHED'
+        GROUP BY c.id
+      ),
+      user_cohort_done AS (
+        SELECT e.user_id, e.cohort_id, COUNT(DISTINCT l.id)::int as done_lessons
+        FROM enrollments e
+        JOIN cohorts c ON c.id = e.cohort_id
+        JOIN modules m ON (m.cohort_id = c.id OR (m.program_id = c.program_id AND m.cohort_id IS NULL)) AND m.status = 'PUBLISHED'
+        JOIN lessons l ON l.module_id = m.id AND l.status = 'PUBLISHED'
+        JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = e.user_id AND (lp.cohort_id = e.cohort_id OR lp.cohort_id IS NULL) AND lp.completed = TRUE
+        GROUP BY e.user_id, e.cohort_id
+      )
       SELECT u.id, u.name, u.email, u.role, u.status, u.first_login, u.created_at,
              p.first_name, p.last_name, p.phone, p.country, p.city,
              COALESCE(
@@ -1374,7 +1391,13 @@ router.get("/participants", async (req: Request, res: Response, next: NextFuncti
                    'nameFr',     c.name_fr,
                    'paymentStatus', e.payment_status,
                    'certStatus',    e.certification_status,
-                   'enrollStatus',  e.status
+                   'enrollStatus',  e.status,
+                   'totalLessons',  COALESCE(clc.total_lessons, 0),
+                   'completedLessons', COALESCE(ucd.done_lessons, 0),
+                   'progress',      CASE WHEN COALESCE(clc.total_lessons, 0) > 0
+                                         THEN ROUND((COALESCE(ucd.done_lessons, 0)::numeric / clc.total_lessons::numeric) * 100)
+                                         ELSE 0
+                                    END::int
                  ) ORDER BY e.created_at ASC
                ) FILTER (WHERE e.id IS NOT NULL),
                '[]'
@@ -1386,6 +1409,8 @@ router.get("/participants", async (req: Request, res: Response, next: NextFuncti
       LEFT JOIN profiles p ON p.user_id = u.id
       LEFT JOIN enrollments e ON e.user_id = u.id
       LEFT JOIN cohorts c ON c.id = e.cohort_id
+      LEFT JOIN cohort_lesson_counts clc ON clc.cohort_id = e.cohort_id
+      LEFT JOIN user_cohort_done ucd ON ucd.user_id = e.user_id AND ucd.cohort_id = e.cohort_id
       WHERE (u.role = 'PARTICIPANT' OR u.role = 'STUDENT')
     `;
     const params: any[] = [];
@@ -1402,10 +1427,23 @@ router.get("/participants", async (req: Request, res: Response, next: NextFuncti
 
     const list = participantsRes.rows.map((r) => {
       const nameParts = (r.name || "").split(" ");
-      const cohorts: Array<{ cohortId: string; nameEn: string; nameFr: string; paymentStatus: string; certStatus: string; enrollStatus: string }> =
-        Array.isArray(r.cohorts) ? r.cohorts : [];
+      const cohorts: Array<{
+        cohortId: string;
+        nameEn: string;
+        nameFr: string;
+        paymentStatus: string;
+        certStatus: string;
+        enrollStatus: string;
+        totalLessons?: number;
+        completedLessons?: number;
+        progress?: number;
+      }> = Array.isArray(r.cohorts) ? r.cohorts : [];
       // Primary cohort = first enrollment (for backward compat)
       const primary = cohorts[0] || null;
+      const progress = primary?.progress ?? 0;
+      const completedLessons = primary?.completedLessons ?? 0;
+      const totalLessons = primary?.totalLessons ?? 0;
+
       return {
         id: r.id,
         firstName: r.first_name || nameParts[0] || "",
@@ -1417,6 +1455,10 @@ router.get("/participants", async (req: Request, res: Response, next: NextFuncti
         // Keep single-cohort fields for backward compatibility
         cohortId: primary?.cohortId || null,
         cohortName: primary ? { en: primary.nameEn, fr: primary.nameFr } : null,
+        progress,
+        overallProgress: progress,
+        completedLessons,
+        totalLessons,
         // NEW: full list of all enrolled cohorts
         cohorts: cohorts.map((c) => ({
           cohortId: c.cohortId,
@@ -1424,6 +1466,9 @@ router.get("/participants", async (req: Request, res: Response, next: NextFuncti
           paymentStatus: c.paymentStatus || "UNPAID",
           certStatus: c.certStatus || "NOT_CERTIFIED",
           enrollStatus: c.enrollStatus,
+          progress: c.progress ?? 0,
+          completedLessons: c.completedLessons ?? 0,
+          totalLessons: c.totalLessons ?? 0,
         })),
         paymentStatus: r.has_paid ? "PAID" : (primary?.paymentStatus || "UNPAID"),
         certification: r.first_cert_status || "NOT_CERTIFIED",

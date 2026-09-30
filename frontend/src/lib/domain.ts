@@ -290,12 +290,19 @@ export interface Participant {
   joinedAt: string;
   isDisqualified?: boolean;
   enrollStatus?: EnrollmentStatus | string;
+  progress?: number;
+  overallProgress?: number;
+  completedLessons?: number;
+  totalLessons?: number;
   cohorts?: Array<{
     cohortId: string;
     name: Bilingual;
     paymentStatus: string;
     certStatus?: string;
     enrollStatus?: string;
+    progress?: number;
+    completedLessons?: number;
+    totalLessons?: number;
   }>;
 }
 
