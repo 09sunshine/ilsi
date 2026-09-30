@@ -4079,7 +4079,9 @@ router.get("/quiz-submissions/long-answers", async (req: Request, res: Response,
         att.submitted_at as "submittedAt",
         COALESCE(u.name, u.email) as "userName",
         u.email as "userEmail",
-        c.name as "cohortName"
+        COALESCE(c.name_en, c.name_fr, 'ILSI Cohort') as "cohortName",
+        c.name_en as "cohortNameEn",
+        c.name_fr as "cohortNameFr"
       FROM quiz_answers qa
       JOIN quiz_questions qq ON qq.id = qa.question_id
       JOIN quiz_attempts att ON att.id = qa.attempt_id
@@ -4112,7 +4114,9 @@ router.get("/quiz-submissions/long-answers", async (req: Request, res: Response,
         LOWER(COALESCE(u.email, '')) LIKE $${params.length} OR 
         LOWER(COALESCE(qa.given_answer, '')) LIKE $${params.length} OR 
         LOWER(COALESCE(qq.prompt_en, '')) LIKE $${params.length} OR 
-        LOWER(COALESCE(qq.prompt_fr, '')) LIKE $${params.length}
+        LOWER(COALESCE(qq.prompt_fr, '')) LIKE $${params.length} OR 
+        LOWER(COALESCE(c.name_en, '')) LIKE $${params.length} OR 
+        LOWER(COALESCE(c.name_fr, '')) LIKE $${params.length}
       )`;
     }
 
