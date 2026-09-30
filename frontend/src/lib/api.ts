@@ -430,6 +430,15 @@ export const api = {
     request<any>(`/api/admin/quizzes/${quizId}/questions`, { method: "POST", body: JSON.stringify(data) }),
   deleteQuizQuestion: (id: string) =>
     request<any>(`/api/admin/quiz-questions/${id}`, { method: "DELETE" }),
+  getQuizLongAnswers: (params?: { quizId?: string | undefined; cohortId?: string | undefined; status?: string | undefined; search?: string | undefined }) => {
+    const q = params ? `?${new URLSearchParams(params as any).toString()}` : "";
+    return request<any[]>(`/api/admin/quiz-submissions/long-answers${q}`);
+  },
+  gradeQuizAnswer: (answerId: string, data: { manualScore?: number | null; manualRating?: string | null; manualFeedback?: string | null }) =>
+    request<any>(`/api/admin/quiz-answers/${answerId}/grade`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 
   // Cohort Lesson Assignments & Scheduling (Admin)
   getCohortLessons: (cohortId: string) => request<any[]>(`/api/admin/cohorts/${cohortId}/lessons`),

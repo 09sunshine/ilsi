@@ -266,8 +266,15 @@ CREATE TABLE IF NOT EXISTS quiz_answers (
     question_id UUID NOT NULL REFERENCES quiz_questions(id) ON DELETE CASCADE,
     given_answer TEXT,
     correct BOOLEAN,
-    earned_points INT NOT NULL DEFAULT 0
+    earned_points INT NOT NULL DEFAULT 0,
+    manual_score NUMERIC(5,2),
+    manual_rating VARCHAR(50),
+    manual_feedback TEXT,
+    graded_at TIMESTAMPTZ,
+    graded_by TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_quiz_answers_manual_grading ON quiz_answers (graded_at, question_id);
 
 -- ============================================================================
 -- 5. PROGRESS TRACKING

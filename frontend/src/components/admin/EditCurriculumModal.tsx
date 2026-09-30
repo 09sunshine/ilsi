@@ -1,3 +1,4 @@
+import { QuizLongAnswersModal } from "./QuizLongAnswersModal";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
@@ -122,7 +123,10 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
   const [questionExplanationEn, setQuestionExplanationEn] = useState("");
   const [questionExplanationFr, setQuestionExplanationFr] = useState("");
   const [questionPoints, setQuestionPoints] = useState(1);
-  const [questionType, setQuestionType] = useState<"MULTIPLE_CHOICE" | "TRUE_FALSE" | "FILL_BLANK">("MULTIPLE_CHOICE");
+  const [questionType, setQuestionType] = useState<"MULTIPLE_CHOICE" | "TRUE_FALSE" | "FILL_BLANK" | "LONG_ANSWER">("MULTIPLE_CHOICE");
+  const [isReviewLongAnswersOpen, setIsReviewLongAnswersOpen] = useState(false);
+  const [reviewTargetQuizId, setReviewTargetQuizId] = useState<string | null>(null);
+  const [reviewTargetQuizTitle, setReviewTargetQuizTitle] = useState<string | null>(null);
   const [acceptableAnswerEn, setAcceptableAnswerEn] = useState("");
   const [acceptableAnswerFr, setAcceptableAnswerFr] = useState("");
   const [questionOptions, setQuestionOptions] = useState<
@@ -631,7 +635,10 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
     let finalOptions: any[] = [];
     let correctTextVal: string | null = null;
 
-    if (questionType === "FILL_BLANK") {
+    if (questionType === "LONG_ANSWER") {
+      finalOptions = [];
+      correctTextVal = null;
+    } else if (questionType === "FILL_BLANK") {
       if (!acceptableAnswerEn.trim()) {
         toast.error(fr ? "Veuillez entrer la réponse correcte acceptée." : "Acceptable correct answer is required.");
         return;
@@ -750,6 +757,19 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setReviewTargetQuizId(null);
+                setReviewTargetQuizTitle(null);
+                setIsReviewLongAnswersOpen(true);
+              }}
+              className="gap-1.5 text-xs h-8 border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 font-semibold"
+            >
+              <FileText className="size-3.5 text-amber-600 dark:text-amber-400" />
+              {fr ? "Évaluer les réponses" : "Review Long Answers"}
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -1604,6 +1624,19 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                                         <div className="flex items-center gap-2">
                                           <Button
                                             size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                              setReviewTargetQuizId(lesson.quiz.id);
+                                              setReviewTargetQuizTitle(fr ? (lesson.titleFr || lesson.titleEn || "Quiz") : (lesson.titleEn || "Quiz"));
+                                              setIsReviewLongAnswersOpen(true);
+                                            }}
+                                            className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10 font-semibold"
+                                          >
+                                            <FileText className="size-3" />
+                                            {fr ? "Évaluer les réponses" : "Submissions"}
+                                          </Button>
+                                          <Button
+                                            size="sm"
                                             onClick={() => {
                                               setTargetQuestionQuizId(lesson.quiz.id);
                                               setIsAddQuestionOpen(true);
@@ -1635,6 +1668,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                                       ) : (
                                         <div className="space-y-3">
                                           {lesson.quiz.questions.map((q: any, qIdx: number) => {
+                                            const isLongAnswer = q.type === "LONG_ANSWER";
                                             const isFillBlank =
                                               q.type === "FILL_BLANK" ||
                                               q.type === "FILL_IN_THE_BLANK";
@@ -1677,9 +1711,16 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                                                       <div className="flex items-center gap-1.5 mb-1">
                                                         <Badge
                                                           variant="outline"
-                                                          className="text-[9px] py-0 px-1.5 h-4"
+                                                          className={cn(
+                                                            "text-[9px] py-0 px-1.5 h-4 font-semibold",
+                                                            isLongAnswer && "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                                                          )}
                                                         >
-                                                          {isFillBlank
+                                                          {isLongAnswer
+                                                            ? fr
+                                                              ? "Réponse rédigée"
+                                                              : "Long Answer"
+                                                            : isFillBlank
                                                             ? fr
                                                               ? "Texte à trous"
                                                               : "Fill in Blank"
@@ -1713,7 +1754,18 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                                                 </div>
 
                                                 {/* Options or Answer */}
-                                                {isFillBlank ? (
+                                                {isLongAnswer ? (
+                                                  <div className="pl-7 pt-1">
+                                                    <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300">
+                                                      <FileText className="size-3.5" />
+                                                      <span>
+                                                        {fr
+                                                          ? "Réponse longue saisie par l'élève • Notée manuellement par les formateurs"
+                                                          : "Long-form written answer • Graded manually by instructors"}
+                                                      </span>
+                                                    </div>
+                                                  </div>
+                                                ) : isFillBlank ? (
                                                   <div className="pl-7 pt-1">
                                                     <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800 dark:text-emerald-300">
                                                       <span className="font-semibold">
@@ -2342,7 +2394,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                 <label className="text-xs font-semibold text-foreground">
                   {fr ? "Type de question" : "Question Type"}
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -2414,11 +2466,41 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                       {fr ? "Saisie libre" : "Typed answer"}
                     </span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setQuestionType("LONG_ANSWER")}
+                    className={cn(
+                      "flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer",
+                      questionType === "LONG_ANSWER"
+                        ? "border-primary bg-primary/10 text-primary font-bold shadow-xs"
+                        : "border-border bg-card hover:bg-muted/40 text-muted-foreground"
+                    )}
+                  >
+                    <span className="text-xs font-semibold">
+                      {fr ? "Réponse rédigée" : "Long Answer"}
+                    </span>
+                    <span className="text-[10px] opacity-75">
+                      {fr ? "Évaluation manuelle" : "Manual review"}
+                    </span>
+                  </button>
                 </div>
               </div>
 
               {/* Conditional Answer Inputs by Question Type */}
-              {questionType === "FILL_BLANK" ? (
+              {questionType === "LONG_ANSWER" ? (
+                <div className="space-y-2 p-3.5 rounded-xl border border-amber-500/25 bg-amber-500/10 text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
+                    <FileText className="size-4 shrink-0" />
+                    <span>{fr ? "Question à réponse longue / développée" : "Long Answer / Essay Question"}</span>
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed text-[11px]">
+                    {fr
+                      ? "Le participant saisira un texte détaillé dans un champ libre. Cette question est notée manuellement par les formateurs et n'influence pas le score automatique du quiz."
+                      : "Students will type an in-depth answer into a spacious text area. This question will be reviewed and graded manually by instructors and does not affect automated quiz pass/fail scoring."}
+                  </p>
+                </div>
+              ) : questionType === "FILL_BLANK" ? (
                 <div className="space-y-3 p-3 rounded-xl border border-primary/20 bg-primary/5">
                   <div>
                     <div className="flex items-center justify-between">
@@ -2646,6 +2728,19 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
           </div>
         </div>
       )}
+
+      {/* Manual Grading Modal */}
+      <QuizLongAnswersModal
+        isOpen={isReviewLongAnswersOpen}
+        onClose={() => {
+          setIsReviewLongAnswersOpen(false);
+          setReviewTargetQuizId(null);
+          setReviewTargetQuizTitle(null);
+        }}
+        initialCohortId={cohort?.id}
+        initialQuizId={reviewTargetQuizId}
+        quizTitle={reviewTargetQuizTitle}
+      />
     </div>
   );
 }

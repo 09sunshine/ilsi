@@ -1,3 +1,4 @@
+import { QuizLongAnswersModal } from "@/components/admin/QuizLongAnswersModal";
 import { useState, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app/AppShell";
@@ -12,7 +13,7 @@ import { CreateCourseModal } from "@/components/admin/CreateCourseModal";
 import { EditCohortModal } from "@/components/admin/EditCohortModal";
 import { EditCurriculumModal } from "@/components/admin/EditCurriculumModal";
 import { DeleteCohortModal } from "@/components/admin/DeleteCohortModal";
-import { BookOpen, Check, Edit3, ExternalLink, Plus, RefreshCw, Trash2, Video } from "lucide-react";
+import { BookOpen, Check, Edit3, ExternalLink, FileText, Plus, RefreshCw, Trash2, Video } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/cohorts")({
@@ -37,6 +38,8 @@ function AdminCohorts() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingCohort, setEditingCohort] = useState<any | null>(null);
   const [managingCurriculumCohort, setManagingCurriculumCohort] = useState<any | null>(null);
+  const [gradingCohort, setGradingCohort] = useState<any | null>(null);
+  const [isAllGradingOpen, setIsAllGradingOpen] = useState(false);
   const [deletingCohort, setDeletingCohort] = useState<any | null>(null);
   const [liveSessions, setLiveSessions] = useState<Record<string, any[]>>({});
   const [editingMeetUrl, setEditingMeetUrl] = useState<Record<string, string>>({});
@@ -126,6 +129,15 @@ function AdminCohorts() {
               {t("common.retry") || "Refresh"}
             </Button>
             <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAllGradingOpen(true)}
+              className="gap-1.5 font-semibold border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+            >
+              <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              {fr ? "Évaluations réponses" : "Review Long Answers"}
+            </Button>
+            <Button
               onClick={() => setIsCreateModalOpen(true)}
               className="gap-2 shadow-sm font-semibold"
             >
@@ -182,6 +194,15 @@ function AdminCohorts() {
                       >
                         <BookOpen className="size-3.5" />
                         {fr ? "Éditer le curriculum" : "Edit Curriculum & Content"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setGradingCohort(c)}
+                        className="h-7 text-xs gap-1.5 font-medium text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 shadow-xs"
+                      >
+                        <FileText className="size-3.5 text-amber-600 dark:text-amber-400" />
+                        {fr ? "Évaluer les réponses" : "Grade Answers"}
                       </Button>
                       <Button
                         size="sm"

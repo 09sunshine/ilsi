@@ -141,6 +141,21 @@ function QuizPage() {
                   if (Array.isArray(res.previousAttempts)) {
                     prevAtt = res.previousAttempts;
                   }
+                  if (res.lastAttempt?.attempt && Array.isArray(res.lastAttempt.answers)) {
+                    setResult({
+                      attempt: res.lastAttempt.attempt,
+                      graded: res.lastAttempt.answers.map((a: any) => ({
+                        questionId: a.questionId,
+                        given: a.given,
+                        correct: a.correct,
+                        earned: a.earned,
+                        manualScore: a.manualScore,
+                        manualRating: a.manualRating,
+                        manualFeedback: a.manualFeedback,
+                        gradedAt: a.gradedAt,
+                      })),
+                    });
+                  }
                 }
               } catch (_) {}
             }
@@ -562,9 +577,9 @@ function QuizPage() {
               return (
                 <li key={q.id} className="panel p-5">
                   <div className="flex items-start gap-3">
-                    {g?.correct === null ? (
-                      <Badge variant="secondary" className="shrink-0">
-                        manual
+                    {g?.correct === null || q.type === "LONG_ANSWER" ? (
+                      <Badge variant="outline" className="shrink-0 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[10px] font-semibold">
+                        {fr ? "Évaluation manuelle" : "Manual Review"}
                       </Badge>
                     ) : g?.correct ? (
                       <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" />
@@ -576,23 +591,72 @@ function QuizPage() {
                         {i + 1}. {L(q.prompt)}
                       </p>
 
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                        <span className="text-muted-foreground">Your answer:</span>
-                        <span
-                          className={cn(
-                            "rounded px-2 py-0.5 font-medium",
-                            g?.correct
-                              ? "bg-success/15 text-success"
-                              : "bg-destructive/15 text-destructive"
+                      {q.type === "LONG_ANSWER" ? (
+                        <div className="mt-3 space-y-2.5">
+                          <div className="text-xs font-semibold text-muted-foreground">
+                            {fr ? "Votre réponse rédigée :" : "Your submitted response:"}
+                          </div>
+                          <div className="rounded-xl border border-border bg-muted/20 p-3.5 text-xs text-foreground font-normal leading-relaxed whitespace-pre-wrap select-text">
+                            {g?.given || "—"}
+                          </div>
+
+                          {/* Manual Grade / Appreciation Feedback if provided by instructor */}
+                          {(g as any)?.manualRating || (g as any)?.manualScore !== undefined || (g as any)?.manualFeedback ? (
+                            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3.5 space-y-2 text-xs">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                                  <span>🌟</span>
+                                  {fr ? "Évaluation & Mention du formateur :" : "Instructor Evaluation & Rating:"}
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  {(g as any)?.manualRating && (
+                                    <Badge className="bg-emerald-600 text-white font-semibold text-[10px]">
+                                      {(g as any).manualRating}
+                                    </Badge>
+                                  )}
+                                  {(g as any)?.manualScore !== undefined && (g as any)?.manualScore !== null && (
+                                    <span className="font-bold text-emerald-700 dark:text-emerald-300 font-mono">
+                                      {(g as any).manualScore} pts
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {(g as any)?.manualFeedback && (
+                                <p className="text-muted-foreground text-xs leading-relaxed italic bg-background/80 p-2.5 rounded-lg border border-border/60">
+                                  "{(g as any).manualFeedback}"
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-2.5 text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                              <span>⏳</span>
+                              <span>
+                                {fr
+                                  ? "Cette réponse est en attente d'évaluation personnalisée par votre formateur. Elle n'a aucun impact négatif sur votre score automatique."
+                                  : "This answer is awaiting qualitative evaluation by your instructor. It does not negatively affect your automated quiz result."}
+                              </span>
+                            </div>
                           )}
-                        >
-                          {g?.given
-                            ? q.options?.find((o: any) => o.id === g.given)
-                              ? L(q.options.find((o: any) => o.id === g.given)!.label)
-                              : g.given
-                            : "—"}
-                        </span>
-                      </div>
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                          <span className="text-muted-foreground">Your answer:</span>
+                          <span
+                            className={cn(
+                              "rounded px-2 py-0.5 font-medium",
+                              g?.correct
+                                ? "bg-success/15 text-success"
+                                : "bg-destructive/15 text-destructive"
+                            )}
+                          >
+                            {g?.given
+                              ? q.options?.find((o: any) => o.id === g.given)
+                                ? L(q.options.find((o: any) => o.id === g.given)!.label)
+                                : g.given
+                              : "—"}
+                          </span>
+                        </div>
+                      )}
 
                       {/* Display correct answer when attempts are exhausted or passed */}
                       {showCorrect && correctAnswer ? (
@@ -797,7 +861,32 @@ function QuizPage() {
                 {q.required ? <span className="text-destructive"> *</span> : null}
               </p>
 
-              {q.type === "WRITTEN" || q.type === "REFLECTION" ? (
+              {q.type === "LONG_ANSWER" ? (
+                <div className="mt-3 space-y-2">
+                  <Textarea
+                    rows={8}
+                    className="w-full resize-y min-h-[160px] text-sm leading-relaxed p-3.5 bg-background"
+                    placeholder={
+                      fr
+                        ? "Rédigez ici votre réponse détaillée et argumentée... Vous pouvez développer librement sans limite stricte de caractères."
+                        : "Type your detailed and comprehensive response here... You can develop your thoughts freely without strict character limits."
+                    }
+                    value={answers[q.id] ?? ""}
+                    onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
+                  />
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-medium">
+                      <span>💡</span>
+                      {fr
+                        ? "Question à réponse longue : cette réponse sera évaluée manuellement par un formateur."
+                        : "Long-answer question: this response will be manually evaluated by an instructor."}
+                    </span>
+                    <span className="font-mono text-[11px]">
+                      {(answers[q.id] || "").length} {fr ? "caractères" : "characters"}
+                    </span>
+                  </div>
+                </div>
+              ) : q.type === "WRITTEN" || q.type === "REFLECTION" ? (
                 <>
                   <Textarea
                     rows={4}

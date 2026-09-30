@@ -43,11 +43,11 @@ interface Props {
 
 interface QuestionDraft {
   orderIndex: number;
-  type: "MULTIPLE_CHOICE" | "TRUE_FALSE" | "FILL_BLANK";
+  type: "MULTIPLE_CHOICE" | "TRUE_FALSE" | "FILL_BLANK" | "LONG_ANSWER";
   promptEn: string;
   promptFr: string;
   points: number;
-  correctText?: string;
+  correctText?: string | undefined;
   options: Array<{
     orderIndex: number;
     labelEn: string;
@@ -663,7 +663,7 @@ export function CreateCourseModal({ isOpen, onClose, onCourseCreated }: Props) {
     modIdx: number,
     lesIdx: number,
     qIdx: number,
-    newType: "MULTIPLE_CHOICE" | "TRUE_FALSE" | "FILL_BLANK"
+    newType: "MULTIPLE_CHOICE" | "TRUE_FALSE" | "FILL_BLANK" | "LONG_ANSWER"
   ) => {
     const updated = [...modules];
     const question = updated[modIdx]?.lessons[lesIdx]?.quiz?.questions[qIdx];
@@ -680,6 +680,9 @@ export function CreateCourseModal({ isOpen, onClose, onCourseCreated }: Props) {
       question.options = [
         { orderIndex: 1, labelEn: question.correctText || "Expected answer", labelFr: question.correctText || "Réponse attendue", correct: true },
       ];
+    } else if (newType === "LONG_ANSWER") {
+      delete question.correctText;
+      question.options = [];
     } else if (newType === "MULTIPLE_CHOICE") {
       if (!question.options || question.options.length < 2) {
         question.options = [
@@ -2006,7 +2009,7 @@ export function CreateCourseModal({ isOpen, onClose, onCourseCreated }: Props) {
                                                   selectedModuleIdx,
                                                   lesIdx,
                                                   qIdx,
-                                                  e.target.value as "MULTIPLE_CHOICE" | "TRUE_FALSE" | "FILL_BLANK"
+                                                  e.target.value as "MULTIPLE_CHOICE" | "TRUE_FALSE" | "FILL_BLANK" | "LONG_ANSWER"
                                                 )
                                               }
                                               className="h-6 text-[11px] bg-background border border-input rounded px-1.5 font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
@@ -2019,6 +2022,9 @@ export function CreateCourseModal({ isOpen, onClose, onCourseCreated }: Props) {
                                               </option>
                                               <option value="FILL_BLANK">
                                                 {fr ? "✏️ Texte à trous" : "✏️ Fill in the Blank"}
+                                              </option>
+                                              <option value="LONG_ANSWER">
+                                                {fr ? "📝 Réponse rédigée (Évaluation manuelle)" : "📝 Long Answer (Manual Evaluation)"}
                                               </option>
                                             </select>
                                           </div>
@@ -2230,7 +2236,22 @@ export function CreateCourseModal({ isOpen, onClose, onCourseCreated }: Props) {
                                       )}
 
                                       {/* TYPE 3: FILL IN THE BLANK */}
-                                      {q.type === "FILL_BLANK" && (
+                                      {/* TYPE 4: LONG ANSWER */}
+                                       {q.type === "LONG_ANSWER" && (
+                                         <div className="space-y-1.5 pt-1 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/25">
+                                           <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-medium text-xs">
+                                             <FileText className="size-3.5 shrink-0" />
+                                             <span>{fr ? "Question à réponse longue / rédigée" : "Long Answer / Essay Question"}</span>
+                                           </div>
+                                           <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                             {fr
+                                               ? "L'étudiant disposera d'un champ de texte pour rédiger une réponse développée. Cette question est évaluée manuellement par les formateurs et n'influence pas le score automatique du quiz."
+                                               : "Students will type a comprehensive, long-form answer. This question is manually reviewed and graded by instructors and does not affect the automatic quiz score."}
+                                           </p>
+                                         </div>
+                                       )}
+
+                                       {q.type === "FILL_BLANK" && (
                                         <div className="space-y-1.5 pt-1 bg-muted/20 p-2.5 rounded-lg border border-border/50">
                                           <Label className="text-[10px] font-semibold text-muted-foreground block">
                                             {fr ? "Mot-clé ou réponse exacte attendue (insensible à la casse) :" : "Expected Exact Answer / Keyword (Case-insensitive):"}

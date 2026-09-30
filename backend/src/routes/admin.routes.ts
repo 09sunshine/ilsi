@@ -4032,4 +4032,166 @@ router.delete("/resources/:id", async (req: Request, res: Response, next: NextFu
   }
 });
 
+/**
+ * GET /api/admin/quiz-submissions/long-answers
+ * Lists all submitted long-answer question responses with student info, question prompt, answer text, and grading status.
+ */
+router.get("/quiz-submissions/long-answers", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { quizId, cohortId, status, search } = req.query as {
+      quizId?: string;
+      cohortId?: string;
+      status?: string;
+      search?: string;
+    };
+
+    let query = `
+      SELECT 
+        qa.id as "answerId",
+        qa.attempt_id as "attemptId",
+        qa.question_id as "questionId",
+        qa.given_answer as "givenAnswer",
+        qa.manual_score as "manualScore",
+        qa.manual_rating as "manualRating",
+        qa.manual_feedback as "manualFeedback",
+        qa.graded_at as "gradedAt",
+        qa.graded_by as "gradedBy",
+        CASE 
+          WHEN qa.graded_at IS NOT NULL OR qa.manual_score IS NOT NULL OR qa.manual_rating IS NOT NULL THEN 'GRADED'
+          ELSE 'PENDING'
+        END as "status",
+        qq.prompt_en as "promptEn",
+        qq.prompt_fr as "promptFr",
+        qq.points as "questionPoints",
+        qq.type as "questionType",
+        q.id as "quizId",
+        q.title_en as "quizTitleEn",
+        q.title_fr as "quizTitleFr",
+        l.id as "lessonId",
+        l.title_en as "lessonTitleEn",
+        l.title_fr as "lessonTitleFr",
+        m.id as "moduleId",
+        m.title_en as "moduleTitleEn",
+        m.title_fr as "moduleTitleFr",
+        att.user_id as "userId",
+        att.cohort_id as "cohortId",
+        att.attempt_number as "attemptNumber",
+        att.submitted_at as "submittedAt",
+        u.full_name as "userName",
+        u.email as "userEmail",
+        c.name as "cohortName"
+      FROM quiz_answers qa
+      JOIN quiz_questions qq ON qq.id = qa.question_id
+      JOIN quiz_attempts att ON att.id = qa.attempt_id
+      JOIN quizzes q ON q.id = att.quiz_id
+      LEFT JOIN lessons l ON l.id = q.lesson_id
+      LEFT JOIN modules m ON m.id = q.module_id OR m.id = l.module_id
+      JOIN users u ON u.id = att.user_id
+      LEFT JOIN cohorts c ON c.id = att.cohort_id
+      WHERE (qq.type = 'LONG_ANSWER' OR qq.type = 'WRITTEN' OR qq.type = 'REFLECTION')
+    `;
+
+    const params: any[] = [];
+    if (quizId) {
+      params.push(quizId);
+      query += ` AND q.id = $${params.length}`;
+    }
+    if (cohortId) {
+      params.push(cohortId);
+      query += ` AND att.cohort_id = $${params.length}`;
+    }
+    if (status === "PENDING") {
+      query += ` AND qa.graded_at IS NULL AND qa.manual_score IS NULL AND qa.manual_rating IS NULL`;
+    } else if (status === "GRADED") {
+      query += ` AND (qa.graded_at IS NOT NULL OR qa.manual_score IS NOT NULL OR qa.manual_rating IS NOT NULL)`;
+    }
+    if (search && search.trim()) {
+      params.push(`%${search.trim().toLowerCase()}%`);
+      query += ` AND (
+        LOWER(u.full_name) LIKE $${params.length} OR 
+        LOWER(u.email) LIKE $${params.length} OR 
+        LOWER(qa.given_answer) LIKE $${params.length} OR 
+        LOWER(qq.prompt_en) LIKE $${params.length} OR 
+        LOWER(qq.prompt_fr) LIKE $${params.length}
+      )`;
+    }
+
+    query += ` ORDER BY att.submitted_at DESC`;
+
+    const result = await pool.query(query, params);
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/quiz-answers/:id/grade
+ * Manually evaluate and grade a student's long-answer submission.
+ */
+router.post("/quiz-answers/:id/grade", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { manualScore, manualRating, manualFeedback } = req.body;
+    const gradedBy = (req as any).user?.fullName || (req as any).user?.email || "Admin";
+
+    const updateRes = await pool.query(
+      `UPDATE quiz_answers
+       SET manual_score = $1,
+           manual_rating = $2,
+           manual_feedback = $3,
+           graded_at = NOW(),
+           graded_by = $4
+       WHERE id = $5
+       RETURNING *`,
+      [
+        manualScore !== undefined && manualScore !== null && manualScore !== "" ? Number(manualScore) : null,
+        manualRating?.trim() || null,
+        manualFeedback?.trim() || null,
+        gradedBy,
+        id,
+      ]
+    );
+
+    if (updateRes.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.QUIZ_NOT_FOUND, "Quiz answer submission not found");
+    }
+
+    const updatedAnswer = updateRes.rows[0];
+
+    // Fetch attempt, quiz & student details to send notification
+    try {
+      const detailsRes = await pool.query(
+        `SELECT att.user_id, q.title_en, q.title_fr
+         FROM quiz_answers qa
+         JOIN quiz_attempts att ON att.id = qa.attempt_id
+         JOIN quizzes q ON q.id = att.quiz_id
+         WHERE qa.id = $1`,
+        [id]
+      );
+      if (detailsRes.rows.length > 0) {
+        const studentInfo = detailsRes.rows[0];
+        void NotificationService.create({
+          userId: studentInfo.user_id,
+          type: "QUIZ_GRADED",
+          titleEn: "Your written answer was reviewed",
+          titleFr: "Votre réponse rédigée a été évaluée",
+          bodyEn: `An instructor has evaluated your written response for "${studentInfo.title_en}". Check your quiz review to read the feedback!`,
+          bodyFr: `Un formateur a évalué votre réponse rédigée pour le quiz "${studentInfo.title_fr || studentInfo.title_en}". Consultez le corrigé pour voir les appréciations !`,
+        });
+      }
+    } catch (notifErr) {
+      console.warn("[Admin] Failed to notify student of quiz grading:", notifErr);
+    }
+
+    res.json({
+      success: true,
+      message: "Answer graded successfully",
+      data: updatedAnswer,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

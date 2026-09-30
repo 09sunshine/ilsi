@@ -15,6 +15,11 @@ async function startServer() {
         ALTER TABLE IF EXISTS resources ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
         ALTER TABLE IF EXISTS quiz_questions ADD COLUMN IF NOT EXISTS correct_text TEXT;
         ALTER TABLE IF EXISTS quiz_questions ADD COLUMN IF NOT EXISTS type VARCHAR(50) NOT NULL DEFAULT 'MULTIPLE_CHOICE';
+        ALTER TABLE IF EXISTS quiz_answers ADD COLUMN IF NOT EXISTS manual_score NUMERIC(5,2);
+        ALTER TABLE IF EXISTS quiz_answers ADD COLUMN IF NOT EXISTS manual_rating VARCHAR(50);
+        ALTER TABLE IF EXISTS quiz_answers ADD COLUMN IF NOT EXISTS manual_feedback TEXT;
+        ALTER TABLE IF EXISTS quiz_answers ADD COLUMN IF NOT EXISTS graded_at TIMESTAMPTZ;
+        ALTER TABLE IF EXISTS quiz_answers ADD COLUMN IF NOT EXISTS graded_by TEXT;
       `);
       console.log("[Server] Database connection & schema compatibility verified successfully.");
     } finally {

@@ -98,6 +98,31 @@ export class QuizEngineService {
       });
     }
 
+    let lastAttemptDetails = null;
+    if (attemptsRes.rows.length > 0) {
+      const latestAttempt = attemptsRes.rows[0];
+      const answersRes = await pool.query(
+        `SELECT qa.question_id, qa.given_answer, qa.correct, qa.earned_points,
+                qa.manual_score, qa.manual_rating, qa.manual_feedback, qa.graded_at
+         FROM quiz_answers qa
+         WHERE qa.attempt_id = $1`,
+        [latestAttempt.id]
+      );
+      lastAttemptDetails = {
+        attempt: latestAttempt,
+        answers: answersRes.rows.map((r: any) => ({
+          questionId: r.question_id,
+          given: r.given_answer,
+          correct: r.correct,
+          earned: r.earned_points,
+          manualScore: r.manual_score,
+          manualRating: r.manual_rating,
+          manualFeedback: r.manual_feedback,
+          gradedAt: r.graded_at,
+        })),
+      };
+    }
+
     return {
       quiz: {
         id: quiz.id,
@@ -115,6 +140,7 @@ export class QuizEngineService {
         questions,
       },
       previousAttempts: attemptsRes.rows,
+      lastAttempt: lastAttemptDetails,
     };
   }
 
@@ -262,39 +288,47 @@ export class QuizEngineService {
       const gradedDetails = [];
 
       for (const q of questionsRes.rows) {
-        totalPoints += q.points;
         const given = answers[q.id] ?? "";
         let isCorrect: boolean | null = false;
         let earned = 0;
         let correctAnswer: any = null;
 
-        if (q.type === "WRITTEN" || q.type === "REFLECTION") {
-          // Written/reflection: auto-credited if answer meets minimum length, pending trainer review
-          earned = given.trim().length >= 20 ? q.points : 0;
+        if (q.type === "LONG_ANSWER") {
+          // Long answer: evaluated manually by instructors.
+          // Does NOT affect automated score or result of the quiz.
           isCorrect = null;
-        } else if (q.type === "FILL_BLANK") {
-          isCorrect = given.trim().toLowerCase() === (q.correct_text ?? "").trim().toLowerCase();
-          earned = isCorrect ? q.points : 0;
-          correctAnswer = { text: q.correct_text };
+          earned = 0;
+          correctAnswer = null;
         } else {
-          // Multiple choice, True/False, Scenario
-          const correctOptRes = await client.query(
-            `SELECT id, label_en, label_fr FROM quiz_options WHERE question_id = $1 AND correct = TRUE`,
-            [q.id]
-          );
-          const correctOptIds = correctOptRes.rows.map((r) => r.id);
-          isCorrect = correctOptIds.includes(given);
-          earned = isCorrect ? q.points : 0;
-          correctAnswer = {
-            optionIds: correctOptIds,
-            options: correctOptRes.rows.map((r) => ({
-              id: r.id,
-              label: { en: r.label_en, fr: r.label_fr },
-            })),
-          };
+          totalPoints += q.points;
+          if (q.type === "WRITTEN" || q.type === "REFLECTION") {
+            // Written/reflection: auto-credited if answer meets minimum length, pending trainer review
+            earned = given.trim().length >= 20 ? q.points : 0;
+            isCorrect = null;
+          } else if (q.type === "FILL_BLANK") {
+            isCorrect = given.trim().toLowerCase() === (q.correct_text ?? "").trim().toLowerCase();
+            earned = isCorrect ? q.points : 0;
+            correctAnswer = { text: q.correct_text };
+          } else {
+            // Multiple choice, True/False, Scenario
+            const correctOptRes = await client.query(
+              `SELECT id, label_en, label_fr FROM quiz_options WHERE question_id = $1 AND correct = TRUE`,
+              [q.id]
+            );
+            const correctOptIds = correctOptRes.rows.map((r) => r.id);
+            isCorrect = correctOptIds.includes(given);
+            earned = isCorrect ? q.points : 0;
+            correctAnswer = {
+              optionIds: correctOptIds,
+              options: correctOptRes.rows.map((r) => ({
+                id: r.id,
+                label: { en: r.label_en, fr: r.label_fr },
+              })),
+            };
+          }
+          earnedScore += earned;
         }
 
-        earnedScore += earned;
         gradedDetails.push({
           questionId: q.id,
           given,
@@ -306,7 +340,8 @@ export class QuizEngineService {
         });
       }
 
-      const percentage = totalPoints ? Math.round((earnedScore / totalPoints) * 100) : 0;
+      // If all questions are LONG_ANSWER, totalPoints is 0; pass automatically pending manual review
+      const percentage = totalPoints ? Math.round((earnedScore / totalPoints) * 100) : 100;
       const passed = percentage >= quiz.passing_score;
 
       // Check if user has ever passed this quiz
@@ -408,6 +443,18 @@ export class QuizEngineService {
            VALUES ($1, $2, $3, $4, $5)`,
           [attemptId, detail.questionId, detail.given, detail.correct, detail.earned]
         );
+      }
+
+      // 5.1 Notify admins if a long answer was submitted for manual grading
+      const hasLongAnswer = questionsRes.rows.some((q: any) => q.type === "LONG_ANSWER");
+      if (hasLongAnswer) {
+        void NotificationService.notifyAdmins({
+          type: "QUIZ_LONG_ANSWER_SUBMITTED",
+          titleEn: "New Long Answer Submitted",
+          titleFr: "Nouvelle réponse rédigée soumise",
+          bodyEn: `A student submitted a long-answer question awaiting manual evaluation for quiz "${quiz.title_en || "Quiz"}".`,
+          bodyFr: `Un participant a soumis une réponse longue en attente d'évaluation pour le quiz "${quiz.title_fr || quiz.title_en || "Quiz"}".`,
+        });
       }
 
       // 6. Update lesson_progress if attached to a lesson
