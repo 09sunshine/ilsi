@@ -56,6 +56,8 @@ function QuizPage() {
   const [reviewMode, setReviewMode] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [result, setResult] = useState<GradedAttempt | null>(null);
+  const [latestAttemptResult, setLatestAttemptResult] = useState<GradedAttempt | null>(null);
+  const activeResult = result || latestAttemptResult;
 
   useEffect(() => {
     let mounted = true;
@@ -74,7 +76,7 @@ function QuizPage() {
             prevAtt = res.previousAttempts;
           }
           if (res.lastAttempt?.attempt && Array.isArray(res.lastAttempt.answers)) {
-            setResult({
+            setLatestAttemptResult({
               attempt: res.lastAttempt.attempt,
               graded: res.lastAttempt.answers.map((a: any) => ({
                 questionId: a.questionId,
@@ -297,10 +299,12 @@ function QuizPage() {
     try {
       const res = await api.submitQuizAttempt(quiz.id || moduleId, answers);
       if (res && res.attempt) {
-        setResult({
+        const gradedRes: GradedAttempt = {
           attempt: res.attempt,
           graded: res.graded || [],
-        });
+        };
+        setResult(gradedRes);
+        setLatestAttemptResult(gradedRes);
         setPreviousAttempts((prev) => [...prev, res.attempt]);
         if (res.isDisqualified || res.disqualified || (res.attempt as any)?.isDisqualified) {
           setQuiz((prev: any) => ({ ...prev, isDisqualified: true, disqualified: true }));
@@ -310,7 +314,7 @@ function QuizPage() {
     } catch (err: any) {
       if (err?.code === "DISQUALIFIED" || err?.message?.toLowerCase().includes("disqualif")) {
         setQuiz((prev: any) => ({ ...prev, isDisqualified: true, disqualified: true }));
-        setResult({
+        const disqResult: GradedAttempt = {
           attempt: {
             id: `att-disq-${Date.now()}`,
             quizId: quiz.id || moduleId,
@@ -322,11 +326,15 @@ function QuizPage() {
             disqualified: true,
           } as any,
           graded: [],
-        });
+        };
+        setResult(disqResult);
+        setLatestAttemptResult(disqResult);
         return;
       }
       console.warn("Backend quiz submission error, falling back to local grading:", err);
-      setResult(gradeQuiz(quiz, answers));
+      const localResult = gradeQuiz(quiz, answers);
+      setResult(localResult);
+      setLatestAttemptResult(localResult);
     } finally {
       setSubmitting(false);
     }
@@ -394,7 +402,7 @@ function QuizPage() {
 
           <ol className="space-y-4">
             {questions.map((q, i) => {
-              const g = result?.graded?.find((x) => x.questionId === q.id);
+              const g = activeResult?.graded?.find((x) => x.questionId === q.id);
               const submittedText = g?.given || answers[q.id];
               const correctAnswer = getCorrectAnswerDisplay(q, g);
               return (
@@ -857,7 +865,7 @@ function QuizPage() {
           </dl>
 
           {/* Highlight instructor evaluation if available */}
-          {result?.graded?.some((x: any) => x.manualRating || x.manualScore !== undefined || x.manualFeedback) ? (
+          {latestAttemptResult?.graded?.some((x: any) => x.manualRating || x.manualScore !== undefined || x.manualFeedback) ? (
             <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-left space-y-1.5 shadow-xs">
               <div className="flex items-center gap-2">
                 <span className="text-base">🌟</span>
