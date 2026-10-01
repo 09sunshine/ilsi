@@ -3,17 +3,38 @@ import { requireAuth, requireOnboardingCompleted } from "../middleware/rbac.js";
 import { validateRequest } from "../middleware/validate.js";
 import { progressSchemas, quizSchemas } from "../validators/schemas.js";
 import { quizLimiter, videoLimiter } from "../middleware/rateLimiters.js";
-import { StudentDashboardService } from "../services/StudentDashboardService.js";
+import { StudentDashboardService, invalidateStudentDashboardServiceCache } from "../services/StudentDashboardService.js";
 import { VideoStorageService } from "../services/VideoStorageService.js";
 import { QuizEngineService } from "../services/QuizEngineService.js";
 import { ModuleAccessService } from "../services/ModuleAccessService.js";
-import { LessonAccessService } from "../services/LessonAccessService.js";
+import { LessonAccessService, invalidateLessonAccessCache } from "../services/LessonAccessService.js";
 import { EnrollmentAccessService } from "../services/EnrollmentAccessService.js";
 import { pool } from "../database/pool.js";
 import { AppError, ErrorCodes } from "../constants/errors.js";
 import { NotificationService } from "../services/NotificationService.js";
 
 const router = Router();
+
+interface LessonPayloadCacheEntry {
+  data: any;
+  expiresAt: number;
+}
+const lessonPayloadCache = new Map<string, LessonPayloadCacheEntry>();
+const LESSON_PAYLOAD_CACHE_TTL_MS = 15_000; // 15 seconds TTL
+
+export function invalidateLessonPayloadCache(userId?: string, lessonId?: string) {
+  if (!userId && !lessonId) {
+    lessonPayloadCache.clear();
+    return;
+  }
+  for (const key of lessonPayloadCache.keys()) {
+    if (userId && key.startsWith(`${userId}:`)) {
+      lessonPayloadCache.delete(key);
+    } else if (lessonId && key.includes(`:${lessonId}:`)) {
+      lessonPayloadCache.delete(key);
+    }
+  }
+}
 
 // All student routes require authentication
 const studentPrefixes = [
@@ -61,24 +82,59 @@ router.get("/lessons/:id", requireOnboardingCompleted, async (req: Request, res:
   try {
     const id = req.params.id as string;
     const targetCohortId = req.query.cohortId as string | undefined;
+    const cacheKey = `${req.user!.id}:${id}:${targetCohortId || ""}`;
+    const nowMs = Date.now();
+    const cached = lessonPayloadCache.get(cacheKey);
+
+    if (cached && cached.expiresAt > nowMs) {
+      return res.json({ success: true, data: cached.data });
+    }
 
     // Strict centralized access authorization
     const accessEval = await LessonAccessService.assertAccess(req.user!.id, id, targetCohortId);
     const cohortId = accessEval.cohortId;
 
-    const lessonRes = await pool.query(
-      `SELECT l.id, l.module_id, l.order_index, l.type, l.title_en, l.title_fr,
-              l.description_en, l.description_fr, l.body_en, l.body_fr,
-              l.duration_minutes, l.mandatory,
-              m.cohort_id as module_cohort_id, m.order_index as module_order,
-              COALESCE(lp.completed, FALSE) as completed,
-              COALESCE(lp.video_percent, 0) as video_percent
-       FROM lessons l
-       JOIN modules m ON m.id = l.module_id
-       LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = $1 AND (lp.cohort_id = $2 OR lp.cohort_id IS NULL)
-       WHERE l.id = $3`,
-      [req.user!.id, cohortId || null, id]
-    );
+    // High-performance parallel data resolution: lesson content, chapters, resources, quiz metadata, and cached video URL
+    const [lessonRes, chapRes, resRes, quizRes, videoData] = await Promise.all([
+      pool.query(
+        `SELECT l.id, l.module_id, l.order_index, l.type, l.title_en, l.title_fr,
+                l.description_en, l.description_fr, l.body_en, l.body_fr,
+                l.duration_minutes, l.mandatory,
+                m.cohort_id as module_cohort_id, m.order_index as module_order,
+                COALESCE(lp.completed, FALSE) as completed,
+                COALESCE(lp.video_percent, 0) as video_percent
+         FROM lessons l
+         JOIN modules m ON m.id = l.module_id
+         LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = $1 AND (lp.cohort_id = $2 OR lp.cohort_id IS NULL)
+         WHERE l.id = $3`,
+        [req.user!.id, cohortId || null, id]
+      ),
+      pool.query(
+        `SELECT id, lesson_id, order_index, title_en, title_fr, description_en, description_fr,
+                body_en, body_fr, duration_minutes, video_url, status
+         FROM chapters
+         WHERE lesson_id = $1 AND status = 'PUBLISHED'
+         ORDER BY order_index ASC`,
+        [id]
+      ),
+      pool.query(
+        `SELECT id, name_en, name_fr, type, size_kb, downloadable, url 
+         FROM resources 
+         WHERE lesson_id = $1 AND (status = 'PUBLISHED' OR status IS NULL)`,
+        [id]
+      ),
+      pool.query(
+        `SELECT q.id, q.title_en, q.title_fr, q.description_en, q.description_fr,
+                q.passing_score, q.attempts_allowed, q.published, q.status,
+                (SELECT COUNT(*) FROM quiz_questions qq WHERE qq.quiz_id = q.id)::int as question_count
+         FROM quizzes q
+         WHERE q.lesson_id = $1 AND (q.published = TRUE OR q.status = 'PUBLISHED')
+         ORDER BY q.created_at DESC
+         LIMIT 1`,
+        [id]
+      ),
+      VideoStorageService.getAuthorizedPlaybackUrl(id, req.user!.id, false, cohortId, true),
+    ]);
 
     if (lessonRes.rows.length === 0) {
       throw new AppError(404, ErrorCodes.LESSON_NOT_FOUND, "Lesson not found");
@@ -86,37 +142,7 @@ router.get("/lessons/:id", requireOnboardingCompleted, async (req: Request, res:
 
     const lesson = lessonRes.rows[0];
 
-    // Fetch chapters for this lesson
-    const chapRes = await pool.query(
-      `SELECT id, lesson_id, order_index, title_en, title_fr, description_en, description_fr,
-              body_en, body_fr, duration_minutes, video_url, status
-       FROM chapters
-       WHERE lesson_id = $1 AND status = 'PUBLISHED'
-       ORDER BY order_index ASC`,
-      [id]
-    );
-
-    // Fetch resources attached to lesson
-    const resRes = await pool.query(
-      `SELECT id, name_en, name_fr, type, size_kb, downloadable, url 
-       FROM resources 
-       WHERE lesson_id = $1 AND (status = 'PUBLISHED' OR status IS NULL)`,
-      [id]
-    );
-
-    // Check if video is available and fetch signed playback url
-    // Fetch quiz attached to this lesson (if any)
-    const quizRes = await pool.query(
-      `SELECT q.id, q.title_en, q.title_fr, q.description_en, q.description_fr,
-              q.passing_score, q.attempts_allowed, q.published, q.status,
-              (SELECT COUNT(*) FROM quiz_questions qq WHERE qq.quiz_id = q.id)::int as question_count
-       FROM quizzes q
-       WHERE q.lesson_id = $1 AND (q.published = TRUE OR q.status = 'PUBLISHED')
-       ORDER BY q.created_at DESC
-       LIMIT 1`,
-      [id]
-    );
-
+    // Fetch quiz attempts only if quiz exists
     let lessonQuiz = null;
     if (quizRes.rows.length > 0) {
       const q = quizRes.rows[0];
@@ -148,57 +174,61 @@ router.get("/lessons/:id", requireOnboardingCompleted, async (req: Request, res:
       };
     }
 
-    // Check if video is available and fetch signed playback url
-    const videoData = await VideoStorageService.getAuthorizedPlaybackUrl(id, req.user!.id, false, cohortId);
+    const lessonData = {
+      id: lesson.id,
+      moduleId: lesson.module_id,
+      cohortId: cohortId || lesson.module_cohort_id,
+      order: lesson.order_index,
+      type: lesson.type,
+      title: { en: lesson.title_en, fr: lesson.title_fr },
+      description: { en: lesson.description_en, fr: lesson.description_fr },
+      body: { en: lesson.body_en, fr: lesson.body_fr },
+      durationMinutes: lesson.duration_minutes,
+      mandatory: lesson.mandatory,
+      completed: lesson.completed,
+      videoPercent: lesson.video_percent,
+      videoUrl: videoData?.playbackUrl || null,
+      access: {
+        lessonId: lesson.id,
+        cohortId,
+        state: accessEval.state,
+        isLocked: accessEval.isLocked,
+        lockReason: accessEval.lockReason,
+        availableFrom: accessEval.availableFrom,
+        availableUntil: accessEval.availableUntil,
+        prerequisite: accessEval.prerequisite,
+        progress: lesson.video_percent,
+      },
+      chapters: chapRes.rows.map((c) => ({
+        id: c.id,
+        lessonId: c.lesson_id,
+        order: c.order_index,
+        title: { en: c.title_en, fr: c.title_fr },
+        description: { en: c.description_en || "", fr: c.description_fr || "" },
+        body: { en: c.body_en || "", fr: c.body_fr || "" },
+        durationMinutes: c.duration_minutes,
+        videoUrl: c.video_url || null,
+        status: c.status,
+      })),
+      resources: resRes.rows.map((r) => ({
+        id: r.id,
+        name: { en: r.name_en, fr: r.name_fr },
+        type: r.type,
+        sizeKb: r.size_kb,
+        url: r.url,
+        downloadable: r.downloadable,
+      })),
+      quiz: lessonQuiz,
+    };
+
+    lessonPayloadCache.set(cacheKey, {
+      data: lessonData,
+      expiresAt: nowMs + LESSON_PAYLOAD_CACHE_TTL_MS,
+    });
 
     res.json({
       success: true,
-      data: {
-        id: lesson.id,
-        moduleId: lesson.module_id,
-        cohortId: cohortId || lesson.module_cohort_id,
-        order: lesson.order_index,
-        type: lesson.type,
-        title: { en: lesson.title_en, fr: lesson.title_fr },
-        description: { en: lesson.description_en, fr: lesson.description_fr },
-        body: { en: lesson.body_en, fr: lesson.body_fr },
-        durationMinutes: lesson.duration_minutes,
-        mandatory: lesson.mandatory,
-        completed: lesson.completed,
-        videoPercent: lesson.video_percent,
-        videoUrl: videoData?.playbackUrl || null,
-        access: {
-          lessonId: lesson.id,
-          cohortId,
-          state: accessEval.state,
-          isLocked: accessEval.isLocked,
-          lockReason: accessEval.lockReason,
-          availableFrom: accessEval.availableFrom,
-          availableUntil: accessEval.availableUntil,
-          prerequisite: accessEval.prerequisite,
-          progress: lesson.video_percent,
-        },
-        chapters: chapRes.rows.map((c) => ({
-          id: c.id,
-          lessonId: c.lesson_id,
-          order: c.order_index,
-          title: { en: c.title_en, fr: c.title_fr },
-          description: { en: c.description_en || "", fr: c.description_fr || "" },
-          body: { en: c.body_en || "", fr: c.body_fr || "" },
-          durationMinutes: c.duration_minutes,
-          videoUrl: c.video_url || null,
-          status: c.status,
-        })),
-        resources: resRes.rows.map((r) => ({
-          id: r.id,
-          name: { en: r.name_en, fr: r.name_fr },
-          type: r.type,
-          sizeKb: r.size_kb,
-          url: r.url,
-          downloadable: r.downloadable,
-        })),
-        quiz: lessonQuiz,
-      },
+      data: lessonData,
     });
   } catch (error) {
     next(error);
@@ -265,12 +295,15 @@ router.post(
       const accessEval = await LessonAccessService.assertAccess(req.user!.id, id, targetCohortId);
       const cohortId = accessEval.cohortId;
 
-      // Get lesson parent module
-      const lessonRes = await pool.query(`SELECT module_id FROM lessons WHERE id = $1`, [id]);
-      if (lessonRes.rows.length === 0) {
-        throw new AppError(404, ErrorCodes.LESSON_NOT_FOUND, "Lesson not found");
+      // Use pre-resolved module_id from access check to avoid redundant DB round trip
+      let moduleId = accessEval.moduleId;
+      if (!moduleId) {
+        const lessonRes = await pool.query(`SELECT module_id FROM lessons WHERE id = $1`, [id]);
+        if (lessonRes.rows.length === 0) {
+          throw new AppError(404, ErrorCodes.LESSON_NOT_FOUND, "Lesson not found");
+        }
+        moduleId = lessonRes.rows[0].module_id;
       }
-      const moduleId = lessonRes.rows[0].module_id;
 
       const percent = Math.min(100, Math.max(0, Math.round(Number(videoPercent) || 0)));
       const isCompleted = markComplete || percent >= 80;
@@ -288,6 +321,11 @@ router.post(
            updated_at = NOW()`,
         [req.user!.id, cohortId || null, accessEval.cohortLessonId || null, id, moduleId, isCompleted, percent]
       );
+
+      // Invalidate relevant caches on mutation
+      invalidateLessonPayloadCache(req.user!.id, id);
+      invalidateLessonAccessCache(req.user!.id, id);
+      invalidateStudentDashboardServiceCache(req.user!.id);
 
       res.json({ success: true, data: { completed: isCompleted, videoPercent: percent, cohortId } });
     } catch (error) {
@@ -324,6 +362,12 @@ router.post(
       const answers = req.body.answers || {};
       const cohortId = (req.body.cohortId || req.query.cohortId) as string | undefined;
       const result = await QuizEngineService.submitQuizAttempt(req.params.id as string, req.user!.id, answers, cohortId);
+
+      // Invalidate relevant caches on quiz attempt
+      invalidateStudentDashboardServiceCache(req.user!.id);
+      invalidateLessonAccessCache(req.user!.id);
+      invalidateLessonPayloadCache(req.user!.id);
+
       res.json({ success: true, data: result });
     } catch (error) {
       next(error);

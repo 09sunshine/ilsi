@@ -95,6 +95,7 @@ export function LessonVideoPlayer({
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [lastReportedPercent, setLastReportedPercent] = useState(0);
+  const [bufferedPercent, setBufferedPercent] = useState(0);
 
   const source = parseVideoSource(url);
 
@@ -105,7 +106,17 @@ export function LessonVideoPlayer({
     setHasError(false);
     setIsLoading(true);
     setLastReportedPercent(0);
+    setBufferedPercent(0);
   }, [url]);
+
+  const handleProgressBuffer = () => {
+    if (!videoRef.current || !videoRef.current.duration) return;
+    const b = videoRef.current.buffered;
+    if (b.length > 0) {
+      const end = b.end(b.length - 1);
+      setBufferedPercent(Math.min(100, Math.round((end / videoRef.current.duration) * 100)));
+    }
+  };
 
   // Fullscreen change listener
   useEffect(() => {
@@ -160,11 +171,12 @@ export function LessonVideoPlayer({
     const curr = videoRef.current.currentTime;
     const dur = videoRef.current.duration || 0;
     setCurrentTime(curr);
+    handleProgressBuffer();
 
     if (dur > 0 && onProgress) {
       const percent = Math.round((curr / dur) * 100);
-      // Report progression at 5% intervals to prevent excessive network calls
-      if (percent >= lastReportedPercent + 5 || percent === 100) {
+      // Report progression at 10% intervals to prevent excessive network calls while maintaining progress fidelity
+      if (percent >= lastReportedPercent + 10 || percent === 100) {
         setLastReportedPercent(percent);
         onProgress(percent);
       }
@@ -242,17 +254,23 @@ export function LessonVideoPlayer({
         src={source.rawUrl}
         poster={poster}
         playsInline
+        preload="metadata"
+        crossOrigin="anonymous"
         className="h-full w-full object-contain cursor-pointer"
         onClick={togglePlay}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onTimeUpdate={handleTimeUpdate}
+        onProgress={handleProgressBuffer}
         onLoadedMetadata={() => {
           setIsLoading(false);
           if (videoRef.current) {
             setDuration(videoRef.current.duration || 0);
           }
+          handleProgressBuffer();
         }}
+        onCanPlay={() => setIsLoading(false)}
+        onCanPlayThrough={() => setIsLoading(false)}
         onWaiting={() => setIsLoading(true)}
         onPlaying={() => setIsLoading(false)}
         onEnded={() => {
@@ -307,8 +325,20 @@ export function LessonVideoPlayer({
 
       {/* Custom Bottom Control Bar */}
       <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-3 pt-6 transition-opacity opacity-0 group-hover:opacity-100 flex flex-col gap-2">
-        {/* Seek Bar */}
-        <div className="relative flex items-center group/seek">
+        {/* Seek Bar with Buffer Indicator */}
+        <div className="relative flex items-center group/seek h-3">
+          {/* Background Track */}
+          <div className="absolute inset-x-0 h-1.5 bg-white/20 rounded-lg pointer-events-none group-hover/seek:h-2 transition-all" />
+          {/* Buffered Track (shows how much video is loaded ahead without buffering) */}
+          <div
+            className="absolute left-0 h-1.5 bg-white/40 rounded-lg pointer-events-none group-hover/seek:h-2 transition-all"
+            style={{ width: `${Math.min(100, Math.max(0, bufferedPercent))}%` }}
+          />
+          {/* Active Played Track */}
+          <div
+            className="absolute left-0 h-1.5 bg-primary rounded-lg pointer-events-none group-hover/seek:h-2 transition-all"
+            style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
+          />
           <input
             type="range"
             min={0}
@@ -316,7 +346,7 @@ export function LessonVideoPlayer({
             step={0.1}
             value={progressPercent || 0}
             onChange={handleSeek}
-            className="w-full h-1.5 bg-white/30 rounded-lg appearance-none cursor-pointer accent-primary hover:h-2.5 transition-all"
+            className="relative z-10 w-full h-1.5 bg-transparent rounded-lg appearance-none cursor-pointer accent-primary hover:h-2 transition-all"
           />
         </div>
 

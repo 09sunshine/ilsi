@@ -60,22 +60,72 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   return (data?.data !== undefined ? data.data : data) as T;
 }
 
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+const studentDashboardCache = new Map<string, CacheEntry<any>>();
+const DASHBOARD_CACHE_TTL = 3 * 60 * 1000; // 3 minutes fresh
+
+export function getCachedStudentDashboard(cohortId?: string): any | null {
+  const key = cohortId || "default";
+  const entry = studentDashboardCache.get(key);
+  if (!entry) return null;
+  return entry.data;
+}
+
+export function invalidateStudentDashboardCache(cohortId?: string) {
+  if (cohortId) {
+    studentDashboardCache.delete(cohortId);
+  } else {
+    studentDashboardCache.clear();
+  }
+}
+
 export const api = {
-  getStudentDashboard: (cohortId?: string) =>
-    request<any>(cohortId ? `/api/student/dashboard?cohortId=${encodeURIComponent(cohortId)}` : "/api/student/dashboard"),
+  getStudentDashboard: async (cohortId?: string, options?: { forceRefresh?: boolean }) => {
+    const key = cohortId || "default";
+    const now = Date.now();
+    const cached = studentDashboardCache.get(key);
+
+    if (!options?.forceRefresh && cached && now - cached.timestamp < DASHBOARD_CACHE_TTL) {
+      return cached.data;
+    }
+
+    const endpoint = cohortId
+      ? `/api/student/dashboard?cohortId=${encodeURIComponent(cohortId)}`
+      : "/api/student/dashboard";
+    const data = await request<any>(endpoint);
+    if (data) {
+      studentDashboardCache.set(key, { data, timestamp: Date.now() });
+      if (!cohortId && data.cohort?.id) {
+        studentDashboardCache.set(data.cohort.id, { data, timestamp: Date.now() });
+      }
+    }
+    return data;
+  },
   getLesson: (id: string) => request<any>(`/api/lessons/${id}`),
   getLessonVideo: (id: string) => request<{ playbackUrl: string; durationSeconds: number; thumbnailUrl?: string }>(`/api/lessons/${id}/video`),
-  updateLessonProgress: (id: string, payload: { videoPercent: number; markComplete?: boolean }) =>
-    request<{ completed: boolean; videoPercent: number }>(`/api/progress/lessons/${id}`, {
+  updateLessonProgress: async (id: string, payload: { videoPercent: number; markComplete?: boolean }) => {
+    const res = await request<{ completed: boolean; videoPercent: number }>(`/api/progress/lessons/${id}`, {
       method: "POST",
       body: JSON.stringify(payload),
-    }),
+    });
+    if (payload.markComplete) {
+      invalidateStudentDashboardCache();
+    }
+    return res;
+  },
   getQuiz: (id: string) => request<any>(`/api/quizzes/${id}`),
-  submitQuizAttempt: (id: string, answers: Record<string, string>) =>
-    request<any>(`/api/quizzes/${id}/attempts`, {
+  submitQuizAttempt: async (id: string, answers: Record<string, string>) => {
+    const res = await request<any>(`/api/quizzes/${id}/attempts`, {
       method: "POST",
       body: JSON.stringify({ answers }),
-    }),
+    });
+    invalidateStudentDashboardCache();
+    return res;
+  },
   getLiveSessions: () => request<any[]>("/api/live-sessions"),
   getNotifications: () => request<any[]>("/api/notifications"),
   markAllNotificationsRead: () => request<{ success: boolean }>("/api/notifications/mark-all-read", { method: "POST" }),

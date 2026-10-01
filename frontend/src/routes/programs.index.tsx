@@ -209,6 +209,12 @@ function ProgramsPage() {
                   width={1008}
                   height={656}
                   className="h-44 w-full rounded-xl object-cover"
+                  onError={(e) => {
+                    const fallback = programImage[p.slug] || youngLeadersImg;
+                    if (e.currentTarget.src !== fallback) {
+                      e.currentTarget.src = fallback;
+                    }
+                  }}
                 />
                 <p className="mt-4 truncate text-xs text-muted-foreground">
                   {cohortList.length > 0 ? L(cohortList[0]!.name) : (p.format ? L(p.format) : "Cohort Program")}

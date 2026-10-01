@@ -15,12 +15,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CardsSkeleton, RowsSkeleton } from "@/components/states";
 import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
 import { useLearning } from "@/features/learning/LearningProvider";
 import { moduleLessonCompletion, moduleState, overallProgress } from "@/lib/access";
 import { NOW } from "@/lib/clock";
 import { cn, resolveMediaUrl } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { api, getCachedStudentDashboard } from "@/lib/api";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -47,13 +49,15 @@ function DashboardPage() {
   const now = NOW;
   const fr = locale === "fr";
 
-  const [dashData, setDashData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [dashData, setDashData] = useState<any>(() => getCachedStudentDashboard());
+  const [loading, setLoading] = useState(() => !getCachedStudentDashboard());
 
-  async function loadDash(cId?: string) {
+  async function loadDash(cId?: string, forceRefresh = false) {
     try {
-      setLoading(true);
-      const data = await api.getStudentDashboard(cId);
+      if (!dashData && !getCachedStudentDashboard(cId)) {
+        setLoading(true);
+      }
+      const data = await api.getStudentDashboard(cId, { forceRefresh });
       if (data) {
         setDashData(data);
       }
@@ -65,11 +69,15 @@ function DashboardPage() {
   }
 
   useEffect(() => {
-    void loadDash();
+    void loadDash(undefined, true);
   }, []);
 
   const switchCohort = (cId: string) => {
-    void loadDash(cId);
+    const cached = getCachedStudentDashboard(cId);
+    if (cached) {
+      setDashData(cached);
+    }
+    void loadDash(cId, true);
   };
 
   const participant = dashData?.student || dashData?.participant || { firstName: "", lastName: "" };
@@ -181,6 +189,24 @@ function DashboardPage() {
   const stateTone = (s: string) =>
     s === "COMPLETED" ? "success" : s === "ACTIVE" ? "warning" : s === "FAILED" ? "danger" : "muted";
 
+  if (!dashData && loading) {
+    return (
+      <AppShell title={t("nav.dashboard")}>
+        <div className="mx-auto max-w-7xl space-y-6">
+          <div className="flex items-center gap-4">
+            <Skeleton className="size-14 sm:size-16 rounded-xl" />
+            <div className="space-y-2">
+              <Skeleton className="h-7 w-48 rounded-lg" />
+              <Skeleton className="h-4 w-72 rounded-lg" />
+            </div>
+          </div>
+          <CardsSkeleton count={4} />
+          <RowsSkeleton rows={5} />
+        </div>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell title={t("nav.dashboard")}>
       <div className="mx-auto max-w-7xl space-y-6">
@@ -192,6 +218,9 @@ function DashboardPage() {
                 src={resolveMediaUrl(cohort?.thumbnailUrl || cohort?.thumbnail_url || program?.thumbnailUrl || program?.thumbnail_url)}
                 alt={program ? L(program.title) : "Course thumbnail"}
                 className="size-14 sm:size-16 rounded-xl object-cover border border-border shadow-sm shrink-0"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
               />
             ) : null}
             <div>

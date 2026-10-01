@@ -37,6 +37,8 @@ dist-ssr
 .DS_Store
 *.suo
 *.ntvs*
-*.njsproj
-*.sln
 *.sw?
+
+# Media proxy disk cache
+backend/public/uploads/cache/
+

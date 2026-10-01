@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import compression from "compression";
 import { env } from "./config/env.js";
 import { authenticate } from "./middleware/rbac.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -19,6 +20,7 @@ import supportRoutes from "./routes/support.routes.js";
 import contactRoutes from "./routes/contact.routes.js";
 import programRoutes from "./routes/program.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
+import mediaRoutes from "./routes/media.routes.js";
 
 const app = express();
 
@@ -29,6 +31,17 @@ app.set("trust proxy", 1);
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
+
+// Response compression (gzip/brotli) for all API payloads > 1KB to accelerate network transfer
+app.use(
+  compression({
+    threshold: 1024,
+    filter: (req, res) => {
+      if (req.headers["x-no-compression"]) return false;
+      return compression.filter(req, res);
+    },
   })
 );
 
@@ -146,6 +159,7 @@ app.use("/api", paymentRoutes); // also mounts /api/enrollments/:id/payment, etc
 app.use("/api/student", studentRoutes);
 app.use("/api", studentRoutes); // also mounts /api/lessons, /api/quizzes, /api/live-sessions
 app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
+app.use("/api/media", mediaRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin", uploadRoutes);
 app.use("/api/google", googleRoutes);

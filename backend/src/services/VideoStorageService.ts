@@ -4,27 +4,55 @@ import { ModuleAccessService } from "./ModuleAccessService.js";
 import { LessonAccessService } from "./LessonAccessService.js";
 import { AppError, ErrorCodes } from "../constants/errors.js";
 
+interface CachedVideoPlayback {
+  playbackUrl: string;
+  durationSeconds: number;
+  thumbnailUrl?: string;
+  expiresAt: number;
+}
+
+// In-memory cache for signed playback URLs (50-minute TTL for a 60-minute signed URL)
+const signedPlaybackUrlCache = new Map<string, CachedVideoPlayback>();
+const SIGNED_URL_CACHE_TTL_MS = 50 * 60 * 1000;
+
+export function invalidateVideoUrlCache(lessonId?: string): void {
+  if (lessonId) {
+    signedPlaybackUrlCache.delete(lessonId);
+  } else {
+    signedPlaybackUrlCache.clear();
+  }
+}
+
 export class VideoStorageService {
   private static readonly BUCKET_NAME = "course-videos";
 
   /**
    * Authorizes and generates a short-lived signed URL for course video playback.
+   * Leverages an in-memory TTL cache to eliminate redundant Supabase Storage API round trips.
    */
-  static async getAuthorizedPlaybackUrl(lessonId: string, userId: string, isAdmin: boolean = false, targetCohortId?: string) {
-    // 1. Get lesson and module ID
-    const lessonRes = await pool.query(
-      `SELECT id, module_id, duration_minutes FROM lessons WHERE id = $1`,
-      [lessonId]
-    );
+  static async getAuthorizedPlaybackUrl(
+    lessonId: string,
+    userId: string,
+    isAdmin: boolean = false,
+    targetCohortId?: string,
+    skipAccessCheck: boolean = false
+  ) {
+    let lessonDurationMinutes = 15;
 
-    if (lessonRes.rows.length === 0) {
-      throw new AppError(404, ErrorCodes.LESSON_NOT_FOUND, "Lesson not found");
-    }
+    // 1. If not admin and not pre-verified, strictly verify lesson and module access
+    if (!isAdmin && !skipAccessCheck) {
+      const lessonRes = await pool.query(
+        `SELECT id, module_id, duration_minutes FROM lessons WHERE id = $1`,
+        [lessonId]
+      );
 
-    const lesson = lessonRes.rows[0];
+      if (lessonRes.rows.length === 0) {
+        throw new AppError(404, ErrorCodes.LESSON_NOT_FOUND, "Lesson not found");
+      }
 
-    // 2. If not admin, strictly verify lesson and module access
-    if (!isAdmin) {
+      const lesson = lessonRes.rows[0];
+      lessonDurationMinutes = lesson.duration_minutes || 15;
+
       try {
         await LessonAccessService.assertAccess(userId, lessonId, targetCohortId);
         if (lesson.module_id) {
@@ -37,6 +65,17 @@ export class VideoStorageService {
           `Video access denied: ${err?.message || "Unauthorized cohort content"}`
         );
       }
+    }
+
+    // 2. Check in-memory signed URL cache (returns in <1ms)
+    const now = Date.now();
+    const cached = signedPlaybackUrlCache.get(lessonId);
+    if (cached && cached.expiresAt > now) {
+      return {
+        playbackUrl: cached.playbackUrl,
+        durationSeconds: cached.durationSeconds,
+        thumbnailUrl: cached.thumbnailUrl,
+      };
     }
 
     // 3. Find video record
@@ -61,11 +100,17 @@ export class VideoStorageService {
       !video.storage_path.includes("supabase.co/storage");
 
     if (isExternal) {
-      return {
+      const result = {
         playbackUrl: video.storage_path,
-        durationSeconds: video.duration_seconds || lesson.duration_minutes * 60,
+        durationSeconds: video.duration_seconds || lessonDurationMinutes * 60,
         thumbnailUrl: video.thumbnail_path,
       };
+      // External links don't expire; cache for 24 hours
+      signedPlaybackUrlCache.set(lessonId, {
+        ...result,
+        expiresAt: now + 24 * 60 * 60 * 1000,
+      });
+      return result;
     }
 
     // 5. Generate signed URL from Supabase Storage (valid for 1 hour)
@@ -88,21 +133,29 @@ export class VideoStorageService {
 
         return {
           playbackUrl: pubData?.publicUrl || (video.storage_path.startsWith("http") ? video.storage_path : null),
-          durationSeconds: video.duration_seconds || lesson.duration_minutes * 60,
+          durationSeconds: video.duration_seconds || lessonDurationMinutes * 60,
           thumbnailUrl: video.thumbnail_path,
         };
       }
 
-      return {
+      const result = {
         playbackUrl: data.signedUrl,
-        durationSeconds: video.duration_seconds || lesson.duration_minutes * 60,
+        durationSeconds: video.duration_seconds || lessonDurationMinutes * 60,
         thumbnailUrl: video.thumbnail_path,
       };
+
+      // Cache valid signed URL for 50 minutes to eliminate repetitive storage API calls
+      signedPlaybackUrlCache.set(lessonId, {
+        ...result,
+        expiresAt: now + SIGNED_URL_CACHE_TTL_MS,
+      });
+
+      return result;
     } catch (err) {
       console.error("[Signed URL Generation Failed]:", err);
       return {
         playbackUrl: video.storage_path.startsWith("http") ? video.storage_path : null,
-        durationSeconds: video.duration_seconds || lesson.duration_minutes * 60,
+        durationSeconds: video.duration_seconds || lessonDurationMinutes * 60,
         thumbnailUrl: video.thumbnail_path,
       };
     }

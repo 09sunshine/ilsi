@@ -42,6 +42,11 @@ export const Route = createFileRoute("/learn/$moduleId/$lessonId")({
   component: LessonPage,
 });
 
+// In-memory client-side cache for instant lesson navigation and background prefetching
+const clientLessonCache = new Map<string, any>();
+let cachedDashboardData: { data: any; timestamp: number } | null = null;
+const DASHBOARD_CACHE_TTL = 3 * 60 * 1000;
+
 function LessonPage() {
   const { moduleId, lessonId } = Route.useLoaderData();
   const { t, locale } = useI18n();
@@ -50,26 +55,44 @@ function LessonPage() {
   const navigate = useNavigate();
   const { progress, completeLesson } = useLearning();
 
-  const [lesson, setLesson] = useState<any>(null);
+  const [lesson, setLesson] = useState<any>(() => clientLessonCache.get(lessonId) || null);
   const [module, setModule] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(() => !clientLessonCache.has(lessonId));
   const [error, setError] = useState<{ message: string; code?: string; details?: any } | null>(null);
 
   useEffect(() => {
     let mounted = true;
     async function load() {
-      setLoading(true);
+      const cached = clientLessonCache.get(lessonId);
+      if (cached) {
+        setLesson(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
       setError(null);
+
       try {
-        const lRes = await api.getLesson(lessonId);
+        const lRes = cached || (await api.getLesson(lessonId));
+        if (mounted && !cached) {
+          clientLessonCache.set(lessonId, lRes);
+          setLesson(lRes);
+        }
+
+        // Fast cached lookup for parent module
         let modRes = null;
         try {
-          const dash = await api.getStudentDashboard();
+          const now = Date.now();
+          if (!cachedDashboardData || now - cachedDashboardData.timestamp > DASHBOARD_CACHE_TTL) {
+            const dash = await api.getStudentDashboard();
+            cachedDashboardData = { data: dash, timestamp: now };
+          }
+          const dash = cachedDashboardData.data;
           modRes = dash?.modules?.find((m: any) => m.id === moduleId || m.module?.id === moduleId);
           if (modRes?.module) modRes = modRes.module;
         } catch (_) {}
+
         if (mounted) {
-          setLesson(lRes);
           setModule(modRes || { id: moduleId, title: lRes?.title || { en: "Module" }, lessons: [lRes] });
         }
       } catch (err: any) {
@@ -84,11 +107,30 @@ function LessonPage() {
         if (mounted) setLoading(false);
       }
     }
+
     load();
     return () => {
       mounted = false;
     };
   }, [moduleId, lessonId]);
+
+  const lessons: any[] = module?.lessons || (lesson ? [lesson] : []);
+  const index = lessons.findIndex((l: any) => l.id === lessonId);
+  const prev = index > 0 ? lessons[index - 1] : null;
+  const next = index >= 0 && index < lessons.length - 1 ? lessons[index + 1] : null;
+
+  // Proactive background prefetch for the adjacent next lesson in sequence (0-buffer transition)
+  useEffect(() => {
+    if (!next?.id || clientLessonCache.has(next.id)) return;
+    const timer = setTimeout(() => {
+      api.getLesson(next.id)
+        .then((data) => {
+          if (data) clientLessonCache.set(next.id, data);
+        })
+        .catch(() => {});
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [next?.id]);
 
   if (loading) {
     return (
@@ -195,22 +237,22 @@ function LessonPage() {
     );
   }
 
-  const lessons: any[] = module?.lessons || [lesson];
-  const index = lessons.findIndex((l: any) => l.id === lessonId);
-  const prev = index > 0 ? lessons[index - 1] : null;
-  const next = index >= 0 && index < lessons.length - 1 ? lessons[index + 1] : null;
-  const isDone = !!progress.lessons[lesson.id]?.completed || !!lesson.completed;
-
+  const isDone = !!progress.lessons[lesson?.id]?.completed || !!lesson?.completed;
   const completedCount = lessons.filter((l: any) => !!progress.lessons[l.id]?.completed || !!l.completed).length;
   const percent = lessons.length > 0 ? Math.round((completedCount / lessons.length) * 100) : 0;
 
   const handleComplete = async () => {
+    // Optimistic UI response: update local state instantly
+    completeLesson(lesson.id);
+    setLesson((prev: any) => ({ ...prev, completed: true }));
+    if (clientLessonCache.has(lesson.id)) {
+      clientLessonCache.set(lesson.id, { ...clientLessonCache.get(lesson.id), completed: true });
+    }
+    toast.success(t("course.completed"));
+
     try {
       await api.updateLessonProgress(lesson.id, { videoPercent: 100, markComplete: true });
     } catch (_) {}
-    completeLesson(lesson.id);
-    setLesson((prev: any) => ({ ...prev, completed: true }));
-    toast.success(t("course.completed"));
   };
 
   const isParticipantDisqualified =

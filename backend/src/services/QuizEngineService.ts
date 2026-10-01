@@ -23,29 +23,30 @@ export class QuizEngineService {
 
     const quiz = quizRes.rows[0];
 
-    // Fetch user's previous attempts first to check completion / attempt status
-    const attemptsRes = await pool.query(
-      `SELECT id, attempt_number, score, percentage, passed, started_at, submitted_at
-       FROM quiz_attempts
-       WHERE quiz_id = $1 AND user_id = $2
-       ORDER BY attempt_number ASC`,
-      [quiz.id, userId]
-    );
+    // Fetch user's previous attempts, enrollment status and user status concurrently
+    const [attemptsRes, enrollRes, userRes] = await Promise.all([
+      pool.query(
+        `SELECT id, attempt_number, score, percentage, passed, started_at, submitted_at
+         FROM quiz_attempts
+         WHERE quiz_id = $1 AND user_id = $2
+         ORDER BY attempt_number ASC`,
+        [quiz.id, userId]
+      ),
+      pool.query(
+        `SELECT status FROM enrollments WHERE user_id = $1 ORDER BY (status = 'DISQUALIFIED') DESC, enrolled_at DESC LIMIT 1`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT status FROM users WHERE id = $1`,
+        [userId]
+      ),
+    ]);
 
     const attemptsAllowed = quiz.attempts_allowed || 3;
     const hasPassed = attemptsRes.rows.some((a) => a.passed);
     const attemptsExhausted = attemptsRes.rows.length >= attemptsAllowed;
     const isDisqualified = attemptsExhausted && !hasPassed;
 
-    // Check if participant enrollment or user is already DISQUALIFIED
-    const enrollRes = await pool.query(
-      `SELECT status FROM enrollments WHERE user_id = $1 ORDER BY (status = 'DISQUALIFIED') DESC, enrolled_at DESC LIMIT 1`,
-      [userId]
-    );
-    const userRes = await pool.query(
-      `SELECT status FROM users WHERE id = $1`,
-      [userId]
-    );
     const enrollmentDisqualified =
       enrollRes.rows[0]?.status === "DISQUALIFIED" || userRes.rows[0]?.status === "DISQUALIFIED";
     const disqualified = isDisqualified || enrollmentDisqualified;
@@ -61,27 +62,53 @@ export class QuizEngineService {
 
     const revealAnswers = isAdmin || hasPassed || attemptsExhausted || disqualified;
 
-    // Fetch questions and options (include correct answers if attempts are exhausted, passed, or disqualified)
-    const questionsRes = await pool.query(
-      `SELECT id, order_index, type, prompt_en, prompt_fr, points, required,
-              correct_text, explanation_en, explanation_fr
-       FROM quiz_questions 
-       WHERE quiz_id = $1 
-       ORDER BY order_index ASC`,
-      [quiz.id]
-    );
+    const sortedAttempts = [...attemptsRes.rows].sort((a, b) => b.attempt_number - a.attempt_number);
+    const latestAttempt = sortedAttempts[0];
 
-    const questions = [];
-    for (const q of questionsRes.rows) {
-      const optionsRes = await pool.query(
-        `SELECT id, order_index, label_en, label_fr, correct 
-         FROM quiz_options 
-         WHERE question_id = $1 
+    // Fetch questions and (if attempt exists) latest attempt answers concurrently
+    const [questionsRes, answersRes] = await Promise.all([
+      pool.query(
+        `SELECT id, order_index, type, prompt_en, prompt_fr, points, required,
+                correct_text, explanation_en, explanation_fr
+         FROM quiz_questions 
+         WHERE quiz_id = $1 
          ORDER BY order_index ASC`,
-        [q.id]
+        [quiz.id]
+      ),
+      latestAttempt
+        ? pool.query(
+            `SELECT qa.question_id, qa.given_answer, qa.correct, qa.earned_points,
+                    qa.manual_score, qa.manual_rating, qa.manual_feedback, qa.graded_at
+             FROM quiz_answers qa
+             WHERE qa.attempt_id = $1`,
+            [latestAttempt.id]
+          )
+        : Promise.resolve({ rows: [] }),
+    ]);
+
+    // Fetch all options for all questions in ONE single batch query (eliminating N+1 query loop)
+    const questionIds = questionsRes.rows.map((q) => q.id);
+    const optionsByQuestion = new Map<string, any[]>();
+
+    if (questionIds.length > 0) {
+      const allOptionsRes = await pool.query(
+        `SELECT id, question_id, order_index, label_en, label_fr, correct 
+         FROM quiz_options 
+         WHERE question_id = ANY($1::uuid[]) 
+         ORDER BY order_index ASC`,
+        [questionIds]
       );
 
-      questions.push({
+      for (const opt of allOptionsRes.rows) {
+        const list = optionsByQuestion.get(opt.question_id) || [];
+        list.push(opt);
+        optionsByQuestion.set(opt.question_id, list);
+      }
+    }
+
+    const questions = questionsRes.rows.map((q) => {
+      const qOptions = optionsByQuestion.get(q.id) || [];
+      return {
         id: q.id,
         order: q.order_index,
         type: q.type,
@@ -90,25 +117,16 @@ export class QuizEngineService {
         required: q.required,
         explanation: revealAnswers ? { en: q.explanation_en, fr: q.explanation_fr } : undefined,
         correctText: revealAnswers ? q.correct_text : undefined,
-        options: optionsRes.rows.map((opt) => ({
+        options: qOptions.map((opt) => ({
           id: opt.id,
           label: { en: opt.label_en, fr: opt.label_fr },
           correct: revealAnswers ? opt.correct : undefined,
         })),
-      });
-    }
+      };
+    });
 
     let lastAttemptDetails = null;
-    if (attemptsRes.rows.length > 0) {
-      const sortedAttempts = [...attemptsRes.rows].sort((a, b) => b.attempt_number - a.attempt_number);
-      const latestAttempt = sortedAttempts[0];
-      const answersRes = await pool.query(
-        `SELECT qa.question_id, qa.given_answer, qa.correct, qa.earned_points,
-                qa.manual_score, qa.manual_rating, qa.manual_feedback, qa.graded_at
-         FROM quiz_answers qa
-         WHERE qa.attempt_id = $1`,
-        [latestAttempt.id]
-      );
+    if (latestAttempt) {
       lastAttemptDetails = {
         attempt: latestAttempt,
         answers: answersRes.rows.map((r: any) => ({

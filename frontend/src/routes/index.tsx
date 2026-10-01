@@ -361,6 +361,12 @@ function HomePage() {
                       alt={L(p.title)}
                       loading="lazy"
                       className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      onError={(e) => {
+                        const fallback = programImage[p.slug] || youngLeadersImg;
+                        if (e.currentTarget.src !== fallback) {
+                          e.currentTarget.src = fallback;
+                        }
+                      }}
                     />
                   </div>
                   <div className="flex flex-1 flex-col px-5 pb-5 pt-4">

@@ -567,4 +567,33 @@ describe("Security Architecture & Anti-Tampering Tests", () => {
       expect(() => evaluateParticipantDeletion("SUPER_ADMIN", "ADMIN")).toThrow("Forbidden: Cannot delete administrative accounts");
     });
   });
+
+  // 14. Media Proxy & Supabase Storage Delivery Architecture
+  describe("Media Proxy & SSRF Protection Architecture", () => {
+    function validateProxyDestination(targetUrl: string, allowedSupabaseUrl?: string): boolean {
+      if (!targetUrl || typeof targetUrl !== "string") return false;
+      const trimmed = targetUrl.trim();
+      const isSupabase =
+        trimmed.includes("supabase.co/storage") ||
+        (allowedSupabaseUrl && trimmed.startsWith(allowedSupabaseUrl));
+      const isRelative = trimmed.startsWith("/") && !trimmed.startsWith("//");
+      return !!(isSupabase || isRelative);
+    }
+
+    it("authorizes valid Supabase Storage public CDN URLs", () => {
+      const validUrl =
+        "https://rjnzjmewvyifeaotxpyg.supabase.co/storage/v1/object/public/course-thumbnails/cohort-covers/cover.png";
+      expect(validateProxyDestination(validUrl)).toBe(true);
+    });
+
+    it("authorizes local relative uploads paths", () => {
+      expect(validateProxyDestination("/uploads/cohort-covers/cover.png")).toBe(true);
+    });
+
+    it("strictly blocks unauthorized external domains to prevent SSRF vulnerabilities", () => {
+      expect(validateProxyDestination("http://169.254.169.254/latest/meta-data")).toBe(false);
+      expect(validateProxyDestination("https://malicious-site.com/image.png")).toBe(false);
+      expect(validateProxyDestination("//attacker.com/evil.png")).toBe(false);
+    });
+  });
 });

@@ -4,7 +4,7 @@ import { AppShell } from "@/components/app/AppShell";
 import { ModuleCard } from "@/components/app/ModuleCard";
 import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
 import { useLearning } from "@/features/learning/LearningProvider";
-import { api } from "@/lib/api";
+import { api, getCachedStudentDashboard } from "@/lib/api";
 import { NOW } from "@/lib/clock";
 import { cn, resolveMediaUrl } from "@/lib/utils";
 import { GraduationCap, Layers, ShieldAlert } from "lucide-react";
@@ -37,13 +37,15 @@ function LearnIndex() {
   const navigate = useNavigate({ from: "/learn/" });
 
   const [activeCohortId, setActiveCohortId] = useState<string | undefined>(search.cohortId);
-  const [dashData, setDashData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [dashData, setDashData] = useState<any>(() => getCachedStudentDashboard(search.cohortId));
+  const [loading, setLoading] = useState(() => !getCachedStudentDashboard(search.cohortId));
 
-  async function loadCourse(cId?: string) {
+  async function loadCourse(cId?: string, forceRefresh = false) {
     try {
-      setLoading(true);
-      const data = await api.getStudentDashboard(cId);
+      if (!dashData && !getCachedStudentDashboard(cId)) {
+        setLoading(true);
+      }
+      const data = await api.getStudentDashboard(cId, { forceRefresh });
       if (data) {
         setDashData(data);
         if (data.cohort?.id) {
@@ -58,13 +60,17 @@ function LearnIndex() {
   }
 
   useEffect(() => {
-    void loadCourse(search.cohortId);
+    void loadCourse(search.cohortId, true);
   }, [search.cohortId]);
 
   const handleSelectCohort = (cohortId: string) => {
     setActiveCohortId(cohortId);
     navigate({ search: { cohortId } });
-    void loadCourse(cohortId);
+    const cached = getCachedStudentDashboard(cohortId);
+    if (cached) {
+      setDashData(cached);
+    }
+    void loadCourse(cohortId, true);
   };
 
   const program = dashData?.program;
@@ -157,6 +163,9 @@ function LearnIndex() {
                     src={resolveMediaUrl(cohort.thumbnailUrl || cohort.thumbnail_url || program.thumbnailUrl || program.thumbnail_url)}
                     alt={L(program.title)}
                     className="size-14 sm:size-16 rounded-xl object-cover border border-border shadow-sm shrink-0"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
                   />
                 ) : null}
                 <div>

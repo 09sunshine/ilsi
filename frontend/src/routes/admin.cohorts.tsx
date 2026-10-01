@@ -51,21 +51,27 @@ function AdminCohorts() {
       const res = await api.getCohorts();
       if (res && Array.isArray(res)) {
         setCohortsList(res);
-        // Fetch live sessions for each cohort
-        for (const c of res) {
-          try {
-            const sessions = await api.getCohortLiveSessions(c.id);
-            const sessionsData = Array.isArray(sessions) ? sessions : (sessions as any)?.data || [];
-            setLiveSessions((prev) => ({ ...prev, [c.id]: sessionsData }));
-            const urlMap: Record<string, string> = {};
-            for (const s of sessionsData) {
-              urlMap[s.id] = s.meet_url || "";
+        // Concurrent parallel fetch for cohort live sessions (eliminates sequential N+1 loop)
+        const liveMap: Record<string, any[]> = {};
+        const urlMap: Record<string, string> = {};
+
+        await Promise.allSettled(
+          res.map(async (c: any) => {
+            try {
+              const sessions = await api.getCohortLiveSessions(c.id);
+              const sessionsData = Array.isArray(sessions) ? sessions : (sessions as any)?.data || [];
+              liveMap[c.id] = sessionsData;
+              for (const s of sessionsData) {
+                if (s?.id) urlMap[s.id] = s.meet_url || "";
+              }
+            } catch {
+              liveMap[c.id] = [];
             }
-            setEditingMeetUrl((prev) => ({ ...prev, ...urlMap }));
-          } catch {
-            // ignore per-cohort session fetch errors silently
-          }
-        }
+          })
+        );
+
+        setLiveSessions(liveMap);
+        setEditingMeetUrl((prev) => ({ ...prev, ...urlMap }));
       } else {
         setCohortsList([]);
       }
@@ -175,6 +181,9 @@ function AdminCohorts() {
                           src={resolveMediaUrl(c.thumbnailUrl || c.thumbnail_url)}
                           alt={L(c.name)}
                           className="size-12 rounded-lg object-cover border border-border shadow-sm shrink-0"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
                         />
                       ) : null}
                       <div>

@@ -9,7 +9,7 @@ const baseOptions = {
 export const globalLimiter = rateLimit({
   ...baseOptions,
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300, // limit each IP to 300 requests per window
+  max: 390, // increased by 30% from 300 to 390 for student & admin panel operations
   message: {
     success: false,
     error: {
@@ -22,7 +22,7 @@ export const globalLimiter = rateLimit({
 export const authLimiter = rateLimit({
   ...baseOptions,
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15, // limit each IP to 15 authentication attempts per 15 minutes
+  max: 15, // limit each IP to 15 authentication attempts per 15 minutes (unchanged)
   message: {
     success: false,
     error: {
@@ -48,7 +48,7 @@ export const applicationLimiter = rateLimit({
 export const quizLimiter = rateLimit({
   ...baseOptions,
   windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 15, // limit each IP to 15 quiz submissions per 10 minutes
+  max: 20, // increased by 30% from 15 to 20 for student quiz evaluations
   message: {
     success: false,
     error: {
@@ -61,7 +61,7 @@ export const quizLimiter = rateLimit({
 export const videoLimiter = rateLimit({
   ...baseOptions,
   windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 60, // limit each IP to 60 video signed URL requests per 10 minutes
+  max: 78, // increased by 30% from 60 to 78 for student video stream requests
   message: {
     success: false,
     error: {

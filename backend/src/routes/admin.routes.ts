@@ -4,7 +4,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { requireAuth, requireRole } from "../middleware/rbac.js";
 import { validateRequest } from "../middleware/validate.js";
 import { adminSchemas } from "../validators/schemas.js";
-import { AdminDashboardService } from "../services/AdminDashboardService.js";
+import { AdminDashboardService, invalidateAdminOverviewCache } from "../services/AdminDashboardService.js";
 import { PaymentService } from "../services/PaymentService.js";
 import { GoogleMeetService, generateValidGoogleMeetUrl } from "../integrations/google/meet.js";
 import { auth } from "../config/auth.js";
@@ -12,8 +12,20 @@ import { pool } from "../database/pool.js";
 import { AppError, ErrorCodes } from "../constants/errors.js";
 import { NotificationService } from "../services/NotificationService.js";
 import { supabaseAdmin } from "../integrations/supabase/client.js";
+import { invalidateVideoUrlCache } from "../services/VideoStorageService.js";
 
 const router = Router();
+
+interface AdminParticipantsCacheEntry {
+  data: any;
+  expiresAt: number;
+}
+const adminParticipantsCache = new Map<string, AdminParticipantsCacheEntry>();
+const PARTICIPANTS_CACHE_TTL_MS = 15_000; // 15 seconds TTL
+
+export function invalidateAdminParticipantsCache() {
+  adminParticipantsCache.clear();
+}
 
 // Protect all admin endpoints with RBAC
 router.use(requireAuth);
@@ -1361,6 +1373,12 @@ router.post(
 router.get("/participants", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { cohortId } = req.query;
+    const cohortKey = cohortId && cohortId !== "ALL" ? String(cohortId) : "ALL";
+    const nowMs = Date.now();
+    const cached = adminParticipantsCache.get(cohortKey);
+    if (cached && cached.expiresAt > nowMs) {
+      return res.json({ success: true, data: cached.data });
+    }
 
     // Aggregate all cohorts per user into a JSON array so each user appears exactly once,
     // including accurate lesson progress matching the StudentDashboardService calculation
@@ -1481,6 +1499,11 @@ router.get("/participants", async (req: Request, res: Response, next: NextFuncti
       };
     });
 
+    adminParticipantsCache.set(cohortKey, {
+      data: list,
+      expiresAt: nowMs + PARTICIPANTS_CACHE_TTL_MS,
+    });
+
     res.json({ success: true, data: list });
   } catch (error) {
     next(error);
@@ -1564,6 +1587,9 @@ router.post("/participants", async (req: Request, res: Response, next: NextFunct
     );
     const coh = cohortInfo.rows[0];
 
+    invalidateAdminParticipantsCache();
+    invalidateAdminOverviewCache();
+
     res.status(201).json({
       success: true,
       data: {
@@ -1645,6 +1671,9 @@ router.delete("/participants/:id", async (req: Request, res: Response, next: Nex
     );
 
     await client.query("COMMIT");
+
+    invalidateAdminParticipantsCache();
+    invalidateAdminOverviewCache();
 
     res.json({
       success: true,
@@ -3088,7 +3117,7 @@ router.patch(
  */
 router.patch("/lessons/:id/video", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { videoUrl, durationMinutes } = req.body;
 
     const lessonRes = await pool.query(`SELECT id, title_en FROM lessons WHERE id = $1`, [id]);
@@ -3114,6 +3143,7 @@ router.patch("/lessons/:id/video", async (req: Request, res: Response, next: Nex
           [id, videoUrl, `${lessonRes.rows[0].title_en || "lesson"}.mp4`]
         );
       }
+      invalidateVideoUrlCache(id);
     }
 
     res.json({

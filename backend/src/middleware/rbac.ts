@@ -22,10 +22,58 @@ declare global {
   }
 }
 
+interface CachedSession {
+  user: NonNullable<Express.Request["user"]>;
+  session: any;
+  expiresAt: number;
+}
+
+// In-memory session cache with 30-second TTL to avoid redundant Postgres queries on every request
+const sessionCache = new Map<string, CachedSession>();
+const SESSION_CACHE_TTL_MS = 30_000;
+
+export function clearSessionCache(): void {
+  sessionCache.clear();
+}
+
+function cleanExpiredSessions() {
+  if (sessionCache.size > 1000) {
+    const now = Date.now();
+    for (const [key, val] of sessionCache.entries()) {
+      if (val.expiresAt <= now) {
+        sessionCache.delete(key);
+      }
+    }
+  }
+}
+
 export async function authenticate(req: Request, _res: Response, next: NextFunction): Promise<void> {
   if (req.method === "OPTIONS") {
     return next();
   }
+
+  const authHeader = req.headers.authorization;
+  const cookieHeader = req.headers.cookie;
+
+  // Fast-path: Skip Better Auth lookup if no authorization header and no session cookies exist
+  if (!authHeader && (!cookieHeader || !cookieHeader.includes("session"))) {
+    return next();
+  }
+
+  const cacheKey = authHeader ? `hdr:${authHeader}` : `cookie:${cookieHeader}`;
+  const now = Date.now();
+  const cached = sessionCache.get(cacheKey);
+
+  if (cached) {
+    if (cached.expiresAt > now) {
+      req.user = cached.user;
+      req.session = cached.session;
+      return next();
+    } else {
+      sessionCache.delete(cacheKey);
+    }
+  }
+
   try {
     const session = await auth.api.getSession({
       headers: fromNodeHeaders(req.headers),
@@ -42,6 +90,13 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
         locale: (session.user as any).locale || "fr",
       };
       req.session = session.session;
+
+      cleanExpiredSessions();
+      sessionCache.set(cacheKey, {
+        user: req.user,
+        session: req.session,
+        expiresAt: now + SESSION_CACHE_TTL_MS,
+      });
     }
     next();
   } catch (error) {

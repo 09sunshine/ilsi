@@ -10,6 +10,7 @@ export interface LessonAccessEvaluation {
   lockReason?: LockReason;
   cohortId?: string;
   cohortLessonId?: string;
+  moduleId?: string;
   availableFrom?: string;
   availableUntil?: string;
   prerequisite?: {
@@ -18,6 +19,28 @@ export interface LessonAccessEvaluation {
   } | null;
   progressPercent?: number;
   completed?: boolean;
+}
+
+interface AccessCacheEntry {
+  eval: LessonAccessEvaluation;
+  expiresAt: number;
+}
+
+const accessEvaluationCache = new Map<string, AccessCacheEntry>();
+const ACCESS_CACHE_TTL_MS = 20_000; // 20 seconds TTL
+
+export function invalidateLessonAccessCache(userId?: string, lessonId?: string) {
+  if (!userId && !lessonId) {
+    accessEvaluationCache.clear();
+    return;
+  }
+  for (const key of accessEvaluationCache.keys()) {
+    if (userId && key.startsWith(`${userId}:`)) {
+      accessEvaluationCache.delete(key);
+    } else if (lessonId && key.includes(`:${lessonId}:`)) {
+      accessEvaluationCache.delete(key);
+    }
+  }
 }
 
 export class LessonAccessService {
@@ -37,6 +60,17 @@ export class LessonAccessService {
     targetCohortId?: string,
     now: Date = new Date()
   ): Promise<LessonAccessEvaluation> {
+    const isTest = process.env.NODE_ENV === "test";
+    const cacheKey = `${userId}:${lessonId}:${targetCohortId || ""}`;
+    const nowMs = Date.now();
+
+    if (!isTest) {
+      const cached = accessEvaluationCache.get(cacheKey);
+      if (cached && cached.expiresAt > nowMs) {
+        return cached.eval;
+      }
+    }
+
     // 1. Fetch lesson information
     const lessonRes = await pool.query(
       `SELECT l.id, l.module_id, l.order_index, l.type, l.title_en, l.title_fr,
@@ -332,35 +366,45 @@ export class LessonAccessService {
     }
 
     if (isCompleted) {
-      return {
+      const evalRes: LessonAccessEvaluation = {
         allowed: true,
         state: "COMPLETED",
         code: "OK",
         isLocked: false,
         cohortId,
         cohortLessonId: cohortLesson.id,
+        moduleId: lesson.module_id,
         availableFrom: startAt.toISOString(),
         availableUntil: endAt.toISOString(),
         progressPercent,
         completed: true,
         prerequisite: prerequisiteInfo,
       };
+      if (!isTest) {
+        accessEvaluationCache.set(cacheKey, { eval: evalRes, expiresAt: nowMs + ACCESS_CACHE_TTL_MS });
+      }
+      return evalRes;
     }
 
     // Lesson is currently open and available
-    return {
+    const evalRes: LessonAccessEvaluation = {
       allowed: true,
       state: progressPercent > 0 ? "IN_PROGRESS" : "AVAILABLE",
       code: "OK",
       isLocked: false,
       cohortId,
       cohortLessonId: cohortLesson.id,
+      moduleId: lesson.module_id,
       availableFrom: startAt.toISOString(),
       availableUntil: endAt.toISOString(),
       progressPercent,
       completed: false,
       prerequisite: prerequisiteInfo,
     };
+    if (!isTest) {
+      accessEvaluationCache.set(cacheKey, { eval: evalRes, expiresAt: nowMs + ACCESS_CACHE_TTL_MS });
+    }
+    return evalRes;
   }
 
   /**

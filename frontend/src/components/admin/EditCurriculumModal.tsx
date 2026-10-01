@@ -212,17 +212,29 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
 
   const handleUpdateModule = async () => {
     if (!editingModule) return;
+    const { id, titleEn, titleFr } = editingModule;
+    setEditingModule(null);
+
+    // Optimistic in-memory update for 0ms modal responsiveness
+    setModules((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? {
+              ...m,
+              titleEn,
+              titleFr,
+              title: { en: titleEn, fr: titleFr },
+            }
+          : m
+      )
+    );
+    toast.success(fr ? "Module mis à jour !" : "Module updated!");
+
     try {
-      await api.updateModule(editingModule.id, {
-        titleEn: editingModule.titleEn,
-        titleFr: editingModule.titleFr,
-      });
-      toast.success(fr ? "Module mis à jour !" : "Module updated!");
-      setEditingModule(null);
-      await fetchCurriculum();
-      if (onUpdated) onUpdated();
+      await api.updateModule(id, { titleEn, titleFr });
     } catch (err: any) {
       toast.error(formatHumanErrorMessage(err, "Failed to update module"));
+      await fetchCurriculum();
     }
   };
 
@@ -249,17 +261,20 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
     const targetIdx = direction === "up" ? modIdx - 1 : modIdx + 1;
     if (targetIdx < 0 || targetIdx >= modules.length) return;
 
+    const oldMods = [...modules];
     const newMods = [...modules];
     const [moved] = newMods.splice(modIdx, 1);
     newMods.splice(targetIdx, 0, moved);
 
+    // Instant optimistic visual feedback (0ms)
+    setModules(newMods);
+
     const orders = newMods.map((m, idx) => ({ id: m.id, orderIndex: idx + 1 }));
     try {
       await api.reorderModules(orders);
-      setModules(newMods);
       toast.success(fr ? "Ordre des modules mis à jour." : "Module order updated.");
-      if (onUpdated) onUpdated();
     } catch (err: any) {
+      setModules(oldMods);
       toast.error(formatHumanErrorMessage(err, "Failed to reorder modules"));
     }
   };
@@ -304,25 +319,50 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
 
   const handleUpdateLesson = async () => {
     if (!editingLesson) return;
-    try {
-      const utcStart = fromLocalDatetimeInputValue(editingLesson.startDate);
-      const utcEnd = fromLocalDatetimeInputValue(editingLesson.endDate);
+    const lessonToUpdate = editingLesson;
+    const utcStart = fromLocalDatetimeInputValue(lessonToUpdate.startDate);
+    const utcEnd = fromLocalDatetimeInputValue(lessonToUpdate.endDate);
+    const updatedTitle = { en: lessonToUpdate.titleEn, fr: lessonToUpdate.titleFr };
+    const updatedDuration = Number(lessonToUpdate.durationMinutes) || 15;
 
-      await api.updateLesson(editingLesson.id, {
-        titleEn: editingLesson.titleEn,
-        titleFr: editingLesson.titleFr,
-        durationMinutes: Number(editingLesson.durationMinutes) || 15,
+    setEditingLesson(null);
+
+    // Optimistic in-place update for instant UI feedback (0ms)
+    setModules((prev) =>
+      prev.map((m) => ({
+        ...m,
+        lessons: (m.lessons || []).map((l: any) =>
+          l.id === lessonToUpdate.id
+            ? {
+                ...l,
+                titleEn: lessonToUpdate.titleEn,
+                titleFr: lessonToUpdate.titleFr,
+                title: updatedTitle,
+                durationMinutes: updatedDuration,
+                startDate: utcStart,
+                endDate: utcEnd,
+                startAt: utcStart,
+                endAt: utcEnd,
+              }
+            : l
+        ),
+      }))
+    );
+    toast.success(fr ? "Leçon mise à jour !" : "Lesson updated!");
+
+    try {
+      await api.updateLesson(lessonToUpdate.id, {
+        titleEn: lessonToUpdate.titleEn,
+        titleFr: lessonToUpdate.titleFr,
+        durationMinutes: updatedDuration,
         startDate: utcStart,
         endDate: utcEnd,
         startAt: utcStart,
         endAt: utcEnd,
       });
-      toast.success(fr ? "Leçon mise à jour !" : "Lesson updated!");
-      setEditingLesson(null);
-      await fetchCurriculum();
-      if (onUpdated) onUpdated();
     } catch (err: any) {
       toast.error(formatHumanErrorMessage(err, "Failed to update lesson"));
+      await fetchCurriculum();
     }
   };
 
@@ -351,19 +391,24 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
     const targetIdx = direction === "up" ? lessonIdx - 1 : lessonIdx + 1;
     if (targetIdx < 0 || targetIdx >= mod.lessons.length) return;
 
+    const oldLessons = [...mod.lessons];
     const newLessons = [...mod.lessons];
     const [moved] = newLessons.splice(lessonIdx, 1);
     newLessons.splice(targetIdx, 0, moved);
 
+    // Instant optimistic visual feedback (0ms)
+    setModules((prev) =>
+      prev.map((m) => (m.id === moduleId ? { ...m, lessons: newLessons } : m))
+    );
+
     const orders = newLessons.map((l, idx) => ({ id: l.id, orderIndex: idx + 1 }));
     try {
       await api.reorderLessons(orders);
-      setModules((prev) =>
-        prev.map((m) => (m.id === moduleId ? { ...m, lessons: newLessons } : m))
-      );
       toast.success(fr ? "Ordre des leçons mis à jour." : "Lesson order updated.");
-      if (onUpdated) onUpdated();
     } catch (err: any) {
+      setModules((prev) =>
+        prev.map((m) => (m.id === moduleId ? { ...m, lessons: oldLessons } : m))
+      );
       toast.error(err.message || "Failed to reorder lessons");
     }
   };
@@ -385,11 +430,18 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
       await api.updateLessonVideo(lessonId, { videoUrl: targetUrl });
 
       setVideoLinkInputs((prev) => ({ ...prev, [lessonId]: targetUrl }));
+      setModules((prev) =>
+        prev.map((m) => ({
+          ...m,
+          lessons: (m.lessons || []).map((l: any) =>
+            l.id === lessonId ? { ...l, videoUrl: targetUrl } : l
+          ),
+        }))
+      );
       toast.success(fr ? "Vidéo sauvegardée avec succès !" : "Video uploaded and linked successfully!");
-      await fetchCurriculum();
-      if (onUpdated) onUpdated();
     } catch (err: any) {
       toast.error(err.message || "Video upload failed");
+      await fetchCurriculum();
     } finally {
       setUploadingLessonId(null);
       setUploadProgress(0);
@@ -400,13 +452,23 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
   const handleSaveVideoUrl = async (lessonId: string) => {
     const url = videoLinkInputs[lessonId] || "";
     setSavingVideoId(lessonId);
+
+    // Optimistic in-place update for instant UI response (0ms)
+    setModules((prev) =>
+      prev.map((m) => ({
+        ...m,
+        lessons: (m.lessons || []).map((l: any) =>
+          l.id === lessonId ? { ...l, videoUrl: url } : l
+        ),
+      }))
+    );
+    toast.success(fr ? "Lien vidéo mis à jour !" : "Video URL saved successfully!");
+
     try {
       await api.updateLessonVideo(lessonId, { videoUrl: url });
-      toast.success(fr ? "Lien vidéo mis à jour !" : "Video URL saved successfully!");
-      await fetchCurriculum();
-      if (onUpdated) onUpdated();
     } catch (err: any) {
       toast.error(err.message || "Failed to save video URL");
+      await fetchCurriculum();
     } finally {
       setSavingVideoId(null);
     }
@@ -415,14 +477,24 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
   const handleRemoveVideo = async (lessonId: string) => {
     if (!confirm(fr ? "Supprimer la vidéo de cette leçon ?" : "Remove video from this lesson?")) return;
     setSavingVideoId(lessonId);
+
+    // Optimistic in-place update for instant UI response (0ms)
+    setVideoLinkInputs((prev) => ({ ...prev, [lessonId]: "" }));
+    setModules((prev) =>
+      prev.map((m) => ({
+        ...m,
+        lessons: (m.lessons || []).map((l: any) =>
+          l.id === lessonId ? { ...l, videoUrl: null } : l
+        ),
+      }))
+    );
+    toast.success(fr ? "Vidéo retirée." : "Video removed.");
+
     try {
       await api.updateLessonVideo(lessonId, { videoUrl: "" });
-      setVideoLinkInputs((prev) => ({ ...prev, [lessonId]: "" }));
-      toast.success(fr ? "Vidéo retirée." : "Video removed.");
-      await fetchCurriculum();
-      if (onUpdated) onUpdated();
     } catch (err: any) {
       toast.error(err.message || "Failed to remove video");
+      await fetchCurriculum();
     } finally {
       setSavingVideoId(null);
     }
@@ -430,16 +502,35 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
 
   const handleSaveLessonBody = async (lessonId: string) => {
     setSavingBodyId(lessonId);
+    const bEn = bodyInputsEn[lessonId] || "";
+    const bFr = bodyInputsFr[lessonId] || "";
+
+    // Optimistic in-place update for instant UI response (0ms)
+    setModules((prev) =>
+      prev.map((m) => ({
+        ...m,
+        lessons: (m.lessons || []).map((l: any) =>
+          l.id === lessonId
+            ? {
+                ...l,
+                bodyEn: bEn,
+                bodyFr: bFr,
+                body: { en: bEn, fr: bFr },
+              }
+            : l
+        ),
+      }))
+    );
+    toast.success(fr ? "Texte de cours enregistré !" : "Lesson notes saved!");
+
     try {
       await api.updateLesson(lessonId, {
-        bodyEn: bodyInputsEn[lessonId] || "",
-        bodyFr: bodyInputsFr[lessonId] || "",
+        bodyEn: bEn,
+        bodyFr: bFr,
       });
-      toast.success(fr ? "Texte de cours enregistré !" : "Lesson notes saved!");
-      await fetchCurriculum();
-      if (onUpdated) onUpdated();
     } catch (err: any) {
       toast.error(err.message || "Failed to save lesson body");
+      await fetchCurriculum();
     } finally {
       setSavingBodyId(null);
     }
