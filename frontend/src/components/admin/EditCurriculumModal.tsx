@@ -15,6 +15,7 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
   ArrowUp,
   ArrowDown,
   CheckCircle2,
@@ -64,6 +65,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
   const [modules, setModules] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
+  const [mobileTab, setMobileTab] = useState<"modules" | "content">("modules");
   const [expandedLessonId, setExpandedLessonId] = useState<string | null>(null);
   const [activeLessonTab, setActiveLessonTab] = useState<Record<string, LessonTab>>({});
 
@@ -826,32 +828,45 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="relative flex flex-col w-full max-w-6xl max-h-[92vh] rounded-2xl bg-card border border-border shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto">
+      <div className="relative flex flex-col w-full max-w-6xl h-[95vh] sm:h-auto sm:max-h-[92vh] rounded-xl sm:rounded-2xl bg-card border border-border shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* MODAL HEADER */}
-        <div className="flex items-center justify-between border-b border-border px-6 py-4 bg-muted/30 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
-              <BookOpen className="size-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-display text-lg font-bold text-foreground">
-                  {fr ? "Éditer le Curriculum de la Cohorte" : "Edit Cohort Curriculum & Content"}
-                </h1>
-                <Badge variant="outline" className="text-xs bg-background">
-                  {cohort.status || "ACTIVE"}
-                </Badge>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border p-3 sm:px-6 sm:py-4 bg-muted/30 shrink-0 gap-3">
+          <div className="flex items-center justify-between gap-3 min-w-0 w-full sm:w-auto">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="flex size-9 sm:size-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                <BookOpen className="size-4 sm:size-5" />
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                <span className="font-semibold text-foreground">{L(cohort.name)}</span>
-                {cohort.programTitle && ` • ${typeof cohort.programTitle === "object" ? L(cohort.programTitle) : cohort.programTitle}`}
-                {" • "}
-                {modules.length} {fr ? "modules au total" : "modules total"}
-              </p>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  <h1 className="font-display text-sm sm:text-lg font-bold text-foreground truncate">
+                    {fr ? "Éditer le Curriculum" : "Edit Cohort Curriculum"}
+                  </h1>
+                  <Badge variant="outline" className="text-[10px] sm:text-xs bg-background shrink-0">
+                    {cohort.status || "ACTIVE"}
+                  </Badge>
+                </div>
+                <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
+                  <span className="font-semibold text-foreground">{L(cohort.name)}</span>
+                  {cohort.programTitle && ` • ${typeof cohort.programTitle === "object" ? L(cohort.programTitle) : cohort.programTitle}`}
+                  {" • "}
+                  {modules.length} {fr ? "modules" : "modules"}
+                </p>
+              </div>
             </div>
+            {/* Close button on mobile right next to title */}
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={onClose}
+              className="rounded-full size-8 hover:bg-muted shrink-0 sm:hidden"
+              aria-label="Close"
+            >
+              <X className="size-4" />
+            </Button>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-end">
             <Button
               size="sm"
               variant="outline"
@@ -860,36 +875,62 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                 setReviewTargetQuizTitle(null);
                 setIsReviewLongAnswersOpen(true);
               }}
-              className="gap-1.5 text-xs h-8 border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 font-semibold"
+              className="gap-1.5 text-xs h-7 sm:h-8 flex-1 sm:flex-initial border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 font-semibold justify-center"
             >
-              <FileText className="size-3.5 text-amber-600 dark:text-amber-400" />
-              {fr ? "Évaluer les réponses" : "Review Long Answers"}
+              <FileText className="size-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="truncate">{fr ? "Évaluations réponses" : "Review Long Answers"}</span>
             </Button>
             <Button
               size="sm"
               variant="outline"
               onClick={fetchCurriculum}
               disabled={loading}
-              className="gap-1.5 text-xs h-8"
+              className="gap-1.5 text-xs h-7 sm:h-8 px-2.5 sm:px-3 shrink-0"
+              title={fr ? "Actualiser" : "Refresh"}
             >
               <Clock className={cn("size-3.5", loading && "animate-spin")} />
-              {fr ? "Actualiser" : "Refresh"}
+              <span className="hidden sm:inline">{fr ? "Actualiser" : "Refresh"}</span>
             </Button>
+            {/* Desktop close button */}
             <Button
               size="icon"
               variant="ghost"
               onClick={onClose}
-              className="rounded-full size-8 hover:bg-muted"
+              className="rounded-full size-8 hover:bg-muted hidden sm:flex shrink-0"
+              aria-label="Close"
             >
               <X className="size-4" />
             </Button>
           </div>
         </div>
 
+        {/* MOBILE VIEW TOGGLE */}
+        <div className="md:hidden grid grid-cols-2 border-b border-border bg-muted/20 p-1.5 gap-1 shrink-0">
+          <Button
+            variant={mobileTab === "modules" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setMobileTab("modules")}
+            className="text-xs font-semibold gap-1.5 h-8"
+          >
+            <Layers className="size-3.5" />
+            {fr ? `Modules (${modules.length})` : `Modules (${modules.length})`}
+          </Button>
+          <Button
+            variant={mobileTab === "content" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setMobileTab("content")}
+            className="text-xs font-semibold gap-1.5 h-8"
+            disabled={!selectedModuleId}
+          >
+            <BookOpen className="size-3.5" />
+            {fr ? "Contenu & Leçons" : "Curriculum & Lessons"}
+          </Button>
+        </div>
+
         {/* MODAL BODY */}
-        <div className="flex flex-1 overflow-hidden min-h-[540px]">
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0 sm:min-h-[540px]">
           {/* LEFT SIDEBAR: MODULE LIST */}
-          <div className="w-80 border-r border-border bg-muted/10 flex flex-col shrink-0">
+          <div className={cn("w-full md:w-80 border-r border-border bg-muted/10 flex flex-col shrink-0 min-h-0", mobileTab === "content" && "hidden md:flex")}>
             <div className="p-3 border-b border-border/80 flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <Layers className="size-3.5" />
@@ -931,7 +972,10 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                   return (
                     <div
                       key={m.id}
-                      onClick={() => setSelectedModuleId(m.id)}
+                      onClick={() => {
+                        setSelectedModuleId(m.id);
+                        setMobileTab("content");
+                      }}
                       className={cn(
                         "group relative flex items-start justify-between rounded-xl p-3 text-left transition-all cursor-pointer border",
                         isSelected
@@ -1030,18 +1074,33 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
           </div>
 
           {/* RIGHT MAIN PANEL: ACTIVE MODULE LESSONS & CONTENT */}
-          <div className="flex-1 flex flex-col bg-background overflow-y-auto">
+          <div className={cn("flex-1 flex flex-col bg-background overflow-y-auto min-w-0 min-h-0", mobileTab === "modules" && "hidden md:flex")}>
+            {/* Mobile back button banner */}
+            <div className="md:hidden flex items-center justify-between p-2.5 border-b border-border bg-muted/20 shrink-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMobileTab("modules")}
+                className="text-xs gap-1.5 h-7 text-primary font-semibold hover:bg-primary/10"
+              >
+                <ChevronLeft className="size-3.5" />
+                {fr ? "← Liste des modules" : "← All Modules List"}
+              </Button>
+              <span className="text-[11px] font-medium text-muted-foreground px-2">
+                Module {modules.findIndex((m) => m.id === activeModule?.id) + 1}/{modules.length}
+              </span>
+            </div>
             {activeModule ? (
-              <div className="p-6 space-y-6">
+              <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 min-w-0">
                 {/* Active Module Header */}
-                <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-muted/20 border border-border">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary text-primary-foreground">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 rounded-xl bg-muted/20 border border-border">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary text-primary-foreground shrink-0">
                         Module{" "}
                         {modules.findIndex((m) => m.id === activeModule.id) + 1}
                       </span>
-                      <h2 className="text-base font-bold text-foreground">
+                      <h2 className="text-base font-bold text-foreground truncate">
                         {typeof activeModule.title === "object"
                           ? L(activeModule.title)
                           : activeModule.titleEn || activeModule.title}
@@ -1053,11 +1112,11 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                         : "Progressively build lessons, upload high-definition videos, attach quizzes, and upload lesson PDFs."}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <Button
                       size="sm"
                       onClick={() => setIsAddLessonOpen(true)}
-                      className="gap-1.5 text-xs font-semibold shadow-xs"
+                      className="gap-1.5 text-xs font-semibold shadow-xs w-full sm:w-auto justify-center"
                     >
                       <Plus className="size-3.5" />
                       {fr ? "Ajouter une leçon" : "Add Lesson"}
@@ -1257,14 +1316,14 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
 
                           {/* Expanded Lesson Drawer */}
                           {isExpanded && (
-                            <div className="p-5 space-y-5 bg-background">
+                            <div className="p-3 sm:p-5 space-y-4 sm:space-y-5 bg-background min-w-0">
                               {/* Sub-tabs: Video & Body, Chapters, Documents, Quiz */}
-                              <div className="flex items-center gap-2 border-b border-border pb-2">
+                              <div className="overflow-x-auto scrollbar-none flex items-center gap-1.5 border-b border-border pb-2 min-w-0">
                                 <Button
                                   size="sm"
                                   variant={tab === "video" ? "default" : "ghost"}
                                   onClick={() => setTab(lesson.id, "video")}
-                                  className="h-8 text-xs gap-1.5"
+                                  className="h-8 text-xs gap-1.5 shrink-0"
                                 >
                                   <Video className="size-3.5" />
                                   {fr ? "Vidéo & Contenu" : "Video & Notes"}
@@ -1273,7 +1332,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                                   size="sm"
                                   variant={tab === "chapters" ? "default" : "ghost"}
                                   onClick={() => setTab(lesson.id, "chapters")}
-                                  className="h-8 text-xs gap-1.5"
+                                  className="h-8 text-xs gap-1.5 shrink-0"
                                 >
                                   <Clock className="size-3.5" />
                                   {fr ? `Chapitres (${chapterCount})` : `Chapters (${chapterCount})`}
@@ -1282,7 +1341,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                                   size="sm"
                                   variant={tab === "resources" ? "default" : "ghost"}
                                   onClick={() => setTab(lesson.id, "resources")}
-                                  className="h-8 text-xs gap-1.5"
+                                  className="h-8 text-xs gap-1.5 shrink-0"
                                 >
                                   <Paperclip className="size-3.5" />
                                   {fr ? `Documents (${resourceCount})` : `PDFs & Docs (${resourceCount})`}
@@ -1291,7 +1350,7 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                                   size="sm"
                                   variant={tab === "quiz" ? "default" : "ghost"}
                                   onClick={() => setTab(lesson.id, "quiz")}
-                                  className="h-8 text-xs gap-1.5"
+                                  className="h-8 text-xs gap-1.5 shrink-0"
                                 >
                                   <HelpCircle className="size-3.5" />
                                   {fr

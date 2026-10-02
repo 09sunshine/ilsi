@@ -262,9 +262,9 @@ function LessonPage() {
 
   return (
     <AppShell title={L(module?.title || lesson.title)}>
-      <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="mx-auto grid w-full min-w-0 max-w-6xl gap-5 sm:gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
         {/* Module sidebar */}
-        <aside className="panel h-fit p-4 order-2 lg:order-1 lg:sticky lg:top-24">
+        <aside className="panel h-fit w-full min-w-0 p-3.5 sm:p-4 order-2 lg:order-1 lg:sticky lg:top-24">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {t("course.moduleProgress")}
           </p>
@@ -327,7 +327,7 @@ function LessonPage() {
                       ) : (
                         <PlayCircle className="mt-0.5 size-4 shrink-0" />
                       )}
-                      <span className="min-w-0">
+                      <span className="min-w-0 flex-1">
                         <span className="block truncate">
                           {i + 1}. {L(l.title)}
                         </span>
@@ -365,7 +365,7 @@ function LessonPage() {
         </aside>
 
         {/* Lesson content */}
-        <div className="min-w-0 space-y-5 order-1 lg:order-2">
+        <div className="w-full min-w-0 space-y-4 sm:space-y-5 order-1 lg:order-2">
           {/* Disqualification Banner */}
           {isParticipantDisqualified ? (
             <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 sm:p-5 text-destructive-foreground shadow-sm">
@@ -387,7 +387,7 @@ function LessonPage() {
             </div>
           ) : null}
 
-          <div className="panel p-4 sm:p-6">
+          <div className="panel p-3.5 sm:p-6 w-full min-w-0 overflow-hidden">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary">{(lesson.type || "VIDEO").replace("_", " ")}</Badge>
               {lesson.mandatory ? <Badge variant="outline">required</Badge> : null}
@@ -395,7 +395,7 @@ function LessonPage() {
                 {t("course.lessonOf", { current: index >= 0 ? index + 1 : 1, total: lessons.length })}
               </span>
             </div>
-            <h2 className="mt-3 font-display text-2xl font-semibold">{L(lesson.title)}</h2>
+            <h2 className="mt-3 font-display text-xl sm:text-2xl font-semibold break-words">{L(lesson.title)}</h2>
 
             {/* 1. Video Player */}
             <div className="mt-5">
@@ -415,24 +415,31 @@ function LessonPage() {
               />
             </div>
 
-            <p className="mt-5 text-sm leading-relaxed text-muted-foreground">{L(lesson.body || lesson.description || "")}</p>
+            <p className="mt-5 text-sm leading-relaxed text-muted-foreground break-words">{L(lesson.body || lesson.description || "")}</p>
 
             {/* 2. Attached Resources / Documents (swapped before quiz) */}
             {lesson.resources && lesson.resources.length > 0 ? (
-              <div className="mt-6">
+              <div className="mt-6 min-w-0">
                 <h3 className="text-sm font-semibold">{t("course.resources")}</h3>
-                <ul className="mt-2 space-y-2">
+                <ul className="mt-2 space-y-2 min-w-0">
                   {lesson.resources.map((r: any) => (
                     <li
                       key={r.id}
-                      className="flex items-center gap-3 rounded-lg border border-border p-3"
+                      className="flex items-center justify-between gap-2 sm:gap-3 rounded-lg border border-border p-2.5 sm:p-3 min-w-0"
                     >
-                      <FileText className="size-4 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate text-sm">{L(r.name)}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <FileText className="size-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs sm:text-sm font-medium">{L(r.name)}</p>
+                          <p className="text-[11px] text-muted-foreground sm:hidden">
+                            {r.type} {r.sizeKb ? `· ${r.sizeKb} KB` : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="hidden sm:inline shrink-0 text-xs text-muted-foreground">
                         {r.type} {r.sizeKb ? `· ${r.sizeKb} KB` : ""}
                       </span>
-                      <Button asChild size="sm" variant="ghost" aria-label="Download">
+                      <Button asChild size="sm" variant="ghost" aria-label="Download" className="shrink-0 size-8 p-0 sm:size-auto sm:px-3">
                         <a
                           href={r.url ? resolveMediaUrl(r.url) : "#"}
                           download={typeof r.name === "object" ? (r.name.en || "document") : (r.name || "document")}
@@ -456,36 +463,36 @@ function LessonPage() {
 
             {/* 3. Attached Lesson Quiz Section (swapped after documents) */}
             {lesson.quiz ? (
-              <div className="mt-6 rounded-xl border border-primary/25 bg-primary/5 p-4 sm:p-5 shadow-xs">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="space-y-1.5 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <div className="mt-6 rounded-xl border border-primary/25 bg-primary/5 p-3.5 sm:p-5 shadow-xs min-w-0">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
+                  <div className="space-y-1.5 min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                      <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
                         <HelpCircle className="size-4" />
                       </span>
-                      <h3 className="font-display text-base font-semibold text-foreground truncate">
+                      <h3 className="font-display text-sm sm:text-base font-semibold text-foreground truncate max-w-full">
                         {fr ? "Quiz de la leçon" : "Lesson Quiz"}: {L(lesson.quiz.title)}
                       </h3>
                       {lesson.quiz.hasPassed ? (
-                        <Badge className="bg-success/10 text-success border-success/30 flex items-center gap-1 text-xs">
+                        <Badge className="bg-success/10 text-success border-success/30 flex items-center gap-1 text-[11px] sm:text-xs">
                           <CheckCircle2 className="size-3" /> {fr ? "Réussi" : "Passed"} ({lesson.quiz.bestScore}%)
                         </Badge>
                       ) : lesson.quiz.attemptsCount >= (lesson.quiz.attemptsAllowed || 3) ? (
-                        <Badge variant="destructive" className="bg-destructive/15 text-destructive border-destructive/30 text-xs font-semibold">
+                        <Badge variant="destructive" className="bg-destructive/15 text-destructive border-destructive/30 text-[11px] sm:text-xs font-semibold">
                           {fr ? "Disqualifié" : "Disqualified"} ({lesson.quiz.attemptsCount}/{lesson.quiz.attemptsAllowed || 3})
                         </Badge>
                       ) : lesson.quiz.attemptsCount > 0 ? (
-                        <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 text-xs">
+                        <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 text-[11px] sm:text-xs">
                           {fr ? "Dernier score" : "Latest"}: {lesson.quiz.latestAttempt?.percentage}% ({fr ? "Requis" : "Req"}: {lesson.quiz.passingScore}%)
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-[11px] sm:text-xs">
                           {fr ? "À passer" : "To do"}
                         </Badge>
                       )}
                     </div>
                     {lesson.quiz.description?.en || lesson.quiz.description?.fr ? (
-                      <p className="text-xs text-muted-foreground">{L(lesson.quiz.description)}</p>
+                      <p className="text-xs text-muted-foreground break-words">{L(lesson.quiz.description)}</p>
                     ) : null}
                     <p className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
                       <span>
@@ -500,7 +507,7 @@ function LessonPage() {
                     </p>
                   </div>
 
-                  <Button asChild size="sm" className="shrink-0 gap-1.5 shadow-sm">
+                  <Button asChild size="sm" className="shrink-0 gap-1.5 shadow-sm w-full sm:w-auto justify-center">
                     <Link
                       to="/learn/$moduleId/quiz"
                       params={{ moduleId }}
@@ -521,8 +528,8 @@ function LessonPage() {
             ) : null}
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-2">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center w-full sm:w-auto">
               <Button
                 variant="outline"
                 size="sm"
@@ -534,6 +541,7 @@ function LessonPage() {
                     params: { moduleId, lessonId: prev.id },
                   })
                 }
+                className="w-full sm:w-auto justify-center"
               >
                 <ChevronLeft className="size-4" /> {t("course.prev")}
               </Button>
@@ -549,6 +557,7 @@ function LessonPage() {
                     params: { moduleId, lessonId: next.id },
                   })
                 }
+                className="w-full sm:w-auto justify-center"
               >
                 {t("course.next")} <ChevronRight className="size-4" />
               </Button>
@@ -557,6 +566,7 @@ function LessonPage() {
               size="sm"
               disabled={isDone || isParticipantDisqualified}
               onClick={handleComplete}
+              className="w-full sm:w-auto justify-center"
             >
               {isDone ? (
                 <>

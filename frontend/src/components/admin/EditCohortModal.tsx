@@ -199,35 +199,35 @@ export function EditCohortModal({ cohort, isOpen, onClose, onUpdated }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-5 backdrop-blur-sm overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 sm:p-5 backdrop-blur-sm overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="panel max-w-2xl w-full max-h-[92vh] flex flex-col p-4 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150"
+        className="panel max-w-2xl w-full max-h-[94vh] sm:max-h-[92vh] flex flex-col p-3.5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border pb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
-              <Edit3 className="size-5" />
+        <div className="flex items-center justify-between border-b border-border pb-3 sm:pb-4">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="size-8 sm:size-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <Edit3 className="size-4 sm:size-5" />
             </div>
             <div className="min-w-0">
-              <h3 className="font-display text-base sm:text-lg font-bold text-foreground truncate">
+              <h3 className="font-display text-sm sm:text-lg font-bold text-foreground truncate">
                 {fr ? "Modifier les Détails de la Cohorte" : "Edit Cohort Parameters"}
               </h3>
-              <p className="text-xs text-muted-foreground truncate">
+              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">
                 ID: {cohort.id} · {nameEn || "Cohort"}
               </p>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose} className="shrink-0">
+          <Button variant="ghost" size="sm" onClick={onClose} className="shrink-0 size-8 p-0">
             <X className="size-4" />
           </Button>
         </div>
 
         {/* Translation Bar */}
-        <div className="flex items-center justify-between bg-muted/40 px-3 py-2 rounded-lg my-3 border border-border/60 text-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-muted/40 px-3 py-2 rounded-lg my-3 border border-border/60 text-xs">
           <span className="flex items-center gap-1.5 text-muted-foreground">
             <Globe className="size-3.5 text-primary" />
             {fr ? "Synchronisation Bilingue & Devises" : "Bilingual & Currency Auto-Sync"}
@@ -239,7 +239,7 @@ export function EditCohortModal({ cohort, isOpen, onClose, onUpdated }: Props) {
               size="sm"
               onClick={handleTranslateToFr}
               disabled={translating}
-              className="h-6 text-[11px] px-2 gap-1"
+              className="h-6 text-[11px] px-2 gap-1 flex-1 sm:flex-initial justify-center"
             >
               <Sparkles className="size-3 text-amber-500" />
               {fr ? "Traduire en FR" : "Translate to FR"}
@@ -250,7 +250,7 @@ export function EditCohortModal({ cohort, isOpen, onClose, onUpdated }: Props) {
               size="sm"
               onClick={handleTranslateToEn}
               disabled={translating}
-              className="h-6 text-[11px] px-2 gap-1"
+              className="h-6 text-[11px] px-2 gap-1 flex-1 sm:flex-initial justify-center"
             >
               <Sparkles className="size-3 text-amber-500" />
               {fr ? "Traduire en EN" : "Translate to EN"}
@@ -311,7 +311,7 @@ export function EditCohortModal({ cohort, isOpen, onClose, onUpdated }: Props) {
           </div>
 
           {/* Capacity & Passing Score & Status */}
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
             <div className="space-y-1">
               <Label>{fr ? "Capacité maximale" : "Max Capacity"}</Label>
               <Input
@@ -473,11 +473,11 @@ export function EditCohortModal({ cohort, isOpen, onClose, onUpdated }: Props) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
-            <Button type="button" variant="ghost" onClick={onClose}>
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-4 border-t border-border">
+            <Button type="button" variant="ghost" onClick={onClose} className="w-full sm:w-auto justify-center">
               {fr ? "Annuler" : "Cancel"}
             </Button>
-            <Button type="submit" disabled={submitting}>
+            <Button type="submit" disabled={submitting} className="w-full sm:w-auto justify-center">
               {submitting ? (
                 <>
                   <Loader2 className="mr-2 size-3.5 animate-spin" />

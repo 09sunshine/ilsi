@@ -123,13 +123,13 @@ function AdminCohorts() {
               Manage cohort lifecycle, capacity, passing thresholds, and build comprehensive courses with modules, lessons, quizzes, and live sessions.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <Button
               variant="outline"
               size="sm"
               onClick={fetchCohorts}
               disabled={loading}
-              className="gap-1.5"
+              className="gap-1.5 flex-1 sm:flex-initial justify-center"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               {t("common.retry") || "Refresh"}
@@ -138,14 +138,14 @@ function AdminCohorts() {
               variant="outline"
               size="sm"
               onClick={() => setIsAllGradingOpen(true)}
-              className="gap-1.5 font-semibold border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+              className="gap-1.5 font-semibold border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 flex-1 sm:flex-initial justify-center"
             >
               <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400" />
               {fr ? "Évaluations réponses" : "Review Long Answers"}
             </Button>
             <Button
               onClick={() => setIsCreateModalOpen(true)}
-              className="gap-2 shadow-sm font-semibold"
+              className="gap-2 shadow-sm font-semibold w-full sm:w-auto justify-center"
             >
               <Plus className="h-4 w-4" />
               Create Course &amp; Curriculum
@@ -173,9 +173,9 @@ function AdminCohorts() {
               const sessions = liveSessions[c.id] || [];
 
               return (
-                <section key={c.id} className="panel p-5 transition-shadow hover:shadow-md">
+                <section key={c.id} className="panel p-4 sm:p-5 transition-shadow hover:shadow-md">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex items-center gap-3.5">
+                    <div className="flex items-center gap-3.5 min-w-0">
                       {resolveMediaUrl(c.thumbnailUrl || c.thumbnail_url) ? (
                         <img
                           src={resolveMediaUrl(c.thumbnailUrl || c.thumbnail_url)}
@@ -186,14 +186,14 @@ function AdminCohorts() {
                           }}
                         />
                       ) : null}
-                      <div>
-                        <h2 className="font-display text-base font-semibold">{L(c.name)}</h2>
-                        <p className="text-sm text-muted-foreground">
+                      <div className="min-w-0">
+                        <h2 className="font-display text-base font-semibold truncate">{L(c.name)}</h2>
+                        <p className="text-sm text-muted-foreground truncate">
                           {typeof c.programTitle === "object" ? L(c.programTitle) : c.programTitle || c.programId}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                       <Badge variant={c.status === "ACTIVE" ? "default" : "secondary"}>{c.status}</Badge>
                       <Button
                         size="sm"
@@ -235,7 +235,7 @@ function AdminCohorts() {
                     </div>
                   </div>
 
-                  <dl className="mt-4 grid gap-3 sm:grid-cols-4">
+                  <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <div>
                       <dt className="text-xs text-muted-foreground">{t("common.date")}</dt>
                       <dd className="text-sm font-medium">
@@ -263,11 +263,11 @@ function AdminCohorts() {
                   {cohortModules.length > 0 ? (
                     <ol className="mt-4 divide-y divide-border border-t border-border">
                       {cohortModules.map((m: any) => (
-                        <li key={m.id || m.order} className="flex flex-wrap justify-between gap-2 py-2.5 text-sm">
-                          <span className="truncate">
+                        <li key={m.id || m.order} className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 py-2.5 text-sm min-w-0">
+                          <span className="truncate flex-1 min-w-0">
                             {m.order}. {L(m.title)}
                           </span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-muted-foreground shrink-0">
                             {m.startDate && m.endDate ? `${m.startDate} → ${m.endDate} · ` : ""}
                             {m.lessonCount !== undefined ? `${m.lessonCount} lessons` : `${m.lessons?.length || 0} lessons`}
                             {m.passingScore ? ` · ${m.passingScore}%` : ""}
@@ -286,23 +286,23 @@ function AdminCohorts() {
                       </p>
                       <div className="space-y-2">
                         {sessions.map((s: any) => (
-                          <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface/50 p-2">
+                          <div key={s.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-border bg-surface/50 p-2.5 min-w-0">
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-xs font-medium">{s.title_en}</p>
                               <p className="text-[10px] text-muted-foreground">{new Date(s.starts_at).toLocaleString()}</p>
                             </div>
-                            <div className="flex flex-shrink-0 items-center gap-1">
+                            <div className="flex items-center gap-1.5 w-full sm:w-auto min-w-0">
                               <Input
                                 value={editingMeetUrl[s.id] ?? s.meet_url ?? ""}
                                 onChange={(e) =>
                                   setEditingMeetUrl((prev) => ({ ...prev, [s.id]: e.target.value }))
                                 }
                                 placeholder="https://meet.jit.si/... or https://meet.google.com/..."
-                                className="h-7 w-64 font-mono text-xs"
+                                className="h-8 sm:h-7 flex-1 sm:w-64 min-w-0 font-mono text-xs"
                               />
                               <Button
                                 size="sm"
-                                className="h-7 px-2"
+                                className="h-8 sm:h-7 px-2 shrink-0"
                                 disabled={savingSession === s.id}
                                 onClick={() => handleUpdateMeetUrl(s.id)}
                                 title="Save meeting URL"
@@ -314,7 +314,7 @@ function AdminCohorts() {
                                 )}
                               </Button>
                               {s.meet_url && (
-                                <Button size="sm" variant="outline" className="h-7 px-2" asChild>
+                                <Button size="sm" variant="outline" className="h-8 sm:h-7 px-2 shrink-0" asChild>
                                   <a
                                     href={editingMeetUrl[s.id] || s.meet_url}
                                     target="_blank"
@@ -328,7 +328,7 @@ function AdminCohorts() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-7 px-2 text-destructive hover:bg-destructive/10"
+                                className="h-8 sm:h-7 px-2 shrink-0 text-destructive hover:bg-destructive/10"
                                 onClick={() => handleDeleteSession(c.id, s.id)}
                                 title="Delete this live session"
                               >

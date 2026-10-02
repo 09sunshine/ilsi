@@ -343,7 +343,7 @@ export function AppShell({
           </div>
         </header>
 
-        <main className="flex-1 px-4 pb-24 pt-5 sm:px-6 lg:pb-10 lg:pt-6">{children}</main>
+        <main className="flex-1 w-full min-w-0 max-w-full overflow-x-clip px-3 pb-24 pt-4 sm:px-6 lg:pb-10 lg:pt-6">{children}</main>
       </div>
 
       {/* Mobile drawer */}
