@@ -123,7 +123,7 @@ function loadYouTubeIframeApi(): Promise<any> {
   return ytApiPromise;
 }
 
-export function LessonVideoPlayer({
+function LessonVideoPlayerInner({
   url,
   title,
   poster,
@@ -174,7 +174,8 @@ export function LessonVideoPlayer({
 
     loadYouTubeIframeApi().then((YT) => {
       if (isCancelled) return;
-      if (!YT || !YT.Player || !ytContainerRef.current) {
+      const hostEl = ytContainerRef.current;
+      if (!YT || !YT.Player || !hostEl) {
         setYtUseFallbackIframe(true);
         setIsLoading(false);
         return;
@@ -184,10 +185,22 @@ export function LessonVideoPlayer({
 
       try {
         if (ytPlayerRef.current && typeof ytPlayerRef.current.destroy === "function") {
-          ytPlayerRef.current.destroy();
+          try {
+            ytPlayerRef.current.destroy();
+          } catch (_) {}
+          ytPlayerRef.current = null;
         }
 
-        ytPlayerRef.current = new YT.Player(ytContainerRef.current, {
+        // Clean any existing imperative DOM nodes inside hostEl
+        hostEl.innerHTML = "";
+
+        // Create an unmanaged imperative mount target so YouTube replaces mountTarget, NOT React's own hostEl
+        const mountTarget = document.createElement("div");
+        mountTarget.id = `yt-player-target-${source.videoId}`;
+        mountTarget.className = "h-full w-full";
+        hostEl.appendChild(mountTarget);
+
+        ytPlayerRef.current = new YT.Player(mountTarget, {
           videoId: source.videoId,
           playerVars: {
             autoplay: 0,
@@ -261,6 +274,9 @@ export function LessonVideoPlayer({
         } catch (_) {}
         ytPlayerRef.current = null;
       }
+      if (ytContainerRef.current) {
+        ytContainerRef.current.innerHTML = "";
+      }
     };
   }, [source.type, source.videoId]);
 
@@ -307,6 +323,7 @@ export function LessonVideoPlayer({
         )}
         {ytUseFallbackIframe ? (
           <iframe
+            key={`yt-fallback-${source.videoId}`}
             src={source.embedUrl}
             title={title || "Lesson Video"}
             className="absolute inset-0 h-full w-full border-0"
@@ -314,7 +331,7 @@ export function LessonVideoPlayer({
             allowFullScreen
           />
         ) : (
-          <div ref={ytContainerRef} className="absolute inset-0 h-full w-full" />
+          <div key={`yt-container-${source.videoId}`} ref={ytContainerRef} className="absolute inset-0 h-full w-full" />
         )}
       </div>
     );
@@ -621,3 +638,70 @@ export function LessonVideoPlayer({
     </div>
   );
 }
+
+interface VideoErrorBoundaryProps {
+  children: React.ReactNode;
+  rawUrl?: string | null | undefined;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+class VideoErrorBoundary extends React.Component<VideoErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: VideoErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("VideoErrorBoundary caught an error:", error, errorInfo);
+  }
+
+  override render() {
+    if (this.state.hasError) {
+      return (
+        <div className="aspect-video w-full rounded-xl border border-border bg-black/90 flex flex-col items-center justify-center p-6 text-center text-white">
+          <AlertCircle className="size-10 text-destructive mb-2" />
+          <p className="font-semibold text-sm">Video Player Error</p>
+          <p className="text-xs text-zinc-300 mt-1 max-w-sm">
+            Something went wrong while displaying the video player. You can retry or open the video directly.
+          </p>
+          <div className="flex items-center gap-2 mt-4">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => this.setState({ hasError: false })}
+              className="text-xs text-white border-white/20 bg-white/10 hover:bg-white/20"
+            >
+              Retry
+            </Button>
+            {this.props.rawUrl && (
+              <Button asChild size="sm" variant="outline" className="gap-1.5 text-xs text-white border-white/20 bg-white/10 hover:bg-white/20">
+                <a href={this.props.rawUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="size-3.5" />
+                  Open in New Tab
+                </a>
+              </Button>
+            )}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export function LessonVideoPlayer(props: LessonVideoPlayerProps) {
+  return (
+    <VideoErrorBoundary rawUrl={props.url}>
+      <LessonVideoPlayerInner {...props} />
+    </VideoErrorBoundary>
+  );
+}
+

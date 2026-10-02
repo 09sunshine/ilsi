@@ -569,11 +569,12 @@ function LessonPage() {
               className="w-full sm:w-auto justify-center"
             >
               {isDone ? (
-                <>
-                  <CheckCircle2 className="size-4" /> {t("course.completed")}
-                </>
+                <span className="inline-flex items-center gap-1.5">
+                  <CheckCircle2 className="size-4" />
+                  <span>{t("course.completed")}</span>
+                </span>
               ) : (
-                t("course.markComplete")
+                <span>{t("course.markComplete")}</span>
               )}
             </Button>
           </div>

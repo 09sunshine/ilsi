@@ -1,3 +1,4 @@
+import "@/lib/dom-patch";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -6,6 +7,7 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
@@ -39,12 +41,21 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error("Root ErrorComponent caught:", error);
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
+
+  const errorMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+      ? error
+      : (error as any)?.message
+      ? String((error as any).message)
+      : "Something went wrong on our end. You can try refreshing or head back home.";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -53,7 +64,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
           This page didn't load
         </h1>
         <p className="text-sm text-muted-foreground">
-          {error?.message ? String(error.message) : "Something went wrong on our end. You can try refreshing or head back home."}
+          {errorMessage}
         </p>
         <div className="flex flex-wrap justify-center gap-2 pt-2">
           <button
