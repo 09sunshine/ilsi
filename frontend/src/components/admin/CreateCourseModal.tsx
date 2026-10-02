@@ -1803,8 +1803,8 @@ export function CreateCourseModal({ isOpen, onClose, onCourseCreated }: Props) {
                                 </div>
                                 <p className="text-[10px] text-muted-foreground">
                                   {fr
-                                    ? "Compatible YouTube, Vimeo, Loom et liens MP4 directs. Sera affiché dans le dashboard étudiant."
-                                    : "Compatible with YouTube, Vimeo, Loom, and direct MP4 URLs. Renders seamlessly in student dashboard."}
+                                    ? "💡 Recommandé : Collez un lien YouTube « Non répertorié » pour une lecture fluide et instantanée partout dans le monde (USA, Europe, etc.). Compatible également avec Vimeo, Loom et MP4 directs."
+                                    : "💡 Recommended: Paste an 'Unlisted' YouTube link for instant, 0-buffering playback globally (US, Europe, etc.). Also compatible with Vimeo, Loom, and direct MP4 URLs."}
                                 </p>
 
                                 {/* Live Link Preview */}

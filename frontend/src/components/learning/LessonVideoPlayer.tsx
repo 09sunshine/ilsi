@@ -28,21 +28,28 @@ interface LessonVideoPlayerProps {
 
 type VideoType = "youtube" | "vimeo" | "loom" | "direct" | "unknown";
 
-function parseVideoSource(url: string | null | undefined): { type: VideoType; embedUrl?: string; rawUrl?: string } {
+function parseVideoSource(url: string | null | undefined): {
+  type: VideoType;
+  videoId?: string;
+  embedUrl?: string;
+  rawUrl?: string;
+} {
   if (!url || typeof url !== "string") {
     return { type: "unknown" };
   }
 
   const trimmed = url.trim();
 
-  // YouTube detection
+  // YouTube detection (watch?v=..., youtu.be/..., embed/..., shorts/..., live/...)
   const ytMatch = trimmed.match(
-    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/i
+    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([\w-]{11})/i
   );
   if (ytMatch && ytMatch[1]) {
+    const videoId = ytMatch[1];
     return {
       type: "youtube",
-      embedUrl: `https://www.youtube-nocookie.com/embed/${ytMatch[1]}?rel=0&modestbranding=1&enablejsapi=1`,
+      videoId,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&enablejsapi=1&iv_load_policy=3&playsinline=1`,
       rawUrl: trimmed,
     };
   }
@@ -74,6 +81,48 @@ function parseVideoSource(url: string | null | undefined): { type: VideoType; em
   };
 }
 
+// Global YouTube API loader helper
+let ytApiPromise: Promise<any> | null = null;
+function loadYouTubeIframeApi(): Promise<any> {
+  if (typeof window === "undefined") return Promise.resolve(null);
+  if ((window as any).YT && (window as any).YT.Player) {
+    return Promise.resolve((window as any).YT);
+  }
+  if (!ytApiPromise) {
+    ytApiPromise = new Promise((resolve) => {
+      const existingScript = document.getElementById("youtube-iframe-api-script");
+      if (!existingScript) {
+        const tag = document.createElement("script");
+        tag.id = "youtube-iframe-api-script";
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScript = document.getElementsByTagName("script")[0];
+        firstScript?.parentNode?.insertBefore(tag, firstScript);
+      }
+
+      const prevCallback = (window as any).onYouTubeIframeAPIReady;
+      (window as any).onYouTubeIframeAPIReady = () => {
+        if (prevCallback) prevCallback();
+        resolve((window as any).YT);
+      };
+
+      // Fallback check in case script is already cached
+      const poll = setInterval(() => {
+        if ((window as any).YT && (window as any).YT.Player) {
+          clearInterval(poll);
+          resolve((window as any).YT);
+        }
+      }, 150);
+
+      // Maximum wait 4 seconds before failing gracefully
+      setTimeout(() => {
+        clearInterval(poll);
+        resolve((window as any).YT || null);
+      }, 4000);
+    });
+  }
+  return ytApiPromise;
+}
+
 export function LessonVideoPlayer({
   url,
   title,
@@ -84,6 +133,11 @@ export function LessonVideoPlayer({
 }: LessonVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const ytContainerRef = useRef<HTMLDivElement | null>(null);
+  const ytPlayerRef = useRef<any>(null);
+  const lastYtPercentRef = useRef<number>(0);
+  const [ytApiLoaded, setYtApiLoaded] = useState(false);
+  const [ytUseFallbackIframe, setYtUseFallbackIframe] = useState(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -107,7 +161,108 @@ export function LessonVideoPlayer({
     setIsLoading(true);
     setLastReportedPercent(0);
     setBufferedPercent(0);
+    lastYtPercentRef.current = 0;
+    setYtUseFallbackIframe(false);
   }, [url]);
+
+  // YouTube IFrame API Initialization with progress & completion tracking
+  useEffect(() => {
+    if (source.type !== "youtube" || !source.videoId) return;
+
+    let isCancelled = false;
+    let progressTimer: any = null;
+
+    loadYouTubeIframeApi().then((YT) => {
+      if (isCancelled) return;
+      if (!YT || !YT.Player || !ytContainerRef.current) {
+        setYtUseFallbackIframe(true);
+        setIsLoading(false);
+        return;
+      }
+
+      setYtApiLoaded(true);
+
+      try {
+        if (ytPlayerRef.current && typeof ytPlayerRef.current.destroy === "function") {
+          ytPlayerRef.current.destroy();
+        }
+
+        ytPlayerRef.current = new YT.Player(ytContainerRef.current, {
+          videoId: source.videoId,
+          playerVars: {
+            autoplay: 0,
+            controls: 1,
+            rel: 0,
+            modestbranding: 1,
+            iv_load_policy: 3,
+            playsinline: 1,
+            enablejsapi: 1,
+            origin: typeof window !== "undefined" ? window.location.origin : undefined,
+          },
+          events: {
+            onReady: () => {
+              if (!isCancelled) setIsLoading(false);
+            },
+            onStateChange: (event: any) => {
+              if (isCancelled) return;
+
+              // 1 = PLAYING
+              if (event.data === 1) {
+                setIsPlaying(true);
+                setIsLoading(false);
+                if (progressTimer) clearInterval(progressTimer);
+                progressTimer = setInterval(() => {
+                  try {
+                    const p = ytPlayerRef.current;
+                    if (!p || typeof p.getCurrentTime !== "function") return;
+                    const cur = p.getCurrentTime();
+                    const dur = p.getDuration();
+                    if (dur > 0 && onProgress) {
+                      const pct = Math.round((cur / dur) * 100);
+                      if (pct >= lastYtPercentRef.current + 10 || pct === 100) {
+                        lastYtPercentRef.current = pct;
+                        onProgress(pct);
+                      }
+                    }
+                  } catch (_) {}
+                }, 2000);
+              } else {
+                setIsPlaying(false);
+                if (progressTimer) clearInterval(progressTimer);
+              }
+
+              // 0 = ENDED
+              if (event.data === 0) {
+                if (onEnded) onEnded();
+                if (onProgress) onProgress(100);
+              }
+            },
+            onError: () => {
+              if (!isCancelled) {
+                setYtUseFallbackIframe(true);
+                setIsLoading(false);
+              }
+            },
+          },
+        });
+      } catch (err) {
+        console.warn("YouTube player init fallback:", err);
+        setYtUseFallbackIframe(true);
+        setIsLoading(false);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+      if (progressTimer) clearInterval(progressTimer);
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.destroy === "function") {
+        try {
+          ytPlayerRef.current.destroy();
+        } catch (_) {}
+        ytPlayerRef.current = null;
+      }
+    };
+  }, [source.type, source.videoId]);
 
   const handleProgressBuffer = () => {
     if (!videoRef.current || !videoRef.current.duration) return;
@@ -141,8 +296,32 @@ export function LessonVideoPlayer({
     );
   }
 
-  // Embeddable player (YouTube, Vimeo, Loom)
-  if (source.type === "youtube" || source.type === "vimeo" || source.type === "loom") {
+  // YouTube player with active progress and completion tracking
+  if (source.type === "youtube") {
+    return (
+      <div className={cn("relative aspect-video w-full overflow-hidden rounded-xl border border-border bg-black shadow-md", className)}>
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10 pointer-events-none">
+            <Loader2 className="size-8 animate-spin text-white/80" />
+          </div>
+        )}
+        {ytUseFallbackIframe ? (
+          <iframe
+            src={source.embedUrl}
+            title={title || "Lesson Video"}
+            className="absolute inset-0 h-full w-full border-0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+          />
+        ) : (
+          <div ref={ytContainerRef} className="absolute inset-0 h-full w-full" />
+        )}
+      </div>
+    );
+  }
+
+  // Embeddable player (Vimeo, Loom)
+  if (source.type === "vimeo" || source.type === "loom") {
     return (
       <div className={cn("relative aspect-video w-full overflow-hidden rounded-xl border border-border bg-black shadow-md", className)}>
         <iframe

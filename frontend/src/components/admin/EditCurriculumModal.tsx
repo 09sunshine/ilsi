@@ -1412,8 +1412,8 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                                           <Input
                                             placeholder={
                                               fr
-                                                ? "Coller une URL vidéo (Supabase, YouTube, Vimeo...)"
-                                                : "Paste video URL (Supabase, YouTube, Vimeo...)"
+                                                ? "Coller un lien YouTube (Non répertorié) ou URL vidéo..."
+                                                : "Paste YouTube (Unlisted) or video link..."
                                             }
                                             value={videoLinkInputs[lesson.id] || ""}
                                             onChange={(e) =>
@@ -1468,6 +1468,11 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
                                           </div>
                                         </label>
                                       </div>
+                                      <p className="text-[10px] text-muted-foreground">
+                                        {fr
+                                          ? "💡 Recommandé : Collez un lien YouTube « Non répertorié » pour une lecture fluide et instantanée partout dans le monde."
+                                          : "💡 Recommended: Paste an 'Unlisted' YouTube link for instant, 0-buffering playback globally."}
+                                      </p>
                                     </div>
                                   </div>
 

@@ -323,18 +323,27 @@ export function ManageCurriculumVideosModal({ cohort, isOpen, onClose, onUpdated
 
                   {/* Attach Video Link */}
                   <div className="rounded-lg border border-border bg-card p-3 space-y-2">
-                    <p className="font-semibold text-foreground flex items-center gap-1.5 text-[11px]">
-                      <ExternalLink className="size-3.5 text-primary" />
-                      <span>{fr ? "Lien vidéo externe" : "Attach External Video Link"}</span>
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      YouTube, Vimeo, Loom, or direct MP4 URL.
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-foreground flex items-center gap-1.5 text-[11px]">
+                        <ExternalLink className="size-3.5 text-primary" />
+                        <span>{fr ? "Lien vidéo externe (Recommandé)" : "Attach Video Link (Recommended)"}</span>
+                      </p>
+                      {(linkInputs[activeLesson.id]?.includes("youtube.com") || linkInputs[activeLesson.id]?.includes("youtu.be")) && (
+                        <Badge variant="outline" className="text-[9px] text-emerald-600 bg-emerald-500/10 border-emerald-500/30">
+                          ⚡ YouTube Fast CDN
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      {fr
+                        ? "💡 Recommandé : Téléversez votre vidéo sur YouTube en « Non répertoriée » et collez le lien ici pour une lecture fluide et instantanée aux USA et partout dans le monde."
+                        : "💡 Recommended: Upload to YouTube as 'Unlisted' and paste the link below for 0-buffering, high-speed playback for participants in the US and globally."}
                     </p>
                     <div className="flex items-center gap-1.5">
                       <Input
                         value={linkInputs[activeLesson.id] ?? ""}
                         onChange={(e) => setLinkInputs({ ...linkInputs, [activeLesson.id]: e.target.value })}
-                        placeholder="https://www.youtube.com/watch?v=..."
+                        placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
                         className="h-8 text-xs font-mono"
                       />
                       <Button
