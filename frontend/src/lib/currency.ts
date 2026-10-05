@@ -1,12 +1,12 @@
 /**
  * Universal Currency & Multi-Language Pricing Helper for ILSI Platform.
- * Supports English (USD $) and French (EUR €).
+ * Supports USD ($) as primary currency for both English and French.
  */
 
 export type SupportedCurrency = "USD" | "EUR";
 
-export function getCurrencyForLocale(locale: "en" | "fr" | string): SupportedCurrency {
-  return locale?.toLowerCase().startsWith("fr") ? "EUR" : "USD";
+export function getCurrencyForLocale(_locale: "en" | "fr" | string): SupportedCurrency {
+  return "USD";
 }
 
 export function getCurrencySymbol(currency: string): string {
@@ -23,14 +23,15 @@ export function getCurrencySymbol(currency: string): string {
  * Formats a monetary amount into the appropriate currency format.
  * Examples:
  *   formatPrice(180, "USD", "en") => "$180"
- *   formatPrice(165, "EUR", "fr") => "165 €"
+ *   formatPrice(180, "USD", "fr") => "$180"
+ *   formatPrice(165, "EUR", "fr") => "165 €" (retained for historical euro donations/payments)
  */
 export function formatPrice(
   amount: number,
   currency: string = "USD",
   locale: "en" | "fr" | string = "en"
 ): string {
-  const curr = currency.toUpperCase();
+  const curr = currency?.toUpperCase();
   const isFr = locale?.toLowerCase().startsWith("fr");
 
   if (curr === "EUR") {
@@ -39,40 +40,24 @@ export function formatPrice(
       : `€${amount.toLocaleString("en-US")}`;
   }
 
-  // Default USD
-  return isFr
-    ? `${amount.toLocaleString("fr-FR")} $`
-    : `$${amount.toLocaleString("en-US")}`;
+  // USD is formatted as $XX in both English and French
+  return `$${amount.toLocaleString("en-US")}`;
 }
 
 /**
  * Retrieves the specific price, currency, symbol, and formatted string
- * for a program based on the user's active locale (en -> USD, fr -> EUR).
+ * for a program. Program prices are always in USD ($) for both English and French.
  */
 export function getProgramPricing(
   program: { price: number; priceEur?: number; currency?: string },
-  locale: "en" | "fr" | string = "en"
+  _locale: "en" | "fr" | string = "en"
 ): {
   amount: number;
   currency: SupportedCurrency;
   symbol: string;
   formatted: string;
 } {
-  const isFr = locale?.toLowerCase().startsWith("fr");
-  if (isFr) {
-    const amount =
-      typeof program.priceEur === "number" && program.priceEur > 0
-        ? program.priceEur
-        : Math.round(program.price * 0.92);
-    return {
-      amount,
-      currency: "EUR",
-      symbol: "€",
-      formatted: `${amount.toLocaleString("fr-FR")} €`,
-    };
-  }
-
-  const amount = program.price;
+  const amount = typeof program?.price === "number" ? program.price : Number(program?.price) || 0;
   return {
     amount,
     currency: "USD",
