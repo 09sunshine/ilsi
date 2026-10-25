@@ -244,17 +244,26 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
     if (
       !confirm(
         fr
-          ? "Êtes-vous sûr de vouloir supprimer ce module ? Les leçons associées seront archivées si des participants ont déjà progressé."
-          : "Are you sure you want to delete this module? Any lessons with student progress will be safely archived."
+          ? "Êtes-vous sûr de vouloir supprimer définitivement ce module ? Cette action supprimera le module de la base de données et du curriculum."
+          : "Are you sure you want to delete this module? This will permanently remove it from the database and curriculum."
       )
     )
       return;
+
+    const previousModules = [...modules];
+    const remainingModules = modules.filter((m) => m.id !== moduleId);
+    setModules(remainingModules);
+    if (selectedModuleId === moduleId) {
+      setSelectedModuleId(remainingModules[0]?.id || null);
+    }
+
     try {
-      await api.deleteModule(moduleId);
-      toast.success(fr ? "Module supprimé." : "Module deleted.");
+      await api.deleteModule(moduleId, true);
+      toast.success(fr ? "Module supprimé avec succès de la base de données." : "Module deleted successfully from database.");
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
+      setModules(previousModules);
       toast.error(formatHumanErrorMessage(err, "Failed to delete module"));
     }
   };
@@ -372,17 +381,27 @@ export function EditCurriculumModal({ cohort, isOpen, onClose, onUpdated }: Prop
     if (
       !confirm(
         fr
-          ? "Supprimer cette leçon ? Si des participants ont déjà progressé, elle sera archivée en toute sécurité."
-          : "Delete this lesson? If student progress exists, it will be safely archived without breaking records."
+          ? "Êtes-vous sûr de vouloir supprimer définitivement cette leçon ? Cette action la supprimera de la base de données et du curriculum."
+          : "Are you sure you want to delete this lesson? This will permanently remove it from the database and curriculum."
       )
     )
       return;
+
+    const previousModules = [...modules];
+    setModules((prev) =>
+      prev.map((m) => ({
+        ...m,
+        lessons: (m.lessons || []).filter((l: any) => l.id !== lessonId),
+      }))
+    );
+
     try {
-      await api.deleteLesson(lessonId);
-      toast.success(fr ? "Leçon supprimée." : "Lesson deleted.");
+      await api.deleteLesson(lessonId, true);
+      toast.success(fr ? "Leçon supprimée avec succès de la base de données." : "Lesson deleted successfully from database.");
       await fetchCurriculum();
       if (onUpdated) onUpdated();
     } catch (err: any) {
+      setModules(previousModules);
       toast.error(err.message || "Failed to delete lesson");
     }
   };

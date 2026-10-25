@@ -13,6 +13,7 @@ import { AppError, ErrorCodes } from "../constants/errors.js";
 import { NotificationService } from "../services/NotificationService.js";
 import { supabaseAdmin } from "../integrations/supabase/client.js";
 import { invalidateVideoUrlCache } from "../services/VideoStorageService.js";
+import { RankingService } from "../services/RankingService.js";
 
 const router = Router();
 
@@ -2195,7 +2196,8 @@ router.get("/cohorts/:id/curriculum", async (req: Request, res: Response, next: 
       `SELECT m.id, m.order_index, m.title_en, m.title_fr, m.description_en, m.description_fr,
               m.start_date, m.end_date, m.estimated_hours, m.passing_score, m.status
        FROM modules m
-       WHERE m.cohort_id = $1 OR (m.program_id = $2 AND m.program_id IS NOT NULL)
+       WHERE (m.cohort_id = $1 OR (m.program_id = $2 AND m.program_id IS NOT NULL))
+         AND (m.status IS NULL OR m.status != 'ARCHIVED')
        ORDER BY m.order_index ASC`,
       [cohortId, programId]
     );
@@ -2219,6 +2221,7 @@ router.get("/cohorts/:id/curriculum", async (req: Request, res: Response, next: 
        LEFT JOIN videos v ON v.lesson_id = l.id
        LEFT JOIN cohort_lessons cl ON cl.lesson_id = l.id AND cl.cohort_id = $1
        WHERE l.module_id = ANY($2::uuid[])
+         AND (l.status IS NULL OR l.status != 'ARCHIVED')
        ORDER BY COALESCE(cl.order_index, l.order_index) ASC`,
       [cohortId, moduleIds]
     );
@@ -2776,6 +2779,28 @@ router.patch(
 router.delete("/modules/:id", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
+    const force = req.query.force === "true" || req.query.force === undefined;
+
+    if (force) {
+      // Cascade delete progress, quiz attempts, and cohort_lessons to ensure complete deletion
+      await pool.query(`DELETE FROM module_progress WHERE module_id = $1`, [id]);
+      await pool.query(
+        `DELETE FROM lesson_progress WHERE lesson_id IN (SELECT id FROM lessons WHERE module_id = $1)`,
+        [id]
+      );
+      await pool.query(
+        `DELETE FROM quiz_attempts WHERE module_id = $1 OR lesson_id IN (SELECT id FROM lessons WHERE module_id = $1)`,
+        [id]
+      );
+      await pool.query(
+        `DELETE FROM cohort_lessons WHERE lesson_id IN (SELECT id FROM lessons WHERE module_id = $1)`,
+        [id]
+      );
+      await pool.query(`DELETE FROM modules WHERE id = $1 RETURNING id`, [id]);
+      res.json({ success: true, message: "Module deleted successfully" });
+      return;
+    }
+
     const progressRes = await pool.query(
       `SELECT 1 FROM module_progress WHERE module_id = $1
        UNION
@@ -2786,6 +2811,7 @@ router.delete("/modules/:id", async (req: Request, res: Response, next: NextFunc
 
     if (progressRes.rows.length > 0) {
       await pool.query(`UPDATE modules SET status = 'ARCHIVED', updated_at = NOW() WHERE id = $1`, [id]);
+      await pool.query(`UPDATE lessons SET status = 'ARCHIVED', updated_at = NOW() WHERE module_id = $1`, [id]);
       res.json({
         success: true,
         archived: true,
@@ -2794,11 +2820,7 @@ router.delete("/modules/:id", async (req: Request, res: Response, next: NextFunc
       return;
     }
 
-    const result = await pool.query(`DELETE FROM modules WHERE id = $1 RETURNING id`, [id]);
-    if (result.rows.length === 0) {
-      throw new AppError(404, ErrorCodes.RESOURCE_NOT_FOUND, "Module not found");
-    }
-
+    await pool.query(`DELETE FROM modules WHERE id = $1 RETURNING id`, [id]);
     res.json({ success: true, message: "Module deleted successfully" });
   } catch (error) {
     next(error);
@@ -3163,6 +3185,18 @@ router.patch("/lessons/:id/video", async (req: Request, res: Response, next: Nex
 router.delete("/lessons/:id", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
+    const force = req.query.force === "true" || req.query.force === undefined;
+
+    if (force) {
+      // Cascade delete progress, quiz attempts, and cohort_lessons to ensure complete deletion
+      await pool.query(`DELETE FROM lesson_progress WHERE lesson_id = $1`, [id]);
+      await pool.query(`DELETE FROM quiz_attempts WHERE lesson_id = $1`, [id]);
+      await pool.query(`DELETE FROM cohort_lessons WHERE lesson_id = $1`, [id]);
+      await pool.query(`DELETE FROM lessons WHERE id = $1 RETURNING id`, [id]);
+      res.json({ success: true, message: "Lesson deleted successfully" });
+      return;
+    }
+
     const progressRes = await pool.query(
       `SELECT 1 FROM lesson_progress WHERE lesson_id = $1
        UNION
@@ -3185,11 +3219,7 @@ router.delete("/lessons/:id", async (req: Request, res: Response, next: NextFunc
       return;
     }
 
-    const result = await pool.query(`DELETE FROM lessons WHERE id = $1 RETURNING id`, [id]);
-    if (result.rows.length === 0) {
-      throw new AppError(404, ErrorCodes.LESSON_NOT_FOUND, "Lesson not found");
-    }
-
+    await pool.query(`DELETE FROM lessons WHERE id = $1 RETURNING id`, [id]);
     res.json({ success: true, message: "Lesson deleted successfully" });
   } catch (error) {
     next(error);
@@ -4260,10 +4290,11 @@ router.post("/quiz-answers/:id/grade", async (req: Request, res: Response, next:
 
     const updatedAnswer = updateRes.rows[0];
 
-    // Fetch attempt, quiz & student details to send notification
+    // Fetch attempt, quiz & student details to send notification & refresh ranking
     try {
       const detailsRes = await pool.query(
-        `SELECT att.user_id, q.title_en, q.title_fr
+        `SELECT att.user_id, q.title_en, q.title_fr,
+                COALESCE(att.cohort_id, (SELECT cohort_id FROM modules WHERE id = q.module_id)) as cohort_id
          FROM quiz_answers qa
          JOIN quiz_attempts att ON att.id = qa.attempt_id
          JOIN quizzes q ON q.id = att.quiz_id
@@ -4280,6 +4311,16 @@ router.post("/quiz-answers/:id/grade", async (req: Request, res: Response, next:
           bodyEn: `An instructor has evaluated your written response for "${studentInfo.title_en}". Check your quiz review to read the feedback!`,
           bodyFr: `Un formateur a évalué votre réponse rédigée pour le quiz "${studentInfo.title_fr || studentInfo.title_en}". Consultez le corrigé pour voir les appréciations !`,
         });
+
+        // Trigger automatic leaderboard recalculation if cohort exists
+        if (studentInfo.cohort_id) {
+          void RankingService.recalculateCohortRanking(
+            studentInfo.cohort_id,
+            `ADMIN_EVALUATION:${gradedBy}`
+          ).catch((rErr) =>
+            console.warn("[Admin] Failed to recalculate ranking after grading:", rErr)
+          );
+        }
       }
     } catch (notifErr) {
       console.warn("[Admin] Failed to notify student of quiz grading:", notifErr);
@@ -4290,6 +4331,145 @@ router.post("/quiz-answers/:id/grade", async (req: Request, res: Response, next:
       message: "Answer graded successfully",
       data: updatedAnswer,
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/admin/cohorts/:id/rankings
+ * Comprehensive administrative ranking and leaderboard overview for a cohort.
+ */
+router.get("/cohorts/:id/rankings", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const rankings = await RankingService.getAdminCohortRankings(id);
+    if (!rankings) {
+      throw new AppError(404, ErrorCodes.COHORT_NOT_FOUND, "Cohort or ranking not found");
+    }
+    res.json({ success: true, data: rankings });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/admin/cohorts/:id/rankings/recalculate
+ * Manually trigger ranking recalculation for a cohort with server-side audit logging.
+ */
+router.post("/cohorts/:id/rankings/recalculate", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const adminUser = (req as any).user;
+    const actorName = adminUser?.name || adminUser?.email || "Admin";
+
+    const snapshot = await RankingService.recalculateCohortRanking(
+      id,
+      `MANUAL_ADMIN:${actorName}`
+    );
+
+    // Audit log this administrative recalculation
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, resource_type, resource_id, metadata, ip_address)
+       VALUES ($1, 'RECALCULATE_ACADEMIC_RANKING', 'COHORT', $2, $3, $4)`,
+      [
+        adminUser?.id || null,
+        id,
+        JSON.stringify({
+          snapshotId: snapshot?.id,
+          eligibleCount: snapshot?.eligibleStudents,
+          cohortAverage: snapshot?.cohortAverage,
+        }),
+        req.ip || null,
+      ]
+    ).catch((auditErr) => console.warn("[Audit] Failed to log ranking recalculation:", auditErr));
+
+    res.json({
+      success: true,
+      message: "Cohort rankings successfully recalculating/updated",
+      data: snapshot,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/admin/cohorts/:id/rankings/snapshots
+ * Historical snapshots list for an academic cohort.
+ */
+router.get("/cohorts/:id/rankings/snapshots", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const result = await pool.query(
+      `SELECT id, academic_rule_version, status, total_students, eligible_students,
+              cohort_average, calculated_at, calculated_by
+       FROM cohort_ranking_snapshots
+       WHERE cohort_id = $1
+       ORDER BY calculated_at DESC
+       LIMIT 50`,
+      [id]
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/admin/cohorts/:id/rankings/snapshots/:snapshotId
+ * Full entries for a specific historical snapshot.
+ */
+router.get("/cohorts/:id/rankings/snapshots/:snapshotId", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const snapshotId = req.params.snapshotId as string;
+    const details = await RankingService.getSnapshotDetails(snapshotId);
+    res.json({ success: true, data: details });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/admin/cohorts/:id/rankings/export
+ * Secure CSV export of current cohort leaderboard for academic reporting.
+ */
+router.get("/cohorts/:id/rankings/export", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const rankings = await RankingService.getAdminCohortRankings(id);
+    if (!rankings) {
+      throw new AppError(404, ErrorCodes.COHORT_NOT_FOUND, "No ranking available for export");
+    }
+
+    const headers = ["Rank", "Student Name", "Average (%)", "Academic Points", "Modules Completed", "Status", "Ineligibility Reason"];
+    const rows = [
+      ...rankings.eligible.map((e) => [
+        e.rank ?? "",
+        `"${e.name.replace(/"/g, '""')}"`,
+        e.average.toFixed(2),
+        e.points.toFixed(2),
+        `${e.completedModules}/${e.totalModules}`,
+        "ELIGIBLE",
+        "",
+      ]),
+      ...rankings.ineligible.map((ie) => [
+        "N/A",
+        `"${ie.name.replace(/"/g, '""')}"`,
+        "0.00",
+        "0.00",
+        `${ie.completedModules}/${ie.totalModules}`,
+        "INELIGIBLE",
+        ie.ineligibilityReason || "Ineligible",
+      ]),
+    ];
+
+    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="cohort_${id}_ranking.csv"`);
+    res.status(200).send(csvContent);
   } catch (error) {
     next(error);
   }

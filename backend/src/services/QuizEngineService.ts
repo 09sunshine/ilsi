@@ -3,6 +3,7 @@ import { ModuleAccessService } from "./ModuleAccessService.js";
 import { LessonAccessService } from "./LessonAccessService.js";
 import { AppError, ErrorCodes } from "../constants/errors.js";
 import { NotificationService } from "./NotificationService.js";
+import { RankingService } from "./RankingService.js";
 
 export class QuizEngineService {
   /**
@@ -544,6 +545,13 @@ export class QuizEngineService {
       }
 
       await client.query("COMMIT");
+
+      // Asynchronously refresh academic ranking for this cohort
+      if (resolvedCohortId) {
+        void RankingService.recalculateCohortRanking(resolvedCohortId, "QUIZ_SUBMITTED").catch((err) =>
+          console.warn("[RankingService] Error recalculating rankings after quiz submission:", err)
+        );
+      }
 
       return {
         attempt: {

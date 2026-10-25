@@ -21,6 +21,7 @@ import contactRoutes from "./routes/contact.routes.js";
 import programRoutes from "./routes/program.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
 import mediaRoutes from "./routes/media.routes.js";
+import communityRoutes from "./routes/community.routes.js";
 
 const app = express();
 
@@ -163,6 +164,7 @@ app.use("/api/media", mediaRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin", uploadRoutes);
 app.use("/api/google", googleRoutes);
+app.use("/api/community", communityRoutes);
 
 // Catch-all 404 for unhandled API endpoints to prevent raw HTML responses
 app.all("/api/*", (req, res) => {

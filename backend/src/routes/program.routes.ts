@@ -23,7 +23,9 @@ router.get("/", async (_req: Request, res: Response, next: NextFunction) => {
                    'endDate', c.end_date,
                    'capacity', c.capacity,
                    'status', c.status,
-                   'thumbnailUrl', c.thumbnail_url
+                   'thumbnailUrl', c.thumbnail_url,
+                    'feeAmount', c.fee_amount,
+                    'feeCurrency', c.fee_currency
                  )
                ) FILTER (WHERE c.id IS NOT NULL),
                '[]'

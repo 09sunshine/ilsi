@@ -12,6 +12,7 @@ import { EnrollmentAccessService } from "../services/EnrollmentAccessService.js"
 import { pool } from "../database/pool.js";
 import { AppError, ErrorCodes } from "../constants/errors.js";
 import { NotificationService } from "../services/NotificationService.js";
+import { RankingService } from "../services/RankingService.js";
 
 const router = Router();
 
@@ -48,6 +49,7 @@ const studentPrefixes = [
   "/live-sessions",
   "/notifications",
   "/progress",
+  "/rankings",
 ];
 
 router.use((req: Request, res: Response, next: NextFunction) => {
@@ -829,6 +831,63 @@ router.delete("/notifications/:id", async (req: Request, res: Response, next: Ne
     const id = req.params.id as string;
     const result = await NotificationService.delete(id, req.user!.id);
     res.json({ success: true, message: "Notification deleted", data: result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/student/rankings/summary
+ * Fetch authenticated student's personalized academic ranking and performance summary.
+ */
+router.get("/rankings/summary", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    const cohortId = req.query.cohortId as string | undefined;
+    const summary = await RankingService.getStudentRankingSummary(userId, cohortId);
+    res.json({ success: true, data: summary });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/student/rankings/leaderboard
+ * Fetch safe, scoped cohort academic leaderboard for the student's cohort.
+ */
+router.get("/rankings/leaderboard", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.id;
+    let cohortId = req.query.cohortId as string | undefined;
+
+    // If cohortId not explicitly passed, resolve student's active cohort
+    if (!cohortId) {
+      const enrollRes = await pool.query(
+        `SELECT cohort_id FROM enrollments WHERE user_id = $1 AND status IN ('ACTIVE', 'COMPLETED') ORDER BY enrolled_at DESC LIMIT 1`,
+        [userId]
+      );
+      if (enrollRes.rows.length === 0) {
+        return res.json({ success: true, data: { entries: [], total: 0, snapshot: null } });
+      }
+      cohortId = enrollRes.rows[0].cohort_id;
+    } else {
+      // Authorization check: verify student is enrolled in this cohort unless admin/instructor
+      if (req.user!.role === "PARTICIPANT") {
+        const verifyRes = await pool.query(
+          `SELECT 1 FROM enrollments WHERE user_id = $1 AND cohort_id = $2 LIMIT 1`,
+          [userId, cohortId]
+        );
+        if (verifyRes.rows.length === 0) {
+          throw new AppError(403, ErrorCodes.FORBIDDEN, "You do not have access to this cohort's leaderboard");
+        }
+      }
+    }
+
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 50));
+
+    const leaderboard = await RankingService.getCohortLeaderboard(cohortId!, userId, page, limit);
+    res.json({ success: true, data: leaderboard });
   } catch (error) {
     next(error);
   }

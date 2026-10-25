@@ -23,6 +23,7 @@ import { moduleLessonCompletion, moduleState, overallProgress } from "@/lib/acce
 import { NOW } from "@/lib/clock";
 import { cn, resolveMediaUrl } from "@/lib/utils";
 import { api, getCachedStudentDashboard } from "@/lib/api";
+import { AcademicPerformanceLeaderboard } from "@/components/academic/AcademicPerformanceLeaderboard";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -376,6 +377,11 @@ function DashboardPage() {
             }
           />
         </div>
+
+        {/* Academic Performance & Cohort Leaderboard (Compact preview on home dashboard) */}
+        <section className="space-y-3">
+          <AcademicPerformanceLeaderboard cohortId={cohort?.id} compact={true} />
+        </section>
 
         {/* All Enrolled Cohorts (multi-cohort overview) */}
         {enrolledCohorts.length > 1 && (

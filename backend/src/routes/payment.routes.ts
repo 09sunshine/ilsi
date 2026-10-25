@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { PaymentService } from "../services/PaymentService.js";
+import { PaymentProviderRegistry } from "../services/payments/PaymentProvider.js";
 import { requireAuth, requireRole } from "../middleware/rbac.js";
 import { validateRequest } from "../middleware/validate.js";
 import { paymentLimiter } from "../middleware/rateLimiters.js";
@@ -14,7 +15,10 @@ const paymentPrefixes = [
   "/create-intent",
   "/enrollments",
   "/verify-session",
+  "/verify-provider",
   "/webhook",
+  "/paypal/webhook",
+  "/paym/webhook",
   "/applications",
 ];
 
@@ -29,19 +33,40 @@ router.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 /**
+ * GET /api/payments/methods
+ * Safe, server-generated list of currently active payment methods.
+ * Omits disabled providers (e.g. Stripe when STRIPE_ENABLED=false).
+ * Never exposes secrets, merchant credentials, or private configuration.
+ */
+router.get("/methods", (_req: Request, res: Response) => {
+  const methods = PaymentProviderRegistry.getAvailableMethods();
+  res.json({
+    success: true,
+    data: {
+      methods,
+    },
+  });
+});
+
+/**
  * POST /api/payments/create-intent
  * Calculates price strictly from database and creates payment intent
+ * Supports both authenticated participants and accepted applicants
  */
 router.post(
   "/create-intent",
-  requireAuth,
   validateRequest({ body: paymentSchemas.createIntent }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { cohortId, enrollmentId, applicationId, currency, provider } = req.body;
+      let { cohortId, enrollmentId, applicationId, currency, provider, paymMethod, phoneNumber } = req.body;
+
+      let effectiveUserId = req.user?.id;
 
       // IDOR defense: If enrollmentId is provided, ensure caller owns it or is admin
       if (enrollmentId) {
+        if (!req.user) {
+          throw new AppError(401, ErrorCodes.AUTH_REQUIRED, "Authentication required to pay for an existing enrollment");
+        }
         const enCheck = await pool.query(
           `SELECT user_id FROM enrollments WHERE id = $1`,
           [enrollmentId]
@@ -50,9 +75,9 @@ router.post(
           throw new AppError(404, ErrorCodes.ENROLLMENT_NOT_FOUND, "Enrollment not found");
         }
         if (
-          req.user!.role !== "ADMIN" &&
-          req.user!.role !== "SUPER_ADMIN" &&
-          enCheck.rows[0].user_id !== req.user!.id
+          req.user.role !== "ADMIN" &&
+          req.user.role !== "SUPER_ADMIN" &&
+          enCheck.rows[0].user_id !== req.user.id
         ) {
           throw new AppError(
             403,
@@ -60,16 +85,38 @@ router.post(
             "Access denied: You cannot initiate payment for another user's enrollment"
           );
         }
+        effectiveUserId = req.user.id;
+      } else if (applicationId) {
+        // Applicant check: ensure application exists and is accepted
+        const appCheck = await pool.query(
+          `SELECT id, status, cohort_id FROM applications WHERE id = $1`,
+          [applicationId]
+        );
+        if (appCheck.rows.length === 0) {
+          throw new AppError(404, ErrorCodes.RESOURCE_NOT_FOUND, "Application not found");
+        }
+        const app = appCheck.rows[0];
+        if (app.status !== "ACCEPTED" && app.status !== "SELECTED" && app.status !== "ENROLLED") {
+          throw new AppError(400, ErrorCodes.VALIDATION_ERROR, "Application is not yet approved for enrollment payment");
+        }
+        if (!cohortId && app.cohort_id) {
+          cohortId = app.cohort_id;
+        }
+      } else if (!effectiveUserId) {
+        throw new AppError(401, ErrorCodes.AUTH_REQUIRED, "Authentication or valid applicationId is required");
       }
 
       const result = await PaymentService.createPaymentIntent({
         cohortId,
         enrollmentId,
-        userId: req.user!.id,
+        userId: effectiveUserId,
         applicationId,
         currency,
         provider,
+        paymMethod,
+        phoneNumber,
       });
+
       res.json({ success: true, data: result });
     } catch (error) {
       next(error);
@@ -109,12 +156,14 @@ router.post(
         );
       }
 
-      const { currency, provider } = req.body;
+      const { currency, provider, paymMethod, phoneNumber } = req.body;
       const result = await PaymentService.createPaymentIntent({
         enrollmentId,
         userId: req.user!.id,
         currency,
         provider,
+        paymMethod,
+        phoneNumber,
       });
       res.json({ success: true, data: result });
     } catch (error) {
@@ -174,10 +223,33 @@ router.get(
 );
 
 /**
+ * POST /api/payments/verify-provider
+ * Authoritative verification for PayPal, Pay'm, and Stripe
+ */
+router.post(
+  "/verify-provider",
+  validateRequest({ body: paymentSchemas.verifyProvider }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { provider, paymentId, orderId, referenceId, transactionId } = req.body;
+      const result = await PaymentService.verifyProviderPayment({
+        provider,
+        paymentId,
+        orderId,
+        referenceId,
+        transactionId,
+      });
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * POST /api/payments/verify-session
  * Cryptographically verifies checkout session directly with Stripe API.
- * Allows unauthenticated return callbacks from Stripe for applicants.
- * Enforces anti-tampering and anti-replay guarantees.
+ * Preserved for historical/legacy Stripe transactions.
  */
 router.post(
   "/verify-session",
@@ -214,8 +286,75 @@ router.post(
 );
 
 /**
+ * POST /api/payments/paypal/webhook
+ * PayPal webhook handler with cryptographic signature verification and idempotency protection
+ */
+router.post("/paypal/webhook", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const rawPayload = (req as any).rawBody ? (req as any).rawBody.toString("utf8") : JSON.stringify(req.body);
+    const provider = PaymentService.getProvider("PAYPAL");
+
+    const webhookResult = await provider.handleWebhook(rawPayload, undefined, req.headers);
+
+    const result = await PaymentService.handleWebhookEvent({
+      provider: "PAYPAL",
+      eventId: webhookResult.eventId,
+      eventType: webhookResult.eventType,
+      payload: webhookResult.rawPayload,
+    });
+
+    if (webhookResult.status === "PAID" && webhookResult.paymentId && !result.alreadyProcessed) {
+      await PaymentService.verifyPayment(
+        webhookResult.paymentId,
+        webhookResult.providerPaymentId
+      );
+    }
+
+    res.json({ received: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/payments/paym/webhook
+ * Pay'm webhook handler with constant-time HMAC-SHA256 signature verification and idempotency protection
+ */
+router.post("/paym/webhook", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const signature = (req.headers["x-webhook-signature"] || req.headers["X-Webhook-Signature"]) as string | undefined;
+    const rawPayload = (req as any).rawBody ? (req as any).rawBody.toString("utf8") : JSON.stringify(req.body);
+    const provider = PaymentService.getProvider("PAYM");
+
+    const webhookResult = await provider.handleWebhook(req.body, signature, {
+      rawBody: (req as any).rawBody || rawPayload,
+      "x-webhook-signature": signature,
+    });
+
+    const result = await PaymentService.handleWebhookEvent({
+      provider: "PAYM",
+      eventId: webhookResult.eventId,
+      eventType: webhookResult.eventType,
+      payload: webhookResult.rawPayload,
+    });
+
+    if (webhookResult.status === "PAID" && webhookResult.paymentId && !result.alreadyProcessed) {
+      await PaymentService.verifyPayment(
+        webhookResult.paymentId,
+        webhookResult.providerPaymentId
+      );
+    }
+
+    res.json({ received: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * POST /api/payments/webhook
  * Cryptographically signed Stripe webhook handler with idempotency protection.
+ * Preserved for Stripe webhook reconciliation.
  */
 router.post("/webhook", async (req: Request, res: Response, next: NextFunction) => {
   try {

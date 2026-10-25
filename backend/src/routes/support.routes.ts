@@ -3,7 +3,6 @@ import { pool } from "../database/pool.js";
 import { validateRequest } from "../middleware/validate.js";
 import { formSubmissionLimiter } from "../middleware/rateLimiters.js";
 import { supportSchemas } from "../validators/schemas.js";
-
 import { DonationService } from "../services/DonationService.js";
 import { NotificationService } from "../services/NotificationService.js";
 import { z } from "zod";
@@ -17,8 +16,8 @@ const verifyDonationSchema = z.object({
 
 /**
  * POST /api/support/donate
- * Creates a Stripe Checkout Session for one-off or monthly recurring donation
- * Enforces server-side validation, rate limiting, and zero card credential exposure
+ * Creates a Checkout Session with the requested active provider (PayPal, Pay'm, or Stripe when enabled)
+ * Enforces server-side validation, rate limiting, and zero credential exposure
  */
 router.post(
   "/donate",
@@ -26,7 +25,7 @@ router.post(
   validateRequest({ body: supportSchemas.donate }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { name, email, phone, amount, currency, frequency, message } = req.body;
+      const { name, email, phone, amount, currency, frequency, message, provider, paymMethod } = req.body;
       const checkoutResult = await DonationService.createDonationCheckout({
         name,
         email,
@@ -35,11 +34,13 @@ router.post(
         currency,
         frequency,
         message,
+        provider,
+        paymMethod,
       });
 
       res.status(201).json({
         success: true,
-        message: "Stripe checkout session initialized successfully.",
+        message: "Donation checkout initialized successfully.",
         data: checkoutResult,
       });
     } catch (error: any) {
@@ -56,9 +57,39 @@ router.post(
 );
 
 /**
+ * POST /api/support/verify-donation-provider
+ * Authoritative verification for completed PayPal, Pay'm, or Stripe donation
+ * Enforces that donations NEVER enroll a user in any cohort
+ */
+router.post(
+  "/verify-donation-provider",
+  formSubmissionLimiter,
+  validateRequest({ body: supportSchemas.verifyDonationProvider }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { provider, donationId, orderId, referenceId, transactionId, sessionId } = req.body;
+      const result = await DonationService.verifyDonationProvider({
+        provider,
+        donationId,
+        orderId,
+        referenceId,
+        transactionId,
+        sessionId,
+      });
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * POST /api/support/verify-donation-session
- * Server-to-server cryptographic verification of completed donation session
- * Enforces anti-tampering, anti-replay, and atomic state updates
+ * Server-to-server cryptographic verification of completed Stripe donation session
+ * Preserved for Stripe verification.
  */
 router.post(
   "/verify-donation-session",

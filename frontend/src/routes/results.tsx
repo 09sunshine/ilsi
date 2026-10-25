@@ -22,15 +22,27 @@ export const Route = createFileRoute("/results")({
 function ResultsPage() {
   const { t, locale } = useI18n();
   const L = useLocalized();
+  const fr = locale === "fr";
   const { progress } = useLearning();
   const attempts = [...progress.attempts].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 
   return (
     <AppShell title={t("nav.grades")}>
-      <div className="mx-auto max-w-4xl">
-        {attempts.length === 0 ? (
-          <EmptyState icon={<Trophy className="size-5" />} title={t("common.empty")} />
-        ) : (
+      <div className="mx-auto max-w-5xl space-y-8">
+        {/* Detailed Assessment Attempts History */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display font-semibold text-lg text-foreground">
+              {fr ? "Historique des tentatives de quiz" : "Quiz Attempt History"}
+            </h3>
+            <span className="text-xs text-muted-foreground font-medium">
+              {attempts.length} {fr ? "tentatives enregistrées" : "recorded attempts"}
+            </span>
+          </div>
+
+          {attempts.length === 0 ? (
+            <EmptyState icon={<Trophy className="size-5" />} title={t("common.empty")} />
+          ) : (
           <div className="panel overflow-x-auto">
             <table className="w-full min-w-[540px] text-sm">
               <caption className="sr-only">{t("nav.grades")}</caption>
@@ -78,6 +90,7 @@ function ResultsPage() {
             </table>
           </div>
         )}
+        </div>
       </div>
     </AppShell>
   );

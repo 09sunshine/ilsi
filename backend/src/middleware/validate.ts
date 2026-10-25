@@ -48,3 +48,7 @@ export function validateRequest(schemas: ValidationSchemas) {
     }
   };
 }
+
+export function validate(bodySchema: ZodTypeAny) {
+  return validateRequest({ body: bodySchema });
+}

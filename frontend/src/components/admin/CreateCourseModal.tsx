@@ -1301,8 +1301,8 @@ export function CreateCourseModal({ isOpen, onClose, onCourseCreated }: Props) {
                     <Input
                       id="cohCap"
                       type="number"
-                      min={5}
-                      max={300}
+                      min={1}
+                      max={10000}
                       value={cohortCapacity}
                       onChange={(e) => setCohortCapacity(Number(e.target.value))}
                     />

@@ -13,7 +13,8 @@ import { CreateCourseModal } from "@/components/admin/CreateCourseModal";
 import { EditCohortModal } from "@/components/admin/EditCohortModal";
 import { EditCurriculumModal } from "@/components/admin/EditCurriculumModal";
 import { DeleteCohortModal } from "@/components/admin/DeleteCohortModal";
-import { BookOpen, Check, Edit3, ExternalLink, FileText, Plus, RefreshCw, Trash2, Video } from "lucide-react";
+import { AdminRankingsModal } from "@/components/admin/AdminRankingsModal";
+import { BookOpen, Check, Edit3, ExternalLink, FileText, Plus, RefreshCw, Trash2, Video, Trophy } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/cohorts")({
@@ -39,11 +40,29 @@ function AdminCohorts() {
   const [editingCohort, setEditingCohort] = useState<any | null>(null);
   const [managingCurriculumCohort, setManagingCurriculumCohort] = useState<any | null>(null);
   const [gradingCohort, setGradingCohort] = useState<any | null>(null);
+  const [rankingsCohort, setRankingsCohort] = useState<any | null>(null);
   const [isAllGradingOpen, setIsAllGradingOpen] = useState(false);
   const [deletingCohort, setDeletingCohort] = useState<any | null>(null);
   const [liveSessions, setLiveSessions] = useState<Record<string, any[]>>({});
   const [editingMeetUrl, setEditingMeetUrl] = useState<Record<string, string>>({});
+  const [editingStartsAt, setEditingStartsAt] = useState<Record<string, string>>({});
   const [savingSession, setSavingSession] = useState<string | null>(null);
+
+  const toDatetimeLocal = (isoString?: string | null): string => {
+    if (!isoString) return "";
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return "";
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const hours = String(d.getHours()).padStart(2, "0");
+      const minutes = String(d.getMinutes()).padStart(2, "0");
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch {
+      return "";
+    }
+  };
 
   const fetchCohorts = async () => {
     setLoading(true);
@@ -54,6 +73,7 @@ function AdminCohorts() {
         // Concurrent parallel fetch for cohort live sessions (eliminates sequential N+1 loop)
         const liveMap: Record<string, any[]> = {};
         const urlMap: Record<string, string> = {};
+        const startMap: Record<string, string> = {};
 
         await Promise.allSettled(
           res.map(async (c: any) => {
@@ -62,7 +82,10 @@ function AdminCohorts() {
               const sessionsData = Array.isArray(sessions) ? sessions : (sessions as any)?.data || [];
               liveMap[c.id] = sessionsData;
               for (const s of sessionsData) {
-                if (s?.id) urlMap[s.id] = s.meet_url || "";
+                if (s?.id) {
+                  urlMap[s.id] = s.meet_url || "";
+                  startMap[s.id] = toDatetimeLocal(s.starts_at);
+                }
               }
             } catch {
               liveMap[c.id] = [];
@@ -72,6 +95,7 @@ function AdminCohorts() {
 
         setLiveSessions(liveMap);
         setEditingMeetUrl((prev) => ({ ...prev, ...urlMap }));
+        setEditingStartsAt((prev) => ({ ...prev, ...startMap }));
       } else {
         setCohortsList([]);
       }
@@ -90,10 +114,13 @@ function AdminCohorts() {
   const handleUpdateMeetUrl = async (sessionId: string) => {
     setSavingSession(sessionId);
     try {
-      await api.updateLiveSession(sessionId, { meetUrl: editingMeetUrl[sessionId] });
-      toast.success("Meeting link updated successfully!");
+      await api.updateLiveSession(sessionId, {
+        meetUrl: editingMeetUrl[sessionId],
+        startsAt: editingStartsAt[sessionId] ? new Date(editingStartsAt[sessionId]).toISOString() : undefined,
+      });
+      toast.success("Meeting link & schedule updated successfully!");
     } catch {
-      toast.error("Failed to update meeting link.");
+      toast.error("Failed to update meeting details.");
     } finally {
       setSavingSession(null);
     }
@@ -216,6 +243,15 @@ function AdminCohorts() {
                       <Button
                         size="sm"
                         variant="outline"
+                        onClick={() => setRankingsCohort(c)}
+                        className="h-7 text-xs gap-1.5 font-medium text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 shadow-xs"
+                      >
+                        <Trophy className="size-3.5" />
+                        {fr ? "Classement" : "Rankings"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => setEditingCohort(c)}
                         className="h-7 text-xs gap-1.5 font-medium hover:border-primary/50"
                       >
@@ -291,14 +327,24 @@ function AdminCohorts() {
                               <p className="truncate text-xs font-medium">{s.title_en}</p>
                               <p className="text-[10px] text-muted-foreground">{new Date(s.starts_at).toLocaleString()}</p>
                             </div>
-                            <div className="flex items-center gap-1.5 w-full sm:w-auto min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto min-w-0">
+                              <Input
+                                type="datetime-local"
+                                value={editingStartsAt[s.id] ?? toDatetimeLocal(s.starts_at)}
+                                onChange={(e) =>
+                                  setEditingStartsAt((prev) => ({ ...prev, [s.id]: e.target.value }))
+                                }
+                                className="h-8 sm:h-7 w-44 font-mono text-[11px]"
+                                title="Edit Live Date & Time"
+                              />
                               <Input
                                 value={editingMeetUrl[s.id] ?? s.meet_url ?? ""}
                                 onChange={(e) =>
                                   setEditingMeetUrl((prev) => ({ ...prev, [s.id]: e.target.value }))
                                 }
                                 placeholder="https://meet.jit.si/... or https://meet.google.com/..."
-                                className="h-8 sm:h-7 flex-1 sm:w-64 min-w-0 font-mono text-xs"
+                                className="h-8 sm:h-7 flex-1 sm:w-56 min-w-0 font-mono text-xs"
+                                title="Edit Meeting URL"
                               />
                               <Button
                                 size="sm"
@@ -398,6 +444,14 @@ function AdminCohorts() {
         initialCohortId={gradingCohort?.id || null}
         quizTitle={gradingCohort ? L(gradingCohort.name) : null}
       />
+
+      {/* Academic Rankings & Leaderboard Modal */}
+      {rankingsCohort && (
+        <AdminRankingsModal
+          cohort={rankingsCohort}
+          onClose={() => setRankingsCohort(null)}
+        />
+      )}
     </AppShell>
   );
 }

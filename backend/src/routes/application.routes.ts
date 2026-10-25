@@ -38,6 +38,7 @@ router.post(
         cohortId,
         motivation,
         experience,
+        willingToPayFee,
       } = req.body;
 
       const normalizedEmail = email.trim().toLowerCase();
@@ -101,8 +102,9 @@ router.post(
       const result = await pool.query(
         `INSERT INTO applications (
            program_id, cohort_id, first_name, last_name, email, phone, country, city,
-           date_of_birth, education, occupation, organization, motivation, experience, status
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'PENDING')
+           date_of_birth, education, occupation, organization, motivation, experience, status,
+           willing_to_pay
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'PENDING', $15)
          RETURNING id, cohort_id, submitted_at, status`,
         [
           realProgramId,
@@ -119,6 +121,7 @@ router.post(
           organization ? organization.trim() : "",
           motivation.trim(),
           experience ? experience.trim() : "",
+          willingToPayFee !== false,
         ]
       );
 
@@ -236,6 +239,11 @@ router.post(
       if (app.status === "ACCEPTED" || app.status === "SELECTED") {
         if (!isPaid && app.cohort_id) {
           try {
+            const defaultProvider = PaymentService.isProviderEnabled("PAYPAL")
+              ? "PAYPAL"
+              : PaymentService.isProviderEnabled("PAYM")
+              ? "PAYM"
+              : "STRIPE";
             const paymentIntent = await PaymentService.createPaymentIntent({
               cohortId: app.cohort_id,
               enrollmentId: enrollment?.id,
@@ -244,6 +252,7 @@ router.post(
               customerEmail: app.email,
               cohortName: app.cohort_name_en || app.program_title_en,
               currency: officialCurrency,
+              provider: defaultProvider,
             });
             paymentInfo.checkoutUrl = paymentIntent.checkoutUrl;
             paymentInfo.paymentId = paymentIntent.paymentId;
@@ -251,6 +260,10 @@ router.post(
             paymentInfo.feeAmount = paymentIntent.amount;
             paymentInfo.currency = paymentIntent.currency;
             paymentInfo.feeCurrency = paymentIntent.currency;
+            paymentInfo.provider = paymentIntent.provider;
+            paymentInfo.cohortId = app.cohort_id;
+            paymentInfo.internalReference = paymentIntent.internalReference;
+            paymentInfo.sessionId = paymentIntent.sessionId;
           } catch (payErr: any) {
             console.warn("Could not generate checkout session for tracking:", payErr.message);
           }

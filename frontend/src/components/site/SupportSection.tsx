@@ -17,6 +17,7 @@ import {
 import { useI18n } from "@/i18n/LocaleProvider";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { PaymentMethodSelector } from "@/components/payment/PaymentMethodSelector";
 
 const baseSchema = {
   name: z.string().trim().min(2).max(100),
@@ -172,8 +173,38 @@ function DonationForm({ onDone }: { onDone: () => void }) {
   const [frequency, setFrequency] = useState<"one-off" | "monthly">("one-off");
   const [amount, setAmount] = useState("100");
   const [submitting, setSubmitting] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<"paypal" | "paym" | "stripe">("paypal");
+  const [paymMethod, setPaymMethod] = useState("moncash");
 
   const required = fr ? "Champ requis ou invalide." : "This field is required or invalid.";
+
+  const normProvider = (typeof selectedProvider === "string" ? selectedProvider : (selectedProvider as any)?.provider || "paypal").toLowerCase();
+
+  const getSubMethodName = (sub: string) => {
+    switch (sub?.toLowerCase()) {
+      case "moncash":
+        return "MonCash";
+      case "natcash":
+        return "Natcash";
+      case "carte":
+        return fr ? "Carte" : "Card";
+      case "kashpaw":
+        return "KashPaw";
+      default:
+        return "";
+    }
+  };
+
+  const dynamicProviderLabel =
+    normProvider === "paym"
+      ? paymMethod && paymMethod !== "all"
+        ? `Pay'm (${getSubMethodName(paymMethod)})`
+        : "Pay'm"
+      : normProvider === "paypal"
+      ? "PayPal"
+      : fr
+      ? "Carte bancaire"
+      : "Card";
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -198,6 +229,8 @@ function DonationForm({ onDone }: { onDone: () => void }) {
       const res = await api.submitDonation({
         ...parsed.data,
         currency: fr ? "EUR" : "USD",
+        provider: normProvider,
+        paymMethod: normProvider === "paym" ? paymMethod : undefined,
       });
 
       const checkoutUrl = (res as any)?.checkoutUrl || (res as any)?.data?.checkoutUrl;
@@ -205,10 +238,13 @@ function DonationForm({ onDone }: { onDone: () => void }) {
       if (checkoutUrl) {
         toast.info(
           fr
-            ? "Redirection vers le paiement sécurisé Stripe..."
-            : "Redirecting to secure Stripe Checkout..."
+            ? `Redirection vers le paiement sécurisé ${dynamicProviderLabel}...`
+            : `Redirecting to secure ${dynamicProviderLabel} checkout...`
         );
         window.location.href = checkoutUrl;
+      } else if ((res as any)?.instructions) {
+        toast.info((res as any).instructions);
+        onDone();
       } else {
         toast.success(
           fr
@@ -218,7 +254,7 @@ function DonationForm({ onDone }: { onDone: () => void }) {
         onDone();
       }
     } catch (err: any) {
-      toast.error(err.message || "Failed to initiate Stripe donation.");
+      toast.error(err.message || "Failed to initiate donation. Please try again.");
       setSubmitting(false);
     }
   };
@@ -281,32 +317,60 @@ function DonationForm({ onDone }: { onDone: () => void }) {
 
       <SharedFields errors={errors} prefix="d" fr={fr} />
 
+      {/* Multi-provider payment method selector */}
+      <div className="pt-2">
+        <PaymentMethodSelector
+          selectedProvider={selectedProvider}
+          onSelectProvider={(p) => {
+            const next = typeof p === "string" ? p : p?.provider;
+            if (next) setSelectedProvider(next.toLowerCase() as any);
+          }}
+          paymMethod={paymMethod}
+          onSelectPaymMethod={setPaymMethod}
+          amount={Number(amount) || 100}
+          currency={fr ? "EUR" : "USD"}
+          disabled={submitting}
+        />
+      </div>
+
       <Button
         type="submit"
         disabled={submitting}
-        className="w-full rounded-xl bg-neutral-900 text-white hover:bg-neutral-800 py-6 text-base font-semibold shadow-md"
+        translate="no"
+        className="notranslate w-full rounded-xl bg-neutral-900 text-white hover:bg-neutral-800 py-6 text-base font-semibold shadow-md whitespace-normal text-center"
       >
-        {submitting ? (
-          <>
-            <Loader2 className="mr-2 size-5 animate-spin" aria-hidden />
-            {fr ? "Connexion sécurisée à Stripe..." : "Connecting to Stripe..."}
-          </>
-        ) : (
-          <>
-            <Lock className="mr-2 size-4" aria-hidden />
-            {fr
-              ? `Donner ${amount ? `${amount} €` : ""} avec Stripe`
-              : `Donate ${amount ? `$${amount}` : ""} securely via Stripe`}
-          </>
-        )}
+        <span
+          key={submitting ? "submitting" : `${selectedProvider}-${paymMethod}`}
+          className="inline-flex items-center justify-center gap-2 w-full max-w-full"
+        >
+          {submitting ? (
+            <>
+              <Loader2 className="mr-2 size-5 animate-spin shrink-0" aria-hidden />
+              <span>
+                {fr
+                  ? `Redirection vers ${dynamicProviderLabel}...`
+                  : `Redirecting to ${dynamicProviderLabel}...`}
+              </span>
+            </>
+          ) : (
+            <>
+              <Lock className="mr-2 size-4 shrink-0" aria-hidden />
+              <span>
+                {fr
+                  ? `Donner ${amount ? `${amount} €` : ""} avec ${dynamicProviderLabel}`
+                  : `Donate ${amount ? `$${amount}` : ""} securely via ${dynamicProviderLabel}`}
+              </span>
+            </>
+          )}
+        </span>
       </Button>
 
       <div className="flex items-center justify-center gap-2 pt-1 text-center text-xs text-muted-foreground">
         <ShieldCheck className="size-4 text-emerald-600 shrink-0" aria-hidden />
         <span>
           {fr
-            ? "Chiffrement SSL 256 bits · Paiement sécurisé opéré par Stripe"
-            : "256-bit encryption · Secure payment processed directly by Stripe"}
+            ? "Chiffrement SSL 256 bits · Paiement sécurisé et authentifié"
+            : "256-bit encryption · Secure and verified payment"}
         </span>
       </div>
     </form>

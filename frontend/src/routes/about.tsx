@@ -12,6 +12,13 @@ const aboutSearchSchema = z.object({
   donation: z.string().optional(),
   donation_id: z.string().optional(),
   session_id: z.string().optional(),
+  provider: z.string().optional(),
+  token: z.string().optional(),
+  order_id: z.string().optional(),
+  refference_id: z.string().optional(),
+  id_transaction: z.string().optional(),
+  transaction_id: z.string().optional(),
+  status: z.string().optional(),
 });
 
 export const Route = createFileRoute("/about")({
@@ -56,11 +63,88 @@ function AboutPage() {
   } | null>(null);
 
   useEffect(() => {
-    if (search.donation === "success" && search.session_id) {
+    const isPayPalReturn =
+      (search.provider === "paypal" || search.donation === "paypal_success" || (search.token && !search.session_id)) &&
+      !search.session_id;
+
+    const isPaymReturn =
+      search.provider === "paym" ||
+      search.donation === "paym_return" ||
+      Boolean(search.refference_id) ||
+      Boolean(search.id_transaction);
+
+    const isStripeReturn = search.donation === "success" && search.session_id;
+
+    if (isPayPalReturn) {
+      setVerifyingDonation(true);
+      api
+        .verifyProviderDonation({
+          provider: "paypal",
+          orderId: search.order_id || search.token,
+          donationId: search.donation_id,
+        })
+        .then((res: any) => {
+          if (res.status === "COMPLETED" || res.status === "succeeded") {
+            setCompletedDonation({
+              donorName: res.donorName || "Supporter",
+              amount: res.amount,
+              currency: res.currency,
+              frequency: res.frequency || "one-off",
+            });
+            toast.success(
+              fr
+                ? "Don confirmé ! Merci infiniment pour votre soutien généreux."
+                : "Donation confirmed! Thank you so much for your generous support."
+            );
+            if (typeof window !== "undefined" && window.history?.replaceState) {
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+          }
+        })
+        .catch((err: any) => {
+          toast.error(err.message || "Failed to verify donation with PayPal.");
+        })
+        .finally(() => {
+          setVerifyingDonation(false);
+        });
+    } else if (isPaymReturn) {
+      setVerifyingDonation(true);
+      api
+        .verifyProviderDonation({
+          provider: "paym",
+          referenceId: search.refference_id,
+          transactionId: search.id_transaction || search.transaction_id,
+          donationId: search.donation_id,
+        })
+        .then((res: any) => {
+          if (res.status === "COMPLETED" || res.status === "succeeded") {
+            setCompletedDonation({
+              donorName: res.donorName || "Supporter",
+              amount: res.amount,
+              currency: res.currency,
+              frequency: res.frequency || "one-off",
+            });
+            toast.success(
+              fr
+                ? "Don confirmé ! Merci infiniment pour votre soutien généreux."
+                : "Donation confirmed! Thank you so much for your generous support."
+            );
+            if (typeof window !== "undefined" && window.history?.replaceState) {
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+          }
+        })
+        .catch((err: any) => {
+          toast.error(err.message || "Failed to verify donation with Pay'm.");
+        })
+        .finally(() => {
+          setVerifyingDonation(false);
+        });
+    } else if (isStripeReturn) {
       setVerifyingDonation(true);
       api
         .verifyDonationSession({
-          sessionId: search.session_id,
+          sessionId: search.session_id!,
           donationId: search.donation_id,
         })
         .then((res) => {
@@ -87,7 +171,7 @@ function AboutPage() {
         .finally(() => {
           setVerifyingDonation(false);
         });
-    } else if (search.donation === "cancelled") {
+    } else if (search.donation === "cancelled" || search.status === "cancelled") {
       toast.info(
         fr
           ? "Le don a été annulé. Vous pouvez contribuer à tout moment."
@@ -97,7 +181,18 @@ function AboutPage() {
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     }
-  }, [search.donation, search.session_id, search.donation_id, fr]);
+  }, [
+    search.donation,
+    search.session_id,
+    search.donation_id,
+    search.provider,
+    search.token,
+    search.order_id,
+    search.refference_id,
+    search.id_transaction,
+    search.status,
+    fr,
+  ]);
 
   const values = [
     {

@@ -1,13 +1,13 @@
+import crypto from "crypto";
 import { pool } from "../database/pool.js";
 import { AppError, ErrorCodes } from "../constants/errors.js";
 import {
   PaymentProvider,
+  PaymentProviderRegistry,
   StripePaymentProvider,
-  ManualPaymentProvider,
 } from "./payments/PaymentProvider.js";
 import { DonationService } from "./DonationService.js";
 import { NotificationService } from "./NotificationService.js";
-
 import { auth } from "../config/auth.js";
 
 export interface PaymentIntentResult {
@@ -19,27 +19,24 @@ export interface PaymentIntentResult {
   status: string;
   checkoutUrl?: string;
   sessionId?: string;
+  internalReference?: string;
+  provider?: string;
 }
 
 export class PaymentService {
-  private static providers: Record<string, PaymentProvider> = {
-    STRIPE: new StripePaymentProvider(),
-    MANUAL: new ManualPaymentProvider(),
-  };
-
   /**
    * Register or override a payment provider
    */
   static registerProvider(provider: PaymentProvider) {
-    this.providers[provider.name.toUpperCase()] = provider;
+    (PaymentProviderRegistry as any).providers[provider.name.toUpperCase()] = provider;
   }
 
-  static getProvider(name: string = "STRIPE"): PaymentProvider {
-    const p = this.providers[name.toUpperCase()];
-    if (!p) {
-      return this.providers.STRIPE;
-    }
-    return p;
+  static getProvider(name: string = "PAYPAL"): PaymentProvider {
+    return PaymentProviderRegistry.getProvider(name);
+  }
+
+  static isProviderEnabled(name: string): boolean {
+    return PaymentProviderRegistry.isProviderEnabled(name);
   }
 
   /**
@@ -53,20 +50,35 @@ export class PaymentService {
     userId,
     applicationId,
     currency = "USD",
-    provider = "STRIPE",
+    provider = "PAYPAL",
     customerEmail,
     cohortName,
+    paymMethod,
+    phoneNumber,
   }: {
     cohortId?: string;
     enrollmentId?: string;
     userId?: string;
     applicationId?: string;
-    currency?: "USD" | "EUR" | string;
+    currency?: "USD" | "EUR" | "HTG" | string;
     provider?: string;
     customerEmail?: string;
     cohortName?: string;
+    paymMethod?: string;
+    phoneNumber?: string;
   }): Promise<PaymentIntentResult> {
-    const selectedCurrency = currency?.toUpperCase() === "EUR" ? "EUR" : "USD";
+    const selectedProviderName = (provider || "PAYPAL").toUpperCase();
+
+    // Enforce provider availability - Reject new checkouts for disabled providers (e.g. Stripe)
+    if (!PaymentProviderRegistry.isProviderEnabled(selectedProviderName)) {
+      throw new AppError(
+        403,
+        "PROVIDER_DISABLED",
+        `Payment method '${selectedProviderName}' is currently disabled.`
+      );
+    }
+
+    const selectedCurrency = (currency?.toUpperCase() === "EUR" ? "EUR" : currency?.toUpperCase() === "HTG" ? "HTG" : "USD");
     let targetCohortId = cohortId;
     let targetUserId = userId;
 
@@ -87,6 +99,45 @@ export class PaymentService {
 
       if (en.payment_status === "PAID") {
         throw new AppError(400, ErrorCodes.VALIDATION_ERROR, "This enrollment is already paid.");
+      }
+    }
+
+    // 2. If applicationId provided, derive cohort, user and customerEmail from application
+    if (!targetCohortId && applicationId) {
+      const appRes = await pool.query(
+        `SELECT id, cohort_id, program_id, user_id, email, status, payment_status
+         FROM applications
+         WHERE id = $1`,
+        [applicationId]
+      );
+      if (appRes.rows.length > 0) {
+        const app = appRes.rows[0];
+        targetCohortId = app.cohort_id;
+        targetUserId = targetUserId || app.user_id;
+        if (!customerEmail) customerEmail = app.email;
+
+        // If the application doesn't have a cohort_id explicitly assigned yet, find the active or upcoming cohort for its program
+        if (!targetCohortId && app.program_id) {
+          const autoCohortRes = await pool.query(
+            `SELECT id FROM cohorts 
+             WHERE program_id = $1 AND status IN ('UPCOMING', 'ACTIVE', 'ENROLLING')
+             ORDER BY start_date ASC LIMIT 1`,
+            [app.program_id]
+          );
+          if (autoCohortRes.rows.length > 0) {
+            targetCohortId = autoCohortRes.rows[0].id;
+            await pool.query(`UPDATE applications SET cohort_id = $1 WHERE id = $2`, [targetCohortId, applicationId]);
+          } else {
+            const anyCohortRes = await pool.query(
+              `SELECT id FROM cohorts WHERE program_id = $1 ORDER BY created_at DESC LIMIT 1`,
+              [app.program_id]
+            );
+            if (anyCohortRes.rows.length > 0) {
+              targetCohortId = anyCohortRes.rows[0].id;
+              await pool.query(`UPDATE applications SET cohort_id = $1 WHERE id = $2`, [targetCohortId, applicationId]);
+            }
+          }
+        }
       }
     }
 
@@ -111,7 +162,7 @@ export class PaymentService {
     const cohortData = cohortRes.rows[0];
     const { fee_amount, program_price, program_price_eur } = cohortData;
     const resolvedCohortName = cohortName || cohortData.cohort_name_en || cohortData.program_title_en || "ILSI Cohort";
-    
+
     // Use cohort fee if set > 0, otherwise fallback to program template price
     let officialAmount: number;
     if (fee_amount && Number(fee_amount) > 0) {
@@ -140,11 +191,11 @@ export class PaymentService {
     let existingPayment = null;
     if (targetUserId) {
       const existingPayRes = await pool.query(
-        `SELECT id, enrollment_id, user_id, amount, currency, status 
+        `SELECT id, enrollment_id, user_id, amount, currency, status, provider, internal_reference, provider_order_id 
          FROM payments 
-         WHERE user_id = $1 AND cohort_id = $2 AND currency = $3 AND status = 'PENDING'
+         WHERE user_id = $1 AND cohort_id = $2 AND status = 'PENDING'
          ORDER BY created_at DESC LIMIT 1`,
-        [targetUserId, targetCohortId, selectedCurrency]
+        [targetUserId, targetCohortId]
       );
       if (existingPayRes.rows.length > 0) {
         existingPayment = existingPayRes.rows[0];
@@ -152,7 +203,7 @@ export class PaymentService {
     }
     if (!existingPayment && applicationId) {
       const existingAppPayRes = await pool.query(
-        `SELECT id, enrollment_id, user_id, amount, currency, status 
+        `SELECT id, enrollment_id, user_id, amount, currency, status, provider, internal_reference, provider_order_id 
          FROM payments 
          WHERE application_id = $1 AND status = 'PENDING'
          ORDER BY created_at DESC LIMIT 1`,
@@ -163,9 +214,20 @@ export class PaymentService {
       }
     }
 
+    const selectedProvider = this.getProvider(selectedProviderName);
+
     if (existingPayment) {
       const p = existingPayment;
-      const selectedProvider = this.getProvider(provider);
+      const internalRef = p.internal_reference || `ilsi_pay_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+
+      // Update provider and currency on the existing pending payment if user switched method
+      await pool.query(
+        `UPDATE payments 
+         SET provider = $1, currency = $2, internal_reference = $3, updated_at = NOW()
+         WHERE id = $4`,
+        [selectedProviderName, selectedCurrency, internalRef, p.id]
+      );
+
       let session;
       try {
         session = await selectedProvider.createCheckoutSession({
@@ -176,9 +238,18 @@ export class PaymentService {
           applicationId: applicationId,
           customerEmail: resolvedEmail,
           cohortName: resolvedCohortName,
-          amount: Number(p.amount),
-          currency: p.currency,
+          amount: officialAmount,
+          currency: selectedCurrency,
+          metadata: {
+            merchantReference: internalRef,
+            paymentMethod: paymMethod,
+            phoneNumber,
+          },
         });
+
+        if (session?.sessionId) {
+          await pool.query(`UPDATE payments SET provider_order_id = $1 WHERE id = $2`, [session.sessionId, p.id]);
+        }
       } catch (err: any) {
         console.warn("Could not regenerate session for existing pending payment:", err.message);
       }
@@ -186,23 +257,27 @@ export class PaymentService {
       return {
         paymentId: p.id,
         enrollmentId: p.enrollment_id || enrollmentId,
-        amount: Number(p.amount),
-        currency: p.currency,
+        amount: officialAmount,
+        currency: selectedCurrency,
         cohortId: targetCohortId,
         status: p.status,
         checkoutUrl: session?.checkoutUrl,
-        sessionId: session?.sessionId,
+        sessionId: session?.sessionId || p.provider_order_id,
+        internalReference: internalRef,
+        provider: selectedProviderName,
       };
     }
 
-    // 4. Record pending payment with server-enforced price
+    // 4. Generate unique internal reference and record pending payment
+    const internalReference = `ilsi_pay_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+
     const insertRes = await pool.query(
       `INSERT INTO payments (
          user_id, enrollment_id, application_id, cohort_id,
-         amount, currency, status, provider, type
+         amount, currency, status, provider, type, internal_reference, purpose, metadata
        )
-       VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, 'COHORT_FEE')
-       RETURNING id, enrollment_id, amount, currency, status`,
+       VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, 'COHORT_FEE', $8, 'course_payment', $9)
+       RETURNING id, enrollment_id, amount, currency, status, internal_reference, provider`,
       [
         targetUserId || null,
         enrollmentId || null,
@@ -210,14 +285,19 @@ export class PaymentService {
         targetCohortId,
         officialAmount,
         selectedCurrency,
-        provider.toUpperCase(),
+        selectedProviderName,
+        internalReference,
+        JSON.stringify({
+          cohortName: resolvedCohortName,
+          paymMethod: paymMethod || null,
+          phoneNumber: phoneNumber || null,
+        }),
       ]
     );
 
     const payment = insertRes.rows[0];
 
     // 5. Generate provider checkout session
-    const selectedProvider = this.getProvider(provider);
     let checkoutSession;
     try {
       checkoutSession = await selectedProvider.createCheckoutSession({
@@ -230,7 +310,16 @@ export class PaymentService {
         cohortName: resolvedCohortName,
         amount: officialAmount,
         currency: selectedCurrency,
+        metadata: {
+          merchantReference: internalReference,
+          paymentMethod: paymMethod,
+          phoneNumber,
+        },
       });
+
+      if (checkoutSession?.sessionId) {
+        await pool.query(`UPDATE payments SET provider_order_id = $1 WHERE id = $2`, [checkoutSession.sessionId, payment.id]);
+      }
     } catch (err: any) {
       console.warn("Provider checkout session error:", err.message);
     }
@@ -244,6 +333,8 @@ export class PaymentService {
       status: payment.status,
       checkoutUrl: checkoutSession?.checkoutUrl,
       sessionId: checkoutSession?.sessionId,
+      internalReference,
+      provider: selectedProviderName,
     };
   }
 
@@ -254,17 +345,18 @@ export class PaymentService {
   static async verifyPayment(
     paymentId: string,
     providerPaymentId?: string,
-    options?: { expectedAmount?: number; expectedCurrency?: string }
+    options?: { expectedAmount?: number; expectedCurrency?: string; providerOrderId?: string }
   ) {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
 
-      // 1. Fetch payment
+      // 1. Fetch payment with row lock to avoid race conditions
       const payRes = await client.query(
-        `SELECT id, user_id, enrollment_id, application_id, cohort_id, amount, currency, status 
+        `SELECT id, user_id, enrollment_id, application_id, cohort_id, amount, currency, status, provider, internal_reference, provider_order_id 
          FROM payments 
-         WHERE id = $1`,
+         WHERE id::text = $1 OR internal_reference = $1 OR provider_order_id = $1
+         FOR UPDATE`,
         [paymentId]
       );
 
@@ -279,32 +371,38 @@ export class PaymentService {
       }
 
       // 2. Anti-tampering checks: verify amount and currency match database record
-      if (options?.expectedAmount !== undefined && Math.abs(Number(payment.amount) - options.expectedAmount) > 0.01) {
-        throw new AppError(
-          400,
-          "TAMPERED_PAYMENT",
-          `Payment amount mismatch: expected ${payment.amount}, received ${options.expectedAmount}`
-        );
-      }
-      if (options?.expectedCurrency && payment.currency.toUpperCase() !== options.expectedCurrency.toUpperCase()) {
-        throw new AppError(
-          400,
-          "TAMPERED_PAYMENT",
-          `Payment currency mismatch: expected ${payment.currency}, received ${options.expectedCurrency}`
-        );
+      if (options?.expectedAmount !== undefined && options?.expectedCurrency !== "HTG") {
+        if (Math.abs(Number(payment.amount) - options.expectedAmount) > 0.05) {
+          throw new AppError(
+            400,
+            "TAMPERED_PAYMENT",
+            `Payment amount mismatch: expected ${payment.amount}, received ${options.expectedAmount}`
+          );
+        }
       }
 
-      const resolvedProviderTx = providerPaymentId || `tx_${Date.now()}`;
+      if (options?.expectedCurrency && options.expectedCurrency !== "HTG") {
+        if (payment.currency.toUpperCase() !== options.expectedCurrency.toUpperCase()) {
+          throw new AppError(
+            400,
+            "TAMPERED_PAYMENT",
+            `Payment currency mismatch: expected ${payment.currency}, received ${options.expectedCurrency}`
+          );
+        }
+      }
+
+      const resolvedProviderTx = providerPaymentId || payment.provider_order_id || `tx_${Date.now()}`;
 
       // 3. Update payment record to PAID
       await client.query(
         `UPDATE payments 
          SET status = 'PAID',
              provider_payment_id = $1,
+             provider_order_id = COALESCE($2, provider_order_id),
              paid_at = NOW(),
              updated_at = NOW()
-         WHERE id = $2`,
-        [resolvedProviderTx, paymentId]
+         WHERE id = $3`,
+        [resolvedProviderTx, options?.providerOrderId || null, payment.id]
       );
 
       let effectiveUserId = payment.user_id;
@@ -354,10 +452,10 @@ export class PaymentService {
 
           // Link user to payment
           if (effectiveUserId) {
-            await client.query(`UPDATE payments SET user_id = $1 WHERE id = $2`, [effectiveUserId, paymentId]);
+            await client.query(`UPDATE payments SET user_id = $1 WHERE id = $2`, [effectiveUserId, payment.id]);
           }
 
-          // Ensure enrollment exists and is marked ACTIVE and PAID
+          // Ensure enrollment exists and is marked ACTIVE and PAID exactly once
           if (effectiveUserId && targetCohort) {
             const enrollUpsert = await client.query(
               `INSERT INTO enrollments (user_id, cohort_id, status, payment_status, enrolled_at)
@@ -371,7 +469,7 @@ export class PaymentService {
             );
             if (enrollUpsert.rows.length > 0) {
               effectiveEnrollmentId = enrollUpsert.rows[0].id;
-              await client.query(`UPDATE payments SET enrollment_id = $1 WHERE id = $2`, [effectiveEnrollmentId, paymentId]);
+              await client.query(`UPDATE payments SET enrollment_id = $1 WHERE id = $2`, [effectiveEnrollmentId, payment.id]);
             }
           }
 
@@ -424,8 +522,8 @@ export class PaymentService {
         type: "PAYMENT",
         titleEn: "Enrollment Fee Received",
         titleFr: "Frais d'inscription reçus",
-        bodyEn: `Received ${payment.amount} ${payment.currency} for cohort enrollment.`,
-        bodyFr: `Paiement de ${payment.amount} ${payment.currency} reçu pour une inscription.`,
+        bodyEn: `Received ${payment.amount} ${payment.currency} for cohort enrollment (${payment.provider}).`,
+        bodyFr: `Paiement de ${payment.amount} ${payment.currency} reçu pour une inscription (${payment.provider}).`,
       });
 
       return { status: "PAID", message: "Payment verified successfully. Cohort access granted." };
@@ -438,9 +536,81 @@ export class PaymentService {
   }
 
   /**
+   * Unified authoritative verification for PayPal, Pay'm, and Stripe
+   */
+  static async verifyProviderPayment({
+    provider,
+    paymentId,
+    orderId,
+    referenceId,
+    transactionId,
+  }: {
+    provider: string;
+    paymentId?: string;
+    orderId?: string;
+    referenceId?: string;
+    transactionId?: string;
+  }) {
+    const providerName = (provider || "PAYPAL").toUpperCase();
+    const providerInstance = this.getProvider(providerName);
+
+    // Find target payment record
+    const lookupKey = paymentId || referenceId || orderId || transactionId;
+    if (!lookupKey) {
+      throw new AppError(400, ErrorCodes.VALIDATION_ERROR, "Payment identifier (paymentId, orderId, or referenceId) is required.");
+    }
+
+    const payRes = await pool.query(
+      `SELECT id, amount, currency, status, provider, internal_reference, provider_order_id, provider_payment_id
+       FROM payments
+       WHERE id::text = $1 OR internal_reference = $1 OR provider_order_id = $1 OR provider_payment_id = $1
+       LIMIT 1`,
+      [lookupKey]
+    );
+
+    if (payRes.rows.length === 0) {
+      throw new AppError(404, ErrorCodes.RESOURCE_NOT_FOUND, "Payment record not found for verification.");
+    }
+
+    const record = payRes.rows[0];
+    if (record.status === "PAID") {
+      return { status: "PAID", message: "Payment was already verified." };
+    }
+
+    // Call provider verification
+    const targetExternalId = orderId || transactionId || record.provider_order_id || record.provider_payment_id;
+    const verification = await providerInstance.verifyPayment(record.id, targetExternalId, {
+      expectedAmount: Number(record.amount),
+      expectedCurrency: record.currency,
+      merchantReference: record.internal_reference,
+    });
+
+    if (verification.status === "PAID") {
+      // Replay prevention: verify this external ID is not attributed to another payment
+      const replayCheck = await pool.query(
+        `SELECT id FROM payments WHERE provider_payment_id = $1 AND id != $2`,
+        [verification.providerPaymentId, record.id]
+      );
+      if (replayCheck.rows.length > 0) {
+        throw new AppError(409, "REPLAY_DETECTED", "This provider transaction has already been credited to another payment.");
+      }
+
+      return await this.verifyPayment(record.id, verification.providerPaymentId, {
+        expectedAmount: verification.amount,
+        expectedCurrency: verification.currency,
+        providerOrderId: orderId || record.provider_order_id,
+      });
+    }
+
+    return {
+      status: verification.status || "PENDING",
+      message: "Payment verification has not completed yet with provider.",
+    };
+  }
+
+  /**
    * Cryptographically verifies Stripe checkout return session directly against Stripe's API.
-   * Enforces anti-tampering (matching paymentId, matching amount, matching currency),
-   * and anti-replay (guaranteeing one Stripe session cannot be reused for different payments).
+   * Kept fully intact for Stripe verification when enabled or for legacy transactions.
    */
   static async verifySessionPayment(sessionId: string, clientPaymentId?: string) {
     const provider = this.getProvider("STRIPE") as StripePaymentProvider;
@@ -496,7 +666,6 @@ export class PaymentService {
     });
   }
 
-
   /**
    * Records a manual payment for a participant (Special case: First cohort or offline payments)
    */
@@ -536,9 +705,9 @@ export class PaymentService {
       const payRes = await client.query(
         `INSERT INTO payments (
            user_id, enrollment_id, cohort_id, amount, currency,
-           provider, provider_payment_id, status, type, paid_at, metadata
+           provider, provider_payment_id, status, type, paid_at, metadata, purpose
          )
-         VALUES ($1, $2, $3, $4, $5, 'MANUAL', $6, 'PAID', 'COHORT_FEE', NOW(), $7)
+         VALUES ($1, $2, $3, $4, $5, 'MANUAL', $6, 'PAID', 'COHORT_FEE', NOW(), $7, 'course_payment')
          RETURNING *`,
         [
           en.user_id,
@@ -577,7 +746,7 @@ export class PaymentService {
 
   /**
    * Idempotent Webhook Event Processor.
-   * Guarantees that duplicate webhook deliveries from Stripe or payment providers
+   * Guarantees that duplicate webhook deliveries from PayPal, Pay'm, or Stripe
    * will never create duplicate payments, enrollments, or access grants.
    */
   static async handleWebhookEvent({
@@ -615,16 +784,23 @@ export class PaymentService {
 
     // 3. Process payment event (Cohort Enrollment or Donation)
     const providerTransactionId =
-      payload.transactionId || payload.data?.object?.id || eventId;
+      payload.transactionId ||
+      payload.data?.object?.id ||
+      payload.transaction?.transaction_id ||
+      payload.resource?.id ||
+      eventId;
 
     const isDonation =
       payload.data?.object?.metadata?.type === "DONATION" ||
+      payload.resource?.custom_id?.startsWith?.("don_") ||
       Boolean(payload.data?.object?.metadata?.donationId);
 
     if (isDonation) {
       const donationId =
         payload.data?.object?.metadata?.donationId ||
-        payload.data?.object?.client_reference_id;
+        payload.data?.object?.client_reference_id ||
+        payload.resource?.custom_id;
+
       if (donationId) {
         await DonationService.completeDonationFromWebhook({
           donationId,
@@ -637,8 +813,11 @@ export class PaymentService {
     } else {
       const paymentId =
         payload.paymentId ||
+        payload.transaction?.reference_id ||
+        payload.transaction?.refference_id ||
         payload.data?.object?.metadata?.paymentId ||
-        payload.data?.object?.client_reference_id;
+        payload.data?.object?.client_reference_id ||
+        payload.resource?.custom_id;
 
       if (paymentId) {
         await this.verifyPayment(paymentId, providerTransactionId);

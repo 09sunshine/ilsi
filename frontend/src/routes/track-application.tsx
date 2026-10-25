@@ -29,6 +29,7 @@ import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
 import { api } from "@/lib/api";
 import { signIn, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
+import { PaymentMethodSelector } from "@/components/payment/PaymentMethodSelector";
 
 const searchSchema = z.object({
   id: z.string().optional(),
@@ -36,6 +37,14 @@ const searchSchema = z.object({
   payment: z.string().optional(),
   payment_id: z.string().optional(),
   session_id: z.string().optional(),
+  provider: z.string().optional(),
+  token: z.string().optional(),
+  order_id: z.string().optional(),
+  PayerID: z.string().optional(),
+  refference_id: z.string().optional(),
+  id_transaction: z.string().optional(),
+  transaction_id: z.string().optional(),
+  status: z.string().optional(),
 });
 
 export const Route = createFileRoute("/track-application")({
@@ -66,7 +75,8 @@ export const Route = createFileRoute("/track-application")({
 });
 
 function TrackApplicationPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const fr = locale === "fr";
   const L = useLocalized();
   const search = Route.useSearch();
   const navigate = useNavigate();
@@ -78,6 +88,10 @@ function TrackApplicationPage() {
   const [appData, setAppData] = useState<any>(null);
   const [copied, setCopied] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
+  const [initiatingPayment, setInitiatingPayment] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<"paypal" | "paym" | "stripe">("paypal");
+  const [paymMethod, setPaymMethod] = useState("moncash");
+  const [paymentInstructions, setPaymentInstructions] = useState<string | null>(null);
 
   // Account Password Creation state
   const [newPassword, setNewPassword] = useState("");
@@ -113,16 +127,76 @@ function TrackApplicationPage() {
         setQuery(lookup);
       }
 
-      // If returning from Stripe Checkout with payment success
-      if (search.payment === "success" && search.session_id) {
+      const isPayPalReturn =
+        (search.provider === "paypal" || search.payment === "paypal_success" || (search.token && !search.session_id)) &&
+        !search.session_id;
+
+      const isPaymReturn =
+        search.provider === "paym" ||
+        search.payment === "paym_return" ||
+        Boolean(search.refference_id) ||
+        Boolean(search.id_transaction);
+
+      const isStripeReturn = search.payment === "success" && search.session_id;
+
+      if (isPayPalReturn) {
+        setVerifyingPayment(true);
+        try {
+          const res = await api.verifyProviderPayment({
+            provider: "paypal",
+            orderId: search.order_id || search.token,
+            paymentId: search.payment_id,
+            applicationId: lookup,
+          });
+          if (active && (res.status === "PAID" || res.status === "succeeded")) {
+            toast.success(t("payment.confirmed"));
+          } else if (active && (res.status === "PENDING" || res.status === "processing")) {
+            toast.info(t("payment.pending"));
+          }
+        } catch (err: any) {
+          if (active) {
+            toast.error(err.message || t("payment.failed"));
+          }
+        } finally {
+          if (active) {
+            setVerifyingPayment(false);
+            if (lookup) fetchStatus(lookup);
+          }
+        }
+      } else if (isPaymReturn) {
+        setVerifyingPayment(true);
+        try {
+          const res = await api.verifyProviderPayment({
+            provider: "paym",
+            referenceId: search.refference_id,
+            transactionId: search.id_transaction || search.transaction_id,
+            paymentId: search.payment_id,
+            applicationId: lookup,
+          });
+          if (active && (res.status === "PAID" || res.status === "succeeded")) {
+            toast.success(t("payment.confirmed"));
+          } else if (active && (res.status === "PENDING" || res.status === "processing")) {
+            toast.info(t("payment.pending"));
+          }
+        } catch (err: any) {
+          if (active) {
+            toast.error(err.message || t("payment.failed"));
+          }
+        } finally {
+          if (active) {
+            setVerifyingPayment(false);
+            if (lookup) fetchStatus(lookup);
+          }
+        }
+      } else if (isStripeReturn) {
         setVerifyingPayment(true);
         try {
           const res = await api.verifyCheckoutSession({
-            sessionId: search.session_id,
+            sessionId: search.session_id!,
             paymentId: search.payment_id,
           });
           if (active && res.status === "PAID") {
-            toast.success("Payment Confirmed! Your cohort seat is officially reserved.");
+            toast.success(t("payment.confirmed"));
           }
         } catch (err: any) {
           if (active) {
@@ -131,13 +205,11 @@ function TrackApplicationPage() {
         } finally {
           if (active) {
             setVerifyingPayment(false);
-            if (lookup) {
-              fetchStatus(lookup);
-            }
+            if (lookup) fetchStatus(lookup);
           }
         }
-      } else if (search.payment === "cancelled") {
-        toast.info("Payment was cancelled. You can complete your enrollment payment whenever you're ready.");
+      } else if (search.payment === "cancelled" || search.status === "cancelled") {
+        toast.info(t("payment.cancelled"));
         if (lookup) {
           fetchStatus(lookup);
         }
@@ -151,7 +223,19 @@ function TrackApplicationPage() {
     return () => {
       active = false;
     };
-  }, [search.id, search.email, search.payment, search.session_id, search.payment_id]);
+  }, [
+    search.id,
+    search.email,
+    search.payment,
+    search.session_id,
+    search.payment_id,
+    search.provider,
+    search.token,
+    search.order_id,
+    search.refference_id,
+    search.id_transaction,
+    search.status,
+  ]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,13 +249,68 @@ function TrackApplicationPage() {
     setTimeout(() => setCopied(false), 2500);
   };
 
-  const handlePay = () => {
-    if (!appData?.payment?.checkoutUrl) {
-      toast.error("Checkout link is being prepared. Please try again in a few moments.");
+  const getSelectedProviderName = (): string => {
+    const raw =
+      typeof selectedProvider === "string"
+        ? selectedProvider
+        : (selectedProvider as any)?.provider || "paypal";
+    return (raw || "paypal").toLowerCase();
+  };
+
+  const getProviderButtonLabel = (): string => {
+    const p = getSelectedProviderName();
+    if (p === "paypal") {
+      return "PayPal";
+    }
+    if (p === "stripe") {
+      return "Stripe";
+    }
+    if (p === "paym") {
+      if (paymMethod === "moncash") return "Pay'm (MonCash)";
+      if (paymMethod === "natcash") return "Pay'm (Natcash)";
+      if (paymMethod === "carte") return locale === "fr" ? "Pay'm (Carte)" : "Pay'm (Card)";
+      return "Pay'm";
+    }
+    return locale === "fr" ? "Carte bancaire" : "Card";
+  };
+
+  const handlePay = async () => {
+    if (!appData?.applicationId) {
+      toast.error("Application data missing. Please check your status first.");
       return;
     }
-    setRedirecting(true);
-    window.location.href = appData.payment.checkoutUrl;
+
+    setInitiatingPayment(true);
+    setPaymentInstructions(null);
+    try {
+      const cohortId = appData.cohort?.id || appData.payment?.cohortId || undefined;
+      const providerId = getSelectedProviderName();
+      const res = await api.createPaymentIntent({
+        applicationId: appData.applicationId,
+        cohortId,
+        currency:
+          appData.payment?.currency ||
+          appData.payment?.feeCurrency ||
+          appData.cohort?.feeCurrency ||
+          "USD",
+        provider: providerId,
+        paymMethod: providerId === "paym" ? paymMethod : undefined,
+      });
+
+      if (res.checkoutUrl) {
+        setRedirecting(true);
+        window.location.href = res.checkoutUrl;
+      } else if (res.instructions) {
+        setPaymentInstructions(res.instructions);
+        toast.info("Please follow the instructions below to complete your payment.");
+      } else {
+        toast.info(t("payment.pending"));
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to initiate payment. Please try again.");
+    } finally {
+      setInitiatingPayment(false);
+    }
   };
 
   const handleActivateAccount = async (e: React.FormEvent) => {
@@ -268,10 +407,10 @@ function TrackApplicationPage() {
           <div className="panel mb-8 border-primary/40 bg-primary/5 p-6 text-center animate-pulse">
             <Loader2 className="size-8 animate-spin mx-auto text-primary" />
             <h3 className="mt-3 text-lg font-semibold text-foreground">
-              Verifying Stripe Payment...
+              {t("payment.verifying")}
             </h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Please wait while we confirm your transaction and activate your cohort enrollment.
+              {t("payment.verifyingNote")}
             </p>
           </div>
         )}
@@ -439,11 +578,11 @@ function TrackApplicationPage() {
 
             {/* STEP 1: Tuition Payment Card (Shown if not paid yet) */}
             {!isPaid && isAcceptedOrEnrolled && (
-              <div className="panel overflow-hidden border-2 border-primary/20 bg-card p-6 shadow-[var(--shadow-soft)]">
-                <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="panel overflow-hidden border-2 border-primary/20 bg-card p-4 sm:p-6 shadow-[var(--shadow-soft)] max-w-full">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between max-w-full">
                   <div>
                     <div className="flex items-center gap-2">
-                      <CreditCard className="size-5 text-primary" />
+                      <CreditCard className="size-5 text-primary shrink-0" />
                       <h3 className="text-lg font-display font-semibold">
                         {t("track.fee")}
                       </h3>
@@ -453,8 +592,8 @@ function TrackApplicationPage() {
                     </p>
                   </div>
 
-                  <div className="text-right sm:text-right">
-                    <div className="text-3xl font-display font-bold text-foreground">
+                  <div className="text-left sm:text-right shrink-0">
+                    <div className="text-2xl sm:text-3xl font-display font-bold text-foreground">
                       {(appData.payment?.currency || appData.payment?.feeCurrency || appData.cohort?.feeCurrency) === "EUR" ? "€" : "$"}
                       {Number(appData.payment?.amount) > 0
                         ? Number(appData.payment?.amount)
@@ -475,24 +614,76 @@ function TrackApplicationPage() {
                   </div>
                 </div>
 
-                <div className="mt-6 pt-5 border-t flex flex-col gap-3 sm:flex-row sm:justify-end">
+                {/* Multi-provider payment selector */}
+                <div className="mt-6 pt-5 border-t">
+                  <PaymentMethodSelector
+                    selectedProvider={selectedProvider}
+                    onSelectProvider={(p: any) => {
+                      const id = typeof p === "string" ? p : p?.id || p?.provider;
+                      if (id) {
+                        setSelectedProvider(id.toLowerCase() as any);
+                      }
+                    }}
+                    paymMethod={paymMethod}
+                    onSelectPaymMethod={setPaymMethod}
+                    amount={
+                      Number(appData.payment?.amount) > 0
+                        ? Number(appData.payment?.amount)
+                        : Number(appData.payment?.feeAmount) > 0
+                        ? Number(appData.payment?.feeAmount)
+                        : Number(appData.cohort?.feeAmount) > 0
+                        ? Number(appData.cohort?.feeAmount)
+                        : Number(appData.program?.price) > 0
+                        ? Number(appData.program?.price)
+                        : 95
+                    }
+                    currency={
+                      appData.payment?.currency ||
+                      appData.payment?.feeCurrency ||
+                      appData.cohort?.feeCurrency ||
+                      "USD"
+                    }
+                    disabled={redirecting || initiatingPayment}
+                  />
+                </div>
+
+                {paymentInstructions && (
+                  <div className="mt-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-sm space-y-1">
+                    <div className="font-semibold text-amber-700 dark:text-amber-400">Payment Instructions:</div>
+                    <div className="text-foreground whitespace-pre-wrap">{paymentInstructions}</div>
+                  </div>
+                )}
+
+                <div className="mt-6 pt-5 border-t flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between max-w-full overflow-hidden">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground sm:max-w-[55%]">
+                    <span className="shrink-0 text-base" aria-hidden="true">🔒</span>
+                    <span className="leading-relaxed">{t("payment.verifyingNote")}</span>
+                  </div>
                   <Button
                     size="lg"
                     onClick={handlePay}
-                    disabled={redirecting || !appData.payment?.checkoutUrl}
-                    className="w-full sm:w-auto bg-hero-lime text-hero-lime-foreground hover:bg-hero-lime/90 font-bold px-8 shadow-md"
+                    disabled={redirecting || initiatingPayment}
+                    translate="no"
+                    className="notranslate w-full sm:w-auto min-h-[48px] h-auto py-3 px-6 bg-hero-lime text-hero-lime-foreground hover:bg-hero-lime/90 font-bold shadow-md whitespace-normal sm:whitespace-nowrap text-center text-sm sm:text-base transition-all shrink-0 max-w-full"
                   >
-                    {redirecting ? (
-                      <>
-                        <Loader2 className="size-4 animate-spin mr-2" />
-                        {t("track.redirecting")}
-                      </>
-                    ) : (
-                      <>
-                        {t("track.payNow")}
-                        <ExternalLink className="size-4 ml-2" />
-                      </>
-                    )}
+                    <span
+                      key={redirecting || initiatingPayment ? "loading" : `${getSelectedProviderName()}-${paymMethod}`}
+                      className="inline-flex items-center justify-center gap-2 w-full max-w-full"
+                    >
+                      {redirecting || initiatingPayment ? (
+                        <>
+                          <Loader2 className="size-4 animate-spin shrink-0" />
+                          <span className="truncate">{t("track.redirecting")}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="truncate">
+                            {t("payment.payWith")} {getProviderButtonLabel()}
+                          </span>
+                          <ExternalLink className="size-4 shrink-0" />
+                        </>
+                      )}
+                    </span>
                   </Button>
                 </div>
               </div>

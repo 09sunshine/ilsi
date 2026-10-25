@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
+import { formatPrice } from "@/lib/currency";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -53,12 +54,15 @@ const applicationSchema = z.object({
   motivation: z.string().trim().min(40).max(1500),
   experience: z.string().trim().max(1500).optional().or(z.literal("")),
   terms: z.literal(true),
+  willingToPayFee: z.literal(true, {
+    errorMap: () => ({ message: "apply.feeRequired" }),
+  }),
 });
 
 type ApplicationValues = z.infer<typeof applicationSchema>;
 
 function ApplyPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const L = useLocalized();
   const search = Route.useSearch();
   const [submitted, setSubmitted] = useState(false);
@@ -77,6 +81,19 @@ function ApplyPage() {
     resolver: zodResolver(applicationSchema),
     defaultValues: { programId: "", organization: "", experience: "" },
   });
+
+  const selectedProgramId = watch("programId");
+  const selectedProgram = programList.find(
+    (p) => p.id === selectedProgramId || p.slug === selectedProgramId
+  );
+  const cohortFee = selectedProgram?.cohorts?.[0]?.feeAmount;
+  const rawFee =
+    cohortFee !== undefined && cohortFee !== null && Number(cohortFee) > 0
+      ? Number(cohortFee)
+      : Number(selectedProgram?.price) || 0;
+  const programCurrency =
+    selectedProgram?.cohorts?.[0]?.feeCurrency || selectedProgram?.currency || "USD";
+  const formattedFee = formatPrice(rawFee, programCurrency, locale);
 
   useEffect(() => {
     async function loadPrograms() {
@@ -266,12 +283,38 @@ function ApplyPage() {
                   setValue("terms", v === true ? true : (false as never), { shouldValidate: true })
                 }
               />
-              <Label htmlFor="terms" className="text-sm font-normal leading-relaxed">
+              <Label htmlFor="terms" className="text-sm font-normal leading-relaxed cursor-pointer">
                 {t("apply.terms")}
               </Label>
             </div>
             {errors.terms ? (
               <p className="text-xs text-destructive">{t("common.required")}</p>
+            ) : null}
+
+            {/* Personalized Cohort Fee Willingness Question */}
+            <div className="flex items-start gap-3 pt-3 border-t border-border/70">
+              <Checkbox
+                id="willingToPayFee"
+                checked={watch("willingToPayFee") === true}
+                onCheckedChange={(v) =>
+                  setValue("willingToPayFee", v === true ? true : (false as never), { shouldValidate: true })
+                }
+              />
+              <div className="space-y-1">
+                <Label htmlFor="willingToPayFee" className="text-sm font-medium leading-relaxed cursor-pointer text-foreground">
+                  {selectedProgram
+                    ? t("apply.feeQuestion").replace("{fee}", formattedFee)
+                    : t("apply.feeQuestionGeneric")}
+                </Label>
+                {selectedProgram && (
+                  <p className="text-xs text-muted-foreground">
+                    {L(selectedProgram.title)} · <span className="font-semibold text-foreground">{formattedFee}</span> ({programCurrency})
+                  </p>
+                )}
+              </div>
+            </div>
+            {errors.willingToPayFee ? (
+              <p className="text-xs text-destructive">{t("apply.feeRequired")}</p>
             ) : null}
           </fieldset>
 

@@ -96,3 +96,95 @@ export const paymentLimiter = rateLimit({
     },
   },
 });
+
+export const communityPostLimiter = rateLimit({
+  ...baseOptions,
+  windowMs: 15 * 60 * 1000,
+  max: 30, // 30 posts per 15m
+  message: {
+    success: false,
+    error: {
+      code: "COMMUNITY_POST_RATE_LIMIT",
+      message: "You are posting too frequently. Please wait a few moments before creating another post.",
+    },
+  },
+});
+
+export const communityCommentLimiter = rateLimit({
+  ...baseOptions,
+  windowMs: 15 * 60 * 1000,
+  max: 60, // 60 comments per 15m
+  message: {
+    success: false,
+    error: {
+      code: "COMMUNITY_COMMENT_RATE_LIMIT",
+      message: "You are commenting too fast. Please slow down and try again.",
+    },
+  },
+});
+
+export const communityReactionLimiter = rateLimit({
+  ...baseOptions,
+  windowMs: 5 * 60 * 1000,
+  max: 150, // 150 reactions per 5m
+  message: {
+    success: false,
+    error: {
+      code: "COMMUNITY_REACTION_RATE_LIMIT",
+      message: "Too many reactions submitted. Please wait a moment.",
+    },
+  },
+});
+
+export const communityReportLimiter = rateLimit({
+  ...baseOptions,
+  windowMs: 15 * 60 * 1000,
+  max: 15, // 15 reports per 15m
+  message: {
+    success: false,
+    error: {
+      code: "COMMUNITY_REPORT_RATE_LIMIT",
+      message: "Too many reports submitted. Please wait before submitting additional reports.",
+    },
+  },
+});
+
+export const communityUploadLimiter = rateLimit({
+  ...baseOptions,
+  windowMs: 15 * 60 * 1000,
+  max: 25, // 25 file uploads per 15m
+  message: {
+    success: false,
+    error: {
+      code: "COMMUNITY_UPLOAD_RATE_LIMIT",
+      message: "Attachment upload limit reached. Please wait a few minutes before uploading more files.",
+    },
+  },
+});
+
+export const communitySearchLimiter = rateLimit({
+  ...baseOptions,
+  windowMs: 5 * 60 * 1000,
+  max: 120, // 120 member directory searches per 5m
+  message: {
+    success: false,
+    error: {
+      code: "COMMUNITY_SEARCH_RATE_LIMIT",
+      message: "Too many search requests. Please slow down.",
+    },
+  },
+});
+
+export const communityFeedLimiter = rateLimit({
+  ...baseOptions,
+  windowMs: 5 * 60 * 1000,
+  max: 200, // 200 feed requests per 5m
+  message: {
+    success: false,
+    error: {
+      code: "COMMUNITY_FEED_RATE_LIMIT",
+      message: "Too many feed requests. Please slow down.",
+    },
+  },
+});
+

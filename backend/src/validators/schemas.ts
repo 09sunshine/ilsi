@@ -51,6 +51,7 @@ export const applicationSchemas = {
     motivation: z.string().trim().min(40, "Motivation statement must be at least 40 characters").max(2000),
     experience: z.string().trim().max(2000).optional().or(z.literal("")),
     terms: z.boolean().refine((val) => val === true, "You must accept the terms"),
+    willingToPayFee: z.boolean().optional(),
   }),
   track: z
     .object({
@@ -67,12 +68,16 @@ export const paymentSchemas = {
     cohortId: z.string().optional(),
     enrollmentId: z.string().optional(),
     applicationId: z.string().optional(),
-    currency: z.enum(["USD", "EUR"]).optional(),
+    currency: z.enum(["USD", "EUR", "HTG"]).optional(),
     provider: z.string().optional(),
+    paymMethod: z.string().optional(),
+    phoneNumber: z.string().optional(),
   }),
   enrollmentPayment: z.object({
-    currency: z.enum(["USD", "EUR"]).optional(),
+    currency: z.enum(["USD", "EUR", "HTG"]).optional(),
     provider: z.string().optional(),
+    paymMethod: z.string().optional(),
+    phoneNumber: z.string().optional(),
   }),
   verifySession: z.object({
     sessionId: z.string().min(1, "sessionId is required"),
@@ -81,6 +86,13 @@ export const paymentSchemas = {
   verifyPayment: z.object({
     paymentId: z.string().min(1, "paymentId is required"),
     providerTransactionId: z.string().optional(),
+  }),
+  verifyProvider: z.object({
+    provider: z.string().min(1, "provider is required"),
+    paymentId: z.string().optional(),
+    orderId: z.string().optional(),
+    referenceId: z.string().optional(),
+    transactionId: z.string().optional(),
   }),
 };
 
@@ -228,7 +240,7 @@ export const adminSchemas = {
         nameFr: z.string().trim().min(2).max(150),
         startDate: z.string().min(4),
         endDate: z.string().min(4),
-        capacity: z.number().int().min(1).max(500).default(30),
+        capacity: z.number().int().min(1).max(10000).default(30),
         passingScore: z.number().int().min(0).max(100).default(70),
         thumbnailUrl: z.string().trim().optional().or(z.literal("")).nullable(),
       })
@@ -681,9 +693,20 @@ export const supportSchemas = {
     email: z.string().trim().email("Invalid email address").max(255),
     phone: z.string().trim().max(50).optional().or(z.literal("")),
     amount: z.coerce.number().positive("Amount must be positive").max(1_000_000),
-    currency: z.enum(["USD", "EUR"]).default("USD"),
+    currency: z.enum(["USD", "EUR", "HTG"]).default("USD"),
     frequency: z.enum(["one-off", "monthly"]).default("one-off"),
     message: z.string().trim().max(2000).optional().or(z.literal("")),
+    provider: z.string().optional(),
+    paymMethod: z.string().optional(),
+    phoneNumber: z.string().optional(),
+  }),
+  verifyDonationProvider: z.object({
+    provider: z.string().min(1, "provider is required"),
+    donationId: z.string().optional(),
+    orderId: z.string().optional(),
+    referenceId: z.string().optional(),
+    transactionId: z.string().optional(),
+    sessionId: z.string().optional(),
   }),
   volunteer: z.object({
     name: z.string().trim().min(2, "Name is required").max(150),
@@ -701,6 +724,127 @@ export const contactSchemas = {
     email: z.string().trim().email("Invalid email address").max(255),
     subject: z.string().trim().min(2, "Subject is required").max(200),
     message: z.string().trim().min(5, "Message is required").max(5000),
+  }),
+};
+
+export const communitySchemas = {
+  createPost: z
+    .object({
+      scope: z.enum(["cohort", "global"]),
+      cohortId: z.string().uuid("Invalid cohort ID").optional().nullable(),
+      type: z
+        .enum(["DISCUSSION", "ANNOUNCEMENT", "QUESTION", "ACHIEVEMENT", "PROJECT"])
+        .default("DISCUSSION"),
+      title: z.string().trim().max(300).optional().nullable(),
+      content: z
+        .string()
+        .trim()
+        .min(3, "Post content must be at least 3 characters")
+        .max(20000, "Post content cannot exceed 20,000 characters"),
+      attachments: z
+        .array(
+          z.object({
+            storagePath: z.string().trim().min(1),
+            fileName: z.string().trim().max(255),
+            fileType: z.enum(["IMAGE", "DOCUMENT", "PDF"]),
+            mimeType: z.string().trim().max(100),
+            fileSizeBytes: z.number().int().positive().max(25 * 1024 * 1024),
+          })
+        )
+        .max(10, "Maximum 10 attachments per post")
+        .optional(),
+    })
+    .refine(
+      (data) => {
+        if (data.scope === "cohort") {
+          return Boolean(data.cohortId);
+        }
+        return !data.cohortId;
+      },
+      {
+        message: "Cohort posts require a cohortId; global posts cannot have a cohortId.",
+        path: ["cohortId"],
+      }
+    ),
+
+  updatePost: z.object({
+    title: z.string().trim().max(300).optional().nullable(),
+    content: z
+      .string()
+      .trim()
+      .min(3, "Post content must be at least 3 characters")
+      .max(20000, "Post content cannot exceed 20,000 characters")
+      .optional(),
+  }),
+
+  createComment: z.object({
+    content: z
+      .string()
+      .trim()
+      .min(1, "Comment cannot be empty")
+      .max(5000, "Comment cannot exceed 5,000 characters"),
+    parentCommentId: z.string().uuid("Invalid parent comment ID").optional().nullable(),
+  }),
+
+  updateComment: z.object({
+    content: z
+      .string()
+      .trim()
+      .min(1, "Comment cannot be empty")
+      .max(5000, "Comment cannot exceed 5,000 characters"),
+  }),
+
+  reaction: z.object({
+    targetType: z.enum(["post", "comment"]),
+    targetId: z.string().uuid("Invalid target ID"),
+    reactionType: z
+      .enum(["like", "heart", "clap", "celebrate", "insightful", "fire"])
+      .default("like"),
+  }),
+
+  report: z.object({
+    targetType: z.enum(["post", "comment", "user"]),
+    targetId: z.string().min(1, "Target ID is required"),
+    reason: z.enum(["SPAM", "HARASSMENT", "INAPPROPRIATE", "MISINFORMATION", "OTHER"]),
+    details: z.string().trim().max(1000).optional().nullable(),
+  }),
+
+  updateCommunityProfile: z.object({
+    headline: z.string().trim().max(255).optional().nullable(),
+    bio: z.string().trim().max(3000).optional().nullable(),
+    skills: z.array(z.string().trim().max(50)).max(30).optional(),
+    interests: z.array(z.string().trim().max(50)).max(30).optional(),
+    portfolioUrl: z.string().trim().url().max(500).optional().or(z.literal("")).nullable(),
+    linkedinUrl: z.string().trim().url().max(500).optional().or(z.literal("")).nullable(),
+    githubUrl: z.string().trim().url().max(500).optional().or(z.literal("")).nullable(),
+    websiteUrl: z.string().trim().url().max(500).optional().or(z.literal("")).nullable(),
+    isProfilePublic: z.boolean().optional(),
+    showEnrolledPrograms: z.boolean().optional(),
+  }),
+
+  project: z.object({
+    title: z.string().trim().min(2, "Title is too short").max(255),
+    description: z.string().trim().min(5, "Description is too short").max(5000),
+    projectUrl: z.string().trim().url().max(500).optional().or(z.literal("")).nullable(),
+    imageUrl: z.string().trim().url().max(500).optional().or(z.literal("")).nullable(),
+    skillsUsed: z.array(z.string().trim().max(50)).max(20).optional(),
+    cohortId: z.string().uuid().optional().nullable(),
+  }),
+
+  moderationAction: z.object({
+    action: z.enum([
+      "HIDE_POST",
+      "REMOVE_POST",
+      "UNHIDE_POST",
+      "PIN_POST",
+      "UNPIN_POST",
+      "FEATURE_POST",
+      "UNFEATURE_POST",
+      "DISMISS_REPORT",
+      "RESOLVE_REPORT",
+      "DELETE_COMMENT",
+    ]),
+    reason: z.string().trim().max(500).optional().nullable(),
   }),
 };
 

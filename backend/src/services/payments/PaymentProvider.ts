@@ -4,7 +4,7 @@ import { env } from "../../config/env.js";
 export interface CreateCheckoutParams {
   paymentId: string;
   enrollmentId?: string;
-  cohortId: string;
+  cohortId?: string;
   userId?: string;
   applicationId?: string;
   amount: number;
@@ -14,6 +14,7 @@ export interface CreateCheckoutParams {
   successUrl?: string;
   cancelUrl?: string;
   metadata?: Record<string, any>;
+  purpose?: "course_payment" | "donation";
 }
 
 export interface CheckoutSessionResult {
@@ -44,9 +45,23 @@ export interface PaymentProvider {
   name: string;
   createCheckoutSession(params: CreateCheckoutParams): Promise<CheckoutSessionResult>;
   retrieveSession?(sessionId: string): Promise<any>;
-  verifyPayment(paymentId: string, providerPaymentId?: string): Promise<PaymentVerificationResult>;
+  verifyPayment(
+    paymentId: string,
+    providerPaymentId?: string,
+    options?: any
+  ): Promise<PaymentVerificationResult>;
   refundPayment?(paymentId: string): Promise<boolean>;
-  handleWebhook(payload: any, signature?: string): Promise<WebhookResult>;
+  handleWebhook(payload: any, signature?: string, headers?: any): Promise<WebhookResult>;
+}
+
+export interface PublicPaymentMethod {
+  id: string;
+  name: string;
+  enabled: boolean;
+  currencies: string[];
+  descriptionEn?: string;
+  descriptionFr?: string;
+  subMethods?: Array<{ id: string; name: string }>;
 }
 
 /**
@@ -96,7 +111,7 @@ export class StripePaymentProvider implements PaymentProvider {
 
     const metadata: Record<string, string> = {
       paymentId: params.paymentId,
-      cohortId: params.cohortId,
+      ...(params.cohortId ? { cohortId: params.cohortId } : {}),
       ...(params.userId ? { userId: params.userId } : {}),
       ...(params.applicationId ? { applicationId: params.applicationId } : {}),
       ...(params.enrollmentId ? { enrollmentId: params.enrollmentId } : {}),
@@ -258,3 +273,112 @@ export class ManualPaymentProvider implements PaymentProvider {
     throw new Error("Manual payments do not generate webhooks.");
   }
 }
+
+import { PayPalPaymentProvider } from "./PayPalPaymentProvider.js";
+import { PaymPaymentProvider } from "./PaymPaymentProvider.js";
+
+export { PayPalPaymentProvider } from "./PayPalPaymentProvider.js";
+export { PaymPaymentProvider } from "./PaymPaymentProvider.js";
+
+/**
+ * Provider Registry managing availability, configuration, and security guarantees
+ */
+export class PaymentProviderRegistry {
+  private static providers: Record<string, PaymentProvider> = {};
+
+  static init() {
+    this.providers = {
+      STRIPE: new StripePaymentProvider(),
+      PAYPAL: new PayPalPaymentProvider(),
+      PAYM: new PaymPaymentProvider(),
+      MANUAL: new ManualPaymentProvider(),
+    };
+  }
+
+  static getProvider(name: string = "PAYPAL"): PaymentProvider {
+    const normalized = name.toUpperCase();
+    if (!this.providers[normalized]) {
+      if (normalized === "PAYPAL") this.providers.PAYPAL = new PayPalPaymentProvider();
+      else if (normalized === "PAYM") this.providers.PAYM = new PaymPaymentProvider();
+      else if (normalized === "STRIPE") this.providers.STRIPE = new StripePaymentProvider();
+      else if (normalized === "MANUAL") this.providers.MANUAL = new ManualPaymentProvider();
+      else throw new Error(`Unsupported payment provider: ${name}`);
+    }
+    return this.providers[normalized];
+  }
+
+  static isProviderEnabled(name: string): boolean {
+    const normalized = name.toUpperCase();
+    if (normalized === "PAYPAL") {
+      return process.env.PAYPAL_ENABLED !== undefined
+        ? String(process.env.PAYPAL_ENABLED).toLowerCase() === "true"
+        : env.PAYPAL_ENABLED;
+    }
+    if (normalized === "PAYM") {
+      return process.env.PAYM_ENABLED !== undefined
+        ? String(process.env.PAYM_ENABLED).toLowerCase() === "true"
+        : env.PAYM_ENABLED;
+    }
+    if (normalized === "STRIPE") {
+      return process.env.STRIPE_ENABLED !== undefined
+        ? String(process.env.STRIPE_ENABLED).toLowerCase() === "true"
+        : env.STRIPE_ENABLED;
+    }
+    if (normalized === "MANUAL") {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Safe, server-generated list of currently available payment methods for clients.
+   * Excludes disabled providers (Stripe) and never exposes secrets or merchant credentials.
+   */
+  static getAvailableMethods(): PublicPaymentMethod[] {
+    const methods: PublicPaymentMethod[] = [];
+
+    if (this.isProviderEnabled("PAYPAL")) {
+      methods.push({
+        id: "paypal",
+        name: "PayPal",
+        enabled: true,
+        currencies: ["USD", "EUR"],
+        descriptionEn: "Pay securely with PayPal balance, credit cards or linked accounts.",
+        descriptionFr: "Payez en toute sécurité avec PayPal ou cartes bancaires internationales.",
+      });
+    }
+
+    if (this.isProviderEnabled("PAYM")) {
+      methods.push({
+        id: "paym",
+        name: "Pay'm",
+        enabled: true,
+        currencies: ["HTG", "USD"],
+        descriptionEn: "Haitian mobile money & payments (MonCash, NatCash, Card).",
+        descriptionFr: "Paiement mobile en Haïti et multi-options (MonCash, NatCash, Carte).",
+        subMethods: [
+          { id: "all", name: "All Pay'm Methods (Tous)" },
+          { id: "moncash", name: "MonCash" },
+          { id: "natcash", name: "Natcash" },
+          { id: "carte", name: "Credit/Debit Card (Square)" },
+          { id: "kashpaw", name: "KashPaw" },
+        ],
+      });
+    }
+
+    // Stripe is ONLY included if explicitly enabled by authorized configuration
+    if (this.isProviderEnabled("STRIPE")) {
+      methods.push({
+        id: "stripe",
+        name: "Credit / Debit Card (Stripe)",
+        enabled: true,
+        currencies: ["USD", "EUR"],
+        descriptionEn: "Pay with Visa, Mastercard, or American Express.",
+        descriptionFr: "Payez par carte bancaire Visa, Mastercard ou American Express.",
+      });
+    }
+
+    return methods;
+  }
+}
+

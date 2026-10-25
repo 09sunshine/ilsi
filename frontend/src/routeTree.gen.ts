@@ -12,9 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as ApplyRouteImport } from './routes/apply'
+import { Route as CommunityRouteImport } from './routes/community'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as LeaderboardRouteImport } from './routes/leaderboard'
 import { Route as LiveRouteImport } from './routes/live'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as NotificationsRouteImport } from './routes/notifications'
@@ -26,6 +28,7 @@ import { Route as TrackApplicationRouteImport } from './routes/track-application
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminApplicationsRouteImport } from './routes/admin.applications'
 import { Route as AdminCohortsRouteImport } from './routes/admin.cohorts'
+import { Route as AdminCommunityRouteImport } from './routes/admin.community'
 import { Route as AdminDonationsRouteImport } from './routes/admin.donations'
 import { Route as AdminMessagesRouteImport } from './routes/admin.messages'
 import { Route as AdminNotificationsRouteImport } from './routes/admin.notifications'
@@ -54,6 +57,11 @@ const ApplyRoute = ApplyRouteImport.update({
   path: '/apply',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CommunityRoute = CommunityRouteImport.update({
+  id: '/community',
+  path: '/community',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ContactRoute = ContactRouteImport.update({
   id: '/contact',
   path: '/contact',
@@ -67,6 +75,11 @@ const DashboardRoute = DashboardRouteImport.update({
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LeaderboardRoute = LeaderboardRouteImport.update({
+  id: '/leaderboard',
+  path: '/leaderboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LiveRoute = LiveRouteImport.update({
@@ -122,6 +135,11 @@ const AdminApplicationsRoute = AdminApplicationsRouteImport.update({
 const AdminCohortsRoute = AdminCohortsRouteImport.update({
   id: '/admin/cohorts',
   path: '/admin/cohorts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCommunityRoute = AdminCommunityRouteImport.update({
+  id: '/admin/community',
+  path: '/admin/community',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminDonationsRoute = AdminDonationsRouteImport.update({
@@ -189,9 +207,11 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/apply': typeof ApplyRoute
+  '/community': typeof CommunityRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/leaderboard': typeof LeaderboardRoute
   '/live': typeof LiveRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
@@ -202,6 +222,7 @@ export interface FileRoutesByFullPath {
   '/track-application': typeof TrackApplicationRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/cohorts': typeof AdminCohortsRoute
+  '/admin/community': typeof AdminCommunityRoute
   '/admin/donations': typeof AdminDonationsRoute
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/notifications': typeof AdminNotificationsRoute
@@ -220,9 +241,11 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/apply': typeof ApplyRoute
+  '/community': typeof CommunityRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/leaderboard': typeof LeaderboardRoute
   '/live': typeof LiveRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
@@ -233,6 +256,7 @@ export interface FileRoutesByTo {
   '/track-application': typeof TrackApplicationRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/cohorts': typeof AdminCohortsRoute
+  '/admin/community': typeof AdminCommunityRoute
   '/admin/donations': typeof AdminDonationsRoute
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/notifications': typeof AdminNotificationsRoute
@@ -252,9 +276,11 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/apply': typeof ApplyRoute
+  '/community': typeof CommunityRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/leaderboard': typeof LeaderboardRoute
   '/live': typeof LiveRoute
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
@@ -265,6 +291,7 @@ export interface FileRoutesById {
   '/track-application': typeof TrackApplicationRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/cohorts': typeof AdminCohortsRoute
+  '/admin/community': typeof AdminCommunityRoute
   '/admin/donations': typeof AdminDonationsRoute
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/notifications': typeof AdminNotificationsRoute
@@ -285,9 +312,11 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/apply'
+    | '/community'
     | '/contact'
     | '/dashboard'
     | '/forgot-password'
+    | '/leaderboard'
     | '/live'
     | '/login'
     | '/notifications'
@@ -298,6 +327,7 @@ export interface FileRouteTypes {
     | '/track-application'
     | '/admin/applications'
     | '/admin/cohorts'
+    | '/admin/community'
     | '/admin/donations'
     | '/admin/messages'
     | '/admin/notifications'
@@ -316,9 +346,11 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/apply'
+    | '/community'
     | '/contact'
     | '/dashboard'
     | '/forgot-password'
+    | '/leaderboard'
     | '/live'
     | '/login'
     | '/notifications'
@@ -329,6 +361,7 @@ export interface FileRouteTypes {
     | '/track-application'
     | '/admin/applications'
     | '/admin/cohorts'
+    | '/admin/community'
     | '/admin/donations'
     | '/admin/messages'
     | '/admin/notifications'
@@ -347,9 +380,11 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/apply'
+    | '/community'
     | '/contact'
     | '/dashboard'
     | '/forgot-password'
+    | '/leaderboard'
     | '/live'
     | '/login'
     | '/notifications'
@@ -360,6 +395,7 @@ export interface FileRouteTypes {
     | '/track-application'
     | '/admin/applications'
     | '/admin/cohorts'
+    | '/admin/community'
     | '/admin/donations'
     | '/admin/messages'
     | '/admin/notifications'
@@ -379,9 +415,11 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   ApplyRoute: typeof ApplyRoute
+  CommunityRoute: typeof CommunityRoute
   ContactRoute: typeof ContactRoute
   DashboardRoute: typeof DashboardRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  LeaderboardRoute: typeof LeaderboardRoute
   LiveRoute: typeof LiveRoute
   LoginRoute: typeof LoginRoute
   NotificationsRoute: typeof NotificationsRoute
@@ -392,6 +430,7 @@ export interface RootRouteChildren {
   TrackApplicationRoute: typeof TrackApplicationRoute
   AdminApplicationsRoute: typeof AdminApplicationsRoute
   AdminCohortsRoute: typeof AdminCohortsRoute
+  AdminCommunityRoute: typeof AdminCommunityRoute
   AdminDonationsRoute: typeof AdminDonationsRoute
   AdminMessagesRoute: typeof AdminMessagesRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
@@ -430,6 +469,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApplyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/community': {
+      id: '/community'
+      path: '/community'
+      fullPath: '/community'
+      preLoaderRoute: typeof CommunityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/contact': {
       id: '/contact'
       path: '/contact'
@@ -449,6 +495,13 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/leaderboard': {
+      id: '/leaderboard'
+      path: '/leaderboard'
+      fullPath: '/leaderboard'
+      preLoaderRoute: typeof LeaderboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/live': {
@@ -526,6 +579,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/cohorts'
       fullPath: '/admin/cohorts'
       preLoaderRoute: typeof AdminCohortsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/community': {
+      id: '/admin/community'
+      path: '/admin/community'
+      fullPath: '/admin/community'
+      preLoaderRoute: typeof AdminCommunityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/donations': {
@@ -619,9 +679,11 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   ApplyRoute: ApplyRoute,
+  CommunityRoute: CommunityRoute,
   ContactRoute: ContactRoute,
   DashboardRoute: DashboardRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  LeaderboardRoute: LeaderboardRoute,
   LiveRoute: LiveRoute,
   LoginRoute: LoginRoute,
   NotificationsRoute: NotificationsRoute,
@@ -632,6 +694,7 @@ const rootRouteChildren: RootRouteChildren = {
   TrackApplicationRoute: TrackApplicationRoute,
   AdminApplicationsRoute: AdminApplicationsRoute,
   AdminCohortsRoute: AdminCohortsRoute,
+  AdminCommunityRoute: AdminCommunityRoute,
   AdminDonationsRoute: AdminDonationsRoute,
   AdminMessagesRoute: AdminMessagesRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,

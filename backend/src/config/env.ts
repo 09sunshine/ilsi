@@ -34,9 +34,41 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().default(""),
   GOOGLE_REDIRECT_URI: z.string().default("http://localhost:4000/api/google/callback"),
 
-  // Payment (Stripe)
+  // Payment Providers Config & Feature Flags
+  STRIPE_ENABLED: z
+    .preprocess((val) => (val !== undefined ? String(val).toLowerCase() === "true" : false), z.boolean())
+    .default(false),
+  PAYPAL_ENABLED: z
+    .preprocess((val) => (val !== undefined ? String(val).toLowerCase() === "true" : true), z.boolean())
+    .default(true),
+  PAYM_ENABLED: z
+    .preprocess((val) => (val !== undefined ? String(val).toLowerCase() === "true" : true), z.boolean())
+    .default(true),
+
+  // Payment (Stripe - Preserved & Hidden when STRIPE_ENABLED is false)
   STRIPE_SECRET_KEY: z.string().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().default(""),
+
+  // Payment (PayPal)
+  PAYPAL_CLIENT_ID: z.string().default(""),
+  PAYPAL_CLIENT_SECRET: z.string().default(""),
+  PAYPAL_ENVIRONMENT: z
+    .enum(["sandbox", "live", "production"])
+    .transform((val) => (val === "production" ? "live" : val))
+    .default("sandbox"),
+  PAYPAL_WEBHOOK_ID: z.string().default(""),
+
+  // Payment (Pay'm)
+  PAYM_CLIENT_ID: z.string().default(""),
+  PAYM_CLIENT_SECRET: z.string().default(""),
+  PAYM_BASE_URL: z.string().default("https://plopplop.solutionip.app/"),
+  PAYM_USD_TO_HTG_RATE: z
+    .preprocess((val) => {
+      if (val === undefined || val === null || val === "") return 132.0;
+      const parsed = parseFloat(String(val));
+      return isNaN(parsed) || parsed <= 0 ? 132.0 : parsed;
+    }, z.number().positive())
+    .default(132.0),
 
   // Email
   EMAIL_FROM: z.string().default("admissions@ilsi-leadership.org"),

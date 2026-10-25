@@ -1,6 +1,7 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import { useRef } from "react";
 import {
+  Award,
   Bell,
   BookOpen,
   CalendarClock,
@@ -16,6 +17,7 @@ import {
 
   Radio,
   Settings,
+  ShieldAlert,
   Trophy,
   User,
   Users,
@@ -55,7 +57,9 @@ const participantGroups: NavGroup[] = [
     labelFr: "Menu",
     items: [
       { to: "/learn", key: "nav.myCourse", icon: BookOpen },
-      { to: "/results", key: "nav.grades", icon: Trophy },
+      { to: "/community", key: "nav.community", icon: Users },
+      { to: "/leaderboard", key: "nav.leaderboard", icon: Trophy },
+      { to: "/results", key: "nav.grades", icon: Award },
       { to: "/notifications", key: "nav.notifications", icon: Bell },
     ],
   },
@@ -73,6 +77,7 @@ const adminGroups: NavGroup[] = [
     items: [
       { to: "/admin", key: "nav.overview", icon: LayoutDashboard },
       { to: "/admin/cohorts", key: "nav.cohorts", icon: CalendarClock },
+      { to: "/admin/community", key: "nav.adminCommunity", icon: ShieldAlert },
       { to: "/admin/notifications", key: "nav.notifications", icon: Bell },
     ],
   },

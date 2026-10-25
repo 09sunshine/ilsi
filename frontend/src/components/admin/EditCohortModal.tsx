@@ -3,13 +3,17 @@ import { toast } from "sonner";
 import {
   Calendar,
   Check,
+  Clock,
   Edit3,
+  ExternalLink,
   Globe,
   ImageIcon,
   Loader2,
+  Plus,
   Sparkles,
   Trash2,
   UploadCloud,
+  Video,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,6 +29,22 @@ import {
   convertEurToUsd,
   translateText,
 } from "@/lib/translation";
+
+function toDatetimeLocal(isoString?: string | null): string {
+  if (!isoString) return "";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return "";
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  } catch {
+    return "";
+  }
+}
 
 interface Props {
   cohort: any | null;
@@ -56,6 +76,23 @@ export function EditCohortModal({ cohort, isOpen, onClose, onUpdated }: Props) {
   const [translating, setTranslating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // Live Sessions state
+  const [liveSessions, setLiveSessions] = useState<any[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [savingSessionId, setSavingSessionId] = useState<string | null>(null);
+
+  const fetchLiveSessions = async (cohortId: string) => {
+    try {
+      setLoadingSessions(true);
+      const res = await api.getCohortLiveSessions(cohortId);
+      setLiveSessions(Array.isArray(res) ? res : []);
+    } catch (err) {
+      console.warn("Failed to load live sessions:", err);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
   useEffect(() => {
     if (cohort) {
       setNameEn(cohort.name?.en || cohort.name_en || "");
@@ -73,8 +110,71 @@ export function EditCohortModal({ cohort, isOpen, onClose, onUpdated }: Props) {
       setDescriptionEn(cohort.description?.en || cohort.description_en || "");
       setDescriptionFr(cohort.description?.fr || cohort.description_fr || "");
       setThumbnailUrl(cohort.thumbnailUrl || cohort.thumbnail_url || "");
+      if (cohort.id) {
+        fetchLiveSessions(cohort.id);
+      }
     }
   }, [cohort]);
+
+  const handleSessionChange = (id: string, field: string, value: any) => {
+    setLiveSessions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, [field]: value } : s))
+    );
+  };
+
+  const handleSaveSession = async (s: any) => {
+    try {
+      setSavingSessionId(s.id);
+      await api.updateLiveSession(s.id, {
+        meetUrl: s.meet_url,
+        startsAt: s.starts_at ? new Date(s.starts_at).toISOString() : undefined,
+        endsAt: s.ends_at ? new Date(s.ends_at).toISOString() : undefined,
+        titleEn: s.title_en,
+        titleFr: s.title_fr,
+      });
+      toast.success(fr ? "Session en direct mise à jour !" : "Live session updated successfully!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update live session");
+    } finally {
+      setSavingSessionId(null);
+    }
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!confirm(fr ? "Supprimer cette session en direct ?" : "Delete this live session?")) return;
+    try {
+      await api.deleteLiveSession(sessionId);
+      setLiveSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      toast.success(fr ? "Session supprimée." : "Live session deleted.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete session");
+    }
+  };
+
+  const handleAddLiveSession = async () => {
+    if (!cohort?.id) return;
+    try {
+      const defaultStart = startDate ? new Date(startDate) : new Date();
+      defaultStart.setHours(18, 0, 0, 0);
+      const defaultEnd = new Date(defaultStart.getTime() + 60 * 60 * 1000);
+
+      await api.createLiveSession({
+        cohortId: cohort.id,
+        titleEn: `${nameEn || "Cohort"} Live Session #${liveSessions.length + 1}`,
+        titleFr: `${nameFr || nameEn || "Cohorte"} Session Direct #${liveSessions.length + 1}`,
+        startsAt: defaultStart.toISOString(),
+        endsAt: defaultEnd.toISOString(),
+        timezone: timezone || "UTC",
+        instructorName: "ILSI Faculty Lead",
+        meetUrl: "https://meet.google.com/new",
+      });
+
+      toast.success(fr ? "Nouvelle session créée !" : "New live session created!");
+      await fetchLiveSessions(cohort.id);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create live session");
+    }
+  };
 
   if (!isOpen || !cohort) return null;
 
@@ -187,7 +287,24 @@ export function EditCohortModal({ cohort, isOpen, onClose, onUpdated }: Props) {
         thumbnailUrl: thumbnailUrl || null,
       });
 
-      toast.success(fr ? "Cohorte mise à jour avec succès !" : "Cohort updated successfully!");
+      // Save any live sessions configured in the modal
+      for (const s of liveSessions) {
+        if (s.id) {
+          try {
+            await api.updateLiveSession(s.id, {
+              meetUrl: s.meet_url,
+              startsAt: s.starts_at ? new Date(s.starts_at).toISOString() : undefined,
+              endsAt: s.ends_at ? new Date(s.ends_at).toISOString() : undefined,
+              titleEn: s.title_en,
+              titleFr: s.title_fr,
+            });
+          } catch (sessionErr) {
+            console.warn("Could not save live session:", sessionErr);
+          }
+        }
+      }
+
+      toast.success(fr ? "Cohorte et sessions mises à jour avec succès !" : "Cohort and live sessions updated successfully!");
       onUpdated();
       onClose();
     } catch (err: any) {
@@ -317,7 +434,7 @@ export function EditCohortModal({ cohort, isOpen, onClose, onUpdated }: Props) {
               <Input
                 type="number"
                 min={1}
-                max={500}
+                max={10000}
                 value={capacity}
                 onChange={(e) => setCapacity(Number(e.target.value))}
                 required
@@ -469,6 +586,169 @@ export function EditCohortModal({ cohort, isOpen, onClose, onUpdated }: Props) {
                   </div>
                 )}
               </label>
+            )}
+          </div>
+
+          {/* Live Sessions & Meeting Links Section */}
+          <div className="p-3 bg-muted/20 rounded-lg border border-border space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span className="font-semibold text-foreground uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                  <Video className="size-3.5 text-primary" />
+                  <span>{fr ? "Sessions en Direct, Date/Heure & Liens de Réunion" : "Live Sessions, Date/Time & Meeting Links"}</span>
+                </span>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {fr
+                    ? "Modifiez l'URL de réunion, la date et l'heure de début/fin pour chaque session en direct."
+                    : "Edit meeting URLs, live dates, and start/end times for scheduled live sessions."}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddLiveSession}
+                className="h-7 text-xs gap-1 font-medium shadow-2xs"
+              >
+                <Plus className="size-3 text-primary" />
+                <span>{fr ? "Ajouter une session" : "Add Live Session"}</span>
+              </Button>
+            </div>
+
+            {loadingSessions ? (
+              <div className="flex items-center justify-center p-4 text-xs text-muted-foreground gap-2">
+                <Loader2 className="size-3.5 animate-spin" />
+                <span>{fr ? "Chargement des sessions..." : "Loading live sessions..."}</span>
+              </div>
+            ) : liveSessions.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border p-4 text-center bg-card/50">
+                <p className="text-xs text-muted-foreground">
+                  {fr
+                    ? "Aucune session en direct planifiée pour cette cohorte."
+                    : "No live sessions currently scheduled for this cohort."}
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAddLiveSession}
+                  className="mt-2 h-7 text-xs text-primary gap-1"
+                >
+                  <Plus className="size-3" />
+                  <span>{fr ? "Créer une première session" : "Schedule First Live Session"}</span>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {liveSessions.map((s, idx) => (
+                  <div
+                    key={s.id}
+                    className="p-3 rounded-lg border border-border bg-card space-y-2.5 shadow-2xs"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-2">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20 shrink-0">
+                          #{idx + 1}
+                        </Badge>
+                        <Input
+                          value={s.title_en || ""}
+                          onChange={(e) => handleSessionChange(s.id, "title_en", e.target.value)}
+                          placeholder="Session Title (e.g. Kickoff & Orientation)"
+                          className="h-7 text-xs font-semibold flex-1 min-w-[140px]"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {s.meet_url && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs"
+                            asChild
+                          >
+                            <a
+                              href={s.meet_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Test meeting URL"
+                            >
+                              <ExternalLink className="size-3" />
+                            </a>
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSaveSession(s)}
+                          disabled={savingSessionId === s.id}
+                          className="h-7 px-2.5 text-xs gap-1 font-medium"
+                          title="Save this session"
+                        >
+                          {savingSessionId === s.id ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <Check className="size-3 text-emerald-600" />
+                          )}
+                          <span>{fr ? "Sauvegarder" : "Save"}</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteSession(s.id)}
+                          className="h-7 px-2 text-destructive hover:bg-destructive/10"
+                          title="Delete session"
+                        >
+                          <Trash2 className="size-3" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label className="text-[11px] flex items-center gap-1 text-muted-foreground">
+                          <Calendar className="size-3 text-primary" />
+                          <span>{fr ? "Date et Heure de Début *" : "Live Start Date & Time *"}</span>
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          value={toDatetimeLocal(s.starts_at)}
+                          onChange={(e) => handleSessionChange(s.id, "starts_at", e.target.value)}
+                          className="h-8 text-xs font-mono"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] flex items-center gap-1 text-muted-foreground">
+                          <Clock className="size-3 text-primary" />
+                          <span>{fr ? "Date et Heure de Fin *" : "Live End Date & Time *"}</span>
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          value={toDatetimeLocal(s.ends_at)}
+                          onChange={(e) => handleSessionChange(s.id, "ends_at", e.target.value)}
+                          className="h-8 text-xs font-mono"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-[11px] flex items-center gap-1 text-muted-foreground">
+                        <Video className="size-3 text-primary" />
+                        <span>{fr ? "Lien de Réunion (Google Meet / Zoom / Jitsi)" : "Live Meeting Link (Google Meet / Zoom / Jitsi)"}</span>
+                      </Label>
+                      <Input
+                        value={s.meet_url || ""}
+                        onChange={(e) => handleSessionChange(s.id, "meet_url", e.target.value)}
+                        placeholder="https://meet.google.com/xxx-xxxx-xxx or https://meet.jit.si/..."
+                        className="h-8 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
