@@ -324,6 +324,38 @@ router.post(
         [req.user!.id, cohortId || null, accessEval.cohortLessonId || null, id, moduleId, isCompleted, percent]
       );
 
+      // Update module progress if lesson is marked completed
+      if (isCompleted && moduleId) {
+        pool.query(
+          `SELECT COUNT(*) as done_count,
+                  (SELECT COUNT(*) FROM lessons WHERE module_id = $1 AND (status IS NULL OR status != 'ARCHIVED')) as total_count
+           FROM lesson_progress lp
+           JOIN lessons l ON l.id = lp.lesson_id
+           WHERE l.module_id = $1 AND lp.user_id = $2 AND lp.completed = TRUE`,
+          [moduleId, req.user!.id]
+        ).then((countRes) => {
+          const done = parseInt(countRes.rows[0]?.done_count || "0", 10);
+          const total = parseInt(countRes.rows[0]?.total_count || "0", 10);
+          const pct = total > 0 ? Math.round((done / total) * 100) : 100;
+          return pool.query(
+            `INSERT INTO module_progress (user_id, module_id, lessons_completed, completion_percentage, updated_at)
+             VALUES ($1, $2, $3, $4, NOW())
+             ON CONFLICT (user_id, module_id) DO UPDATE SET
+               lessons_completed = EXCLUDED.lessons_completed,
+               completion_percentage = EXCLUDED.completion_percentage,
+               updated_at = NOW()`,
+            [req.user!.id, moduleId, done, pct]
+          );
+        }).catch((e) => console.warn("[ModuleProgress] Error updating module lessons count:", e));
+      }
+
+      // Asynchronously trigger automatic leaderboard ranking recalculation upon lesson completion
+      if (isCompleted && cohortId) {
+        void RankingService.recalculateCohortRanking(cohortId, "LESSON_COMPLETED").catch((err) =>
+          console.warn("[RankingService] Error updating rankings after lesson completion:", err)
+        );
+      }
+
       // Invalidate relevant caches on mutation
       invalidateLessonPayloadCache(req.user!.id, id);
       invalidateLessonAccessCache(req.user!.id, id);
@@ -844,7 +876,8 @@ router.get("/rankings/summary", async (req: Request, res: Response, next: NextFu
   try {
     const userId = req.user!.id;
     const cohortId = req.query.cohortId as string | undefined;
-    const summary = await RankingService.getStudentRankingSummary(userId, cohortId);
+    const moduleId = req.query.moduleId as string | undefined;
+    const summary = await RankingService.getStudentRankingSummary(userId, cohortId, moduleId);
     res.json({ success: true, data: summary });
   } catch (error) {
     next(error);
@@ -854,11 +887,13 @@ router.get("/rankings/summary", async (req: Request, res: Response, next: NextFu
 /**
  * GET /api/student/rankings/leaderboard
  * Fetch safe, scoped cohort academic leaderboard for the student's cohort.
+ * Supports optional moduleId query param to view rankings for a specific module.
  */
 router.get("/rankings/leaderboard", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!.id;
     let cohortId = req.query.cohortId as string | undefined;
+    const moduleId = req.query.moduleId as string | undefined;
 
     // If cohortId not explicitly passed, resolve student's active cohort
     if (!cohortId) {
@@ -886,7 +921,7 @@ router.get("/rankings/leaderboard", async (req: Request, res: Response, next: Ne
     const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 50));
 
-    const leaderboard = await RankingService.getCohortLeaderboard(cohortId!, userId, page, limit);
+    const leaderboard = await RankingService.getCohortLeaderboard(cohortId!, userId, page, limit, moduleId);
     res.json({ success: true, data: leaderboard });
   } catch (error) {
     next(error);

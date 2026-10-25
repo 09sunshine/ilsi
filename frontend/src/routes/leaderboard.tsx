@@ -4,8 +4,11 @@ import { useI18n } from "@/i18n/LocaleProvider";
 import { AcademicPerformanceLeaderboard } from "@/components/academic/AcademicPerformanceLeaderboard";
 
 export const Route = createFileRoute("/leaderboard")({
-  validateSearch: (search: Record<string, unknown>): { cohortId?: string | undefined } => ({
+  validateSearch: (
+    search: Record<string, unknown>
+  ): { cohortId?: string | undefined; moduleId?: string | undefined } => ({
     cohortId: (search["cohortId"] as string) || undefined,
+    moduleId: (search["moduleId"] as string) || undefined,
   }),
   head: () => ({
     meta: [
@@ -26,7 +29,11 @@ function LeaderboardPage() {
   return (
     <AppShell title={t("nav.leaderboard")}>
       <div className="mx-auto max-w-7xl space-y-6">
-        <AcademicPerformanceLeaderboard cohortId={search.cohortId} compact={false} />
+        <AcademicPerformanceLeaderboard
+          cohortId={search.cohortId}
+          initialModuleId={search.moduleId}
+          compact={false}
+        />
       </div>
     </AppShell>
   );

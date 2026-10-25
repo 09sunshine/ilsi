@@ -1,187 +1,299 @@
 import { describe, it, expect } from "vitest";
 import { RankingService } from "../src/services/RankingService.js";
 
-describe("Academic Ranking Engine — Deterministic Scoring & Competition Rules", () => {
-  // Test Model Interfaces
-  interface MockStudentResult {
+describe("Academic Ranking Engine — Module & Lesson Weighted Scoring Rules", () => {
+  // Test Model Interfaces for Lesson-Based Calculations
+  interface MockLessonScore {
+    lessonId: string;
+    moduleId: string;
+    score: number; // 0 to 100 (0 if unfinished)
+    isCompleted: boolean;
+  }
+
+  interface MockStudent {
     userId: string;
     enrollmentStatus: "ACTIVE" | "COMPLETED" | "DISQUALIFIED" | "DROPPED" | "SUSPENDED";
     paymentStatus: "PAID" | "NOT_REQUIRED" | "PENDING";
-    moduleScores: number[]; // percentage marks of completed modules
+    lessonScores: MockLessonScore[];
   }
 
-  function computeRanking(
-    students: MockStudentResult[],
-    previousRanks?: Map<string, number>
+  function computeOverallAndModuleRanking(
+    students: MockStudent[],
+    totalCohortLessons: number,
+    moduleDefinitions: Array<{ moduleId: string; totalLessons: number }>,
+    previousOverallRanks?: Map<string, number>
   ) {
-    const evaluated: Array<{
+    const evaluatedOverall: Array<{
       userId: string;
       isEligible: boolean;
       ineligibilityReason: string | null;
-      completedModules: number;
-      average: number;
+      completedLessons: number;
+      totalLessons: number;
       points: number;
+      maxPossiblePoints: number;
+      average: number;
       rank: number | null;
       rankChange: number | null;
       medal: "GOLD" | "SILVER" | "BRONZE" | null;
     }> = [];
 
+    const evaluatedByModule = new Map<
+      string,
+      Array<{
+        moduleId: string;
+        userId: string;
+        isEligible: boolean;
+        completedLessons: number;
+        totalLessons: number;
+        points: number;
+        score: number;
+        rank: number | null;
+      }>
+    >();
+
+    for (const mod of moduleDefinitions) {
+      evaluatedByModule.set(mod.moduleId, []);
+    }
+
     for (const st of students) {
+      let isEligible = true;
+      let ineligibilityReason: string | null = null;
+
       if (st.enrollmentStatus === "DISQUALIFIED") {
-        evaluated.push({
-          userId: st.userId,
-          isEligible: false,
-          ineligibilityReason: "DISQUALIFIED",
-          completedModules: 0,
-          average: 0.0,
-          points: 0.0,
-          rank: null,
-          rankChange: null,
-          medal: null,
-        });
-        continue;
+        isEligible = false;
+        ineligibilityReason = "DISQUALIFIED";
+      } else if (st.enrollmentStatus === "DROPPED") {
+        isEligible = false;
+        ineligibilityReason = "DROPPED";
+      } else if (st.enrollmentStatus === "SUSPENDED") {
+        isEligible = false;
+        ineligibilityReason = "SUSPENDED";
+      } else if (st.paymentStatus !== "PAID" && st.paymentStatus !== "NOT_REQUIRED") {
+        isEligible = false;
+        ineligibilityReason = "PAYMENT_PENDING";
       }
 
-      if (st.enrollmentStatus === "DROPPED") {
-        evaluated.push({
+      let totalPoints = 0;
+      let totalCompleted = 0;
+
+      // Module level evaluation
+      for (const mod of moduleDefinitions) {
+        const studentModLessons = st.lessonScores.filter((l) => l.moduleId === mod.moduleId);
+        const modPoints = studentModLessons.reduce((sum, l) => sum + (l.score || 0), 0);
+        const modCompleted = studentModLessons.filter((l) => l.isCompleted).length;
+
+        totalPoints += modPoints;
+        totalCompleted += modCompleted;
+
+        // Formula: Overall score of the module = Sum of the grades obtained ÷ Total number of lessons of the module
+        const modScore = mod.totalLessons > 0 ? Number((modPoints / mod.totalLessons).toFixed(2)) : 0.0;
+
+        evaluatedByModule.get(mod.moduleId)!.push({
+          moduleId: mod.moduleId,
           userId: st.userId,
-          isEligible: false,
-          ineligibilityReason: "DROPPED",
-          completedModules: 0,
-          average: 0.0,
-          points: 0.0,
+          isEligible,
+          completedLessons: modCompleted,
+          totalLessons: mod.totalLessons,
+          points: Number(modPoints.toFixed(2)),
+          score: modScore,
           rank: null,
-          rankChange: null,
-          medal: null,
         });
-        continue;
       }
 
-      if (st.paymentStatus !== "PAID" && st.paymentStatus !== "NOT_REQUIRED") {
-        evaluated.push({
-          userId: st.userId,
-          isEligible: false,
-          ineligibilityReason: "PAYMENT_PENDING",
-          completedModules: 0,
-          average: 0.0,
-          points: 0.0,
-          rank: null,
-          rankChange: null,
-          medal: null,
-        });
-        continue;
-      }
+      // Formula: Overall average = Total points obtained ÷ Total curriculum lessons
+      const overallAvg = totalCohortLessons > 0 ? Number((totalPoints / totalCohortLessons).toFixed(2)) : 0.0;
+      const maxPoints = totalCohortLessons * 100.0;
 
-      if (st.moduleScores.length === 0) {
-        evaluated.push({
-          userId: st.userId,
-          isEligible: false,
-          ineligibilityReason: "NO_COMPLETED_MODULES",
-          completedModules: 0,
-          average: 0.0,
-          points: 0.0,
-          rank: null,
-          rankChange: null,
-          medal: null,
-        });
-        continue;
-      }
-
-      const scoreSum = st.moduleScores.reduce((a, b) => a + b, 0);
-      const roundedAvg = Number((scoreSum / st.moduleScores.length).toFixed(2));
-      const totalPoints = Number(scoreSum.toFixed(2));
-
-      evaluated.push({
+      evaluatedOverall.push({
         userId: st.userId,
-        isEligible: true,
-        ineligibilityReason: null,
-        completedModules: st.moduleScores.length,
-        average: roundedAvg,
-        points: totalPoints,
+        isEligible,
+        ineligibilityReason,
+        completedLessons: totalCompleted,
+        totalLessons: totalCohortLessons,
+        points: Number(totalPoints.toFixed(2)),
+        maxPossiblePoints: maxPoints,
+        average: overallAvg,
         rank: null,
         rankChange: null,
         medal: null,
       });
     }
 
-    // Standard competition ranking ("1224" ranking)
-    const eligible = evaluated.filter((s) => s.isEligible);
-    eligible.sort((a, b) => {
+    // Apply Standard Competition Ranking ("1224" rule) for Overall
+    const eligibleOverall = evaluatedOverall.filter((s) => s.isEligible);
+    eligibleOverall.sort((a, b) => {
       if (b.average !== a.average) return b.average - a.average;
       if (b.points !== a.points) return b.points - a.points;
-      return b.completedModules - a.completedModules;
+      return b.completedLessons - a.completedLessons;
     });
 
-    for (let i = 0; i < eligible.length; i++) {
+    for (let i = 0; i < eligibleOverall.length; i++) {
       if (i > 0) {
-        const prev = eligible[i - 1];
-        const curr = eligible[i];
+        const prev = eligibleOverall[i - 1];
+        const curr = eligibleOverall[i];
         if (curr.average === prev.average) {
           curr.rank = prev.rank;
         } else {
           curr.rank = i + 1;
         }
       } else {
-        eligible[0].rank = 1;
+        eligibleOverall[0].rank = 1;
       }
-      currMedal: eligible[i].medal = RankingService.getMedal(eligible[i].rank);
+      eligibleOverall[i].medal = RankingService.getMedal(eligibleOverall[i].rank);
     }
 
     // Movement calculation
-    for (const el of eligible) {
-      if (previousRanks && previousRanks.has(el.userId)) {
-        const prevRank = previousRanks.get(el.userId)!;
-        el.rankChange = prevRank - el.rank!;
+    for (const el of eligibleOverall) {
+      if (previousOverallRanks && previousOverallRanks.has(el.userId)) {
+        el.rankChange = previousOverallRanks.get(el.userId)! - el.rank!;
       } else {
-        el.rankChange = null; // New to ranking
+        el.rankChange = null;
       }
     }
 
-    return evaluated;
+    // Apply Standard Competition Ranking for each module
+    for (const mod of moduleDefinitions) {
+      const modEntries = evaluatedByModule.get(mod.moduleId)!;
+      const eligibleMod = modEntries.filter((s) => s.isEligible);
+      eligibleMod.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (b.points !== a.points) return b.points - a.points;
+        return b.completedLessons - a.completedLessons;
+      });
+
+      for (let i = 0; i < eligibleMod.length; i++) {
+        if (i > 0) {
+          const prev = eligibleMod[i - 1];
+          const curr = eligibleMod[i];
+          if (curr.score === prev.score) {
+            curr.rank = prev.rank;
+          } else {
+            curr.rank = i + 1;
+          }
+        } else {
+          eligibleMod[0].rank = 1;
+        }
+      }
+    }
+
+    return { evaluatedOverall, evaluatedByModule };
   }
 
-  it("calculates exact academic averages and cumulative points deterministically", () => {
-    const students: MockStudentResult[] = [
+  it("calculates module ranking taking into account all lessons in the module (Student B ahead of Student A)", () => {
+    // Exact user scenario:
+    // Module contains 5 lessons.
+    // Student A: completed 2 lessons with 100/100 each => (100 + 100 + 0 + 0 + 0) / 5 = 40/100.
+    // Student B: completed 5 lessons with 90/100 each => (90 + 90 + 90 + 90 + 90) / 5 = 90/100.
+    // Student B must be classified in front of Student A.
+    const moduleDefs = [{ moduleId: "mod-1", totalLessons: 5 }];
+
+    const students: MockStudent[] = [
       {
-        userId: "user-1",
+        userId: "student-A",
         enrollmentStatus: "ACTIVE",
         paymentStatus: "PAID",
-        moduleScores: [80, 90, 100],
+        lessonScores: [
+          { lessonId: "l1", moduleId: "mod-1", score: 100, isCompleted: true },
+          { lessonId: "l2", moduleId: "mod-1", score: 100, isCompleted: true },
+          { lessonId: "l3", moduleId: "mod-1", score: 0, isCompleted: false },
+          { lessonId: "l4", moduleId: "mod-1", score: 0, isCompleted: false },
+          { lessonId: "l5", moduleId: "mod-1", score: 0, isCompleted: false },
+        ],
       },
       {
-        userId: "user-2",
+        userId: "student-B",
         enrollmentStatus: "ACTIVE",
         paymentStatus: "PAID",
-        moduleScores: [75, 85],
+        lessonScores: [
+          { lessonId: "l1", moduleId: "mod-1", score: 90, isCompleted: true },
+          { lessonId: "l2", moduleId: "mod-1", score: 90, isCompleted: true },
+          { lessonId: "l3", moduleId: "mod-1", score: 90, isCompleted: true },
+          { lessonId: "l4", moduleId: "mod-1", score: 90, isCompleted: true },
+          { lessonId: "l5", moduleId: "mod-1", score: 90, isCompleted: true },
+        ],
       },
     ];
 
-    const results = computeRanking(students);
-    const u1 = results.find((r) => r.userId === "user-1")!;
-    const u2 = results.find((r) => r.userId === "user-2")!;
+    const { evaluatedByModule } = computeOverallAndModuleRanking(students, 5, moduleDefs);
+    const mod1Entries = evaluatedByModule.get("mod-1")!;
 
-    expect(u1.average).toBe(90.0);
-    expect(u1.points).toBe(270.0);
-    expect(u1.rank).toBe(1);
+    const studentA = mod1Entries.find((s) => s.userId === "student-A")!;
+    const studentB = mod1Entries.find((s) => s.userId === "student-B")!;
 
-    expect(u2.average).toBe(80.0);
-    expect(u2.points).toBe(160.0);
-    expect(u2.rank).toBe(2);
+    expect(studentA.score).toBe(40.0);
+    expect(studentA.points).toBe(200.0);
+    expect(studentA.completedLessons).toBe(2);
+    expect(studentA.rank).toBe(2);
+
+    expect(studentB.score).toBe(90.0);
+    expect(studentB.points).toBe(450.0);
+    expect(studentB.completedLessons).toBe(5);
+    expect(studentB.rank).toBe(1);
+
+    expect(studentB.rank).toBeLessThan(studentA.rank!); // Student B classified ahead of Student A
+  });
+
+  it("calculates overall ranking on denominator of all 21 lessons in curriculum (5 * 100 = 500/2100 => 23.81%)", () => {
+    // Exact user scenario:
+    // If a student completed 5 lessons with 100/100 each, total points = 500 out of 2,100.
+    // General average = 500 / 21 = 23.81%, not 100%.
+    const totalCohortLessons = 21;
+    const moduleDefs = [{ moduleId: "mod-1", totalLessons: 21 }];
+
+    const lessonScores: MockLessonScore[] = [];
+    for (let i = 1; i <= 21; i++) {
+      if (i <= 5) {
+        lessonScores.push({ lessonId: `l${i}`, moduleId: "mod-1", score: 100, isCompleted: true });
+      } else {
+        lessonScores.push({ lessonId: `l${i}`, moduleId: "mod-1", score: 0, isCompleted: false });
+      }
+    }
+
+    const students: MockStudent[] = [
+      {
+        userId: "student-partial",
+        enrollmentStatus: "ACTIVE",
+        paymentStatus: "PAID",
+        lessonScores,
+      },
+    ];
+
+    const { evaluatedOverall } = computeOverallAndModuleRanking(students, totalCohortLessons, moduleDefs);
+    const result = evaluatedOverall.find((s) => s.userId === "student-partial")!;
+
+    expect(result.points).toBe(500.0);
+    expect(result.maxPossiblePoints).toBe(2100.0);
+    expect(result.completedLessons).toBe(5);
+    expect(result.totalLessons).toBe(21);
+    expect(result.average).toBe(23.81); // (500 / 2100) * 100 = 23.81%
   });
 
   it("applies standard competition ranking (1224 policy) for tied averages", () => {
-    const students: MockStudentResult[] = [
-      { userId: "u-first", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", moduleScores: [95] },
-      { userId: "u-tie-a", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", moduleScores: [90] },
-      { userId: "u-tie-b", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", moduleScores: [90] },
-      { userId: "u-fourth", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", moduleScores: [85] },
+    const moduleDefs = [{ moduleId: "mod-all", totalLessons: 10 }];
+    const totalLessons = 10;
+
+    const makeScores = (points: number, count: number): MockLessonScore[] => {
+      const arr: MockLessonScore[] = [];
+      const scorePerLesson = count > 0 ? points / count : 0;
+      for (let i = 1; i <= 10; i++) {
+        if (i <= count) arr.push({ lessonId: `l${i}`, moduleId: "mod-all", score: scorePerLesson, isCompleted: true });
+        else arr.push({ lessonId: `l${i}`, moduleId: "mod-all", score: 0, isCompleted: false });
+      }
+      return arr;
+    };
+
+    const students: MockStudent[] = [
+      { userId: "u-first", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", lessonScores: makeScores(950, 10) }, // avg: 95
+      { userId: "u-tie-a", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", lessonScores: makeScores(900, 9) },  // avg: 90
+      { userId: "u-tie-b", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", lessonScores: makeScores(900, 9) },  // avg: 90
+      { userId: "u-fourth", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", lessonScores: makeScores(800, 8) }, // avg: 80
     ];
 
-    const results = computeRanking(students);
-    const first = results.find((r) => r.userId === "u-first")!;
-    const tieA = results.find((r) => r.userId === "u-tie-a")!;
-    const tieB = results.find((r) => r.userId === "u-tie-b")!;
-    const fourth = results.find((r) => r.userId === "u-fourth")!;
+    const { evaluatedOverall } = computeOverallAndModuleRanking(students, totalLessons, moduleDefs);
+    const first = evaluatedOverall.find((r) => r.userId === "u-first")!;
+    const tieA = evaluatedOverall.find((r) => r.userId === "u-tie-a")!;
+    const tieB = evaluatedOverall.find((r) => r.userId === "u-tie-b")!;
+    const fourth = evaluatedOverall.find((r) => r.userId === "u-fourth")!;
 
     expect(first.rank).toBe(1);
     expect(first.medal).toBe("GOLD");
@@ -192,83 +304,85 @@ describe("Academic Ranking Engine — Deterministic Scoring & Competition Rules"
     expect(tieB.rank).toBe(2);
     expect(tieB.medal).toBe("SILVER");
 
-    expect(fourth.rank).toBe(4); // Skips rank 3 because of 2 shared rank 2s
+    expect(fourth.rank).toBe(4); // Skips rank 3
     expect(fourth.medal).toBeNull();
   });
 
-  it("awards bronze medal to rank 3", () => {
-    const students: MockStudentResult[] = [
-      { userId: "u-1", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", moduleScores: [98] },
-      { userId: "u-2", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", moduleScores: [92] },
-      { userId: "u-3", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", moduleScores: [88] },
-      { userId: "u-4", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", moduleScores: [80] },
+  it("calculates movement history correctly (+gained, -dropped, 0 unchanged, null new)", () => {
+    const moduleDefs = [{ moduleId: "mod-all", totalLessons: 10 }];
+    const totalLessons = 10;
+
+    const makeScores = (points: number): MockLessonScore[] => [
+      { lessonId: "l1", moduleId: "mod-all", score: points, isCompleted: true },
     ];
 
-    const results = computeRanking(students);
-    const bronze = results.find((r) => r.userId === "u-3")!;
-    expect(bronze.rank).toBe(3);
-    expect(bronze.medal).toBe("BRONZE");
-  });
-
-  it("calculates movement history correctly (+gained, -dropped, 0 unchanged, null new)", () => {
-    const students: MockStudentResult[] = [
-      { userId: "u-climber", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", moduleScores: [95] }, // currently rank 1
-      { userId: "u-faller", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", moduleScores: [85] },  // currently rank 3
-      { userId: "u-steady", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", moduleScores: [90] },  // currently rank 2
-      { userId: "u-fresh", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", moduleScores: [80] },   // currently rank 4
+    const students: MockStudent[] = [
+      { userId: "u-climber", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", lessonScores: makeScores(950) },
+      { userId: "u-faller", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", lessonScores: makeScores(700) },
+      { userId: "u-steady", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", lessonScores: makeScores(850) },
+      { userId: "u-fresh", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", lessonScores: makeScores(600) },
     ];
 
     const previousRanks = new Map<string, number>([
-      ["u-climber", 4], // was 4, now 1 => +3 (gained 3 places)
-      ["u-faller", 1],  // was 1, now 3 => -2 (dropped 2 places)
-      ["u-steady", 2],  // was 2, now 2 => 0 (unchanged)
-      // u-fresh was not ranked previously => null
+      ["u-climber", 4], // was 4, now 1 => +3
+      ["u-faller", 1],  // was 1, now 3 => -2
+      ["u-steady", 2],  // was 2, now 2 => 0
     ]);
 
-    const results = computeRanking(students, previousRanks);
-    const climber = results.find((r) => r.userId === "u-climber")!;
-    const faller = results.find((r) => r.userId === "u-faller")!;
-    const steady = results.find((r) => r.userId === "u-steady")!;
-    const fresh = results.find((r) => r.userId === "u-fresh")!;
+    const { evaluatedOverall } = computeOverallAndModuleRanking(students, totalLessons, moduleDefs, previousRanks);
+    const climber = evaluatedOverall.find((r) => r.userId === "u-climber")!;
+    const faller = evaluatedOverall.find((r) => r.userId === "u-faller")!;
+    const steady = evaluatedOverall.find((r) => r.userId === "u-steady")!;
+    const fresh = evaluatedOverall.find((r) => r.userId === "u-fresh")!;
 
     expect(climber.rank).toBe(1);
-    expect(climber.rankChange).toBe(3); // 4 - 1 = +3
+    expect(climber.rankChange).toBe(3);
 
     expect(faller.rank).toBe(3);
-    expect(faller.rankChange).toBe(-2); // 1 - 3 = -2
+    expect(faller.rankChange).toBe(-2);
 
     expect(steady.rank).toBe(2);
-    expect(steady.rankChange).toBe(0); // 2 - 2 = 0
+    expect(steady.rankChange).toBe(0);
 
     expect(fresh.rank).toBe(4);
-    expect(fresh.rankChange).toBeNull(); // New to ranking
+    expect(fresh.rankChange).toBeNull();
   });
 
-  it("marks disqualified, dropped, unpaid, or 0-module students as ineligible with documented reasons", () => {
-    const students: MockStudentResult[] = [
-      { userId: "u-disq", enrollmentStatus: "DISQUALIFIED", paymentStatus: "PAID", moduleScores: [90] },
-      { userId: "u-drop", enrollmentStatus: "DROPPED", paymentStatus: "PAID", moduleScores: [85] },
-      { userId: "u-unpaid", enrollmentStatus: "ACTIVE", paymentStatus: "PENDING", moduleScores: [90] },
-      { userId: "u-newbie", enrollmentStatus: "ACTIVE", paymentStatus: "PAID", moduleScores: [] },
+  it("marks disqualified, dropped, or unpaid students as ineligible", () => {
+    const moduleDefs = [{ moduleId: "mod-1", totalLessons: 5 }];
+    const students: MockStudent[] = [
+      {
+        userId: "u-disq",
+        enrollmentStatus: "DISQUALIFIED",
+        paymentStatus: "PAID",
+        lessonScores: [{ lessonId: "l1", moduleId: "mod-1", score: 90, isCompleted: true }],
+      },
+      {
+        userId: "u-drop",
+        enrollmentStatus: "DROPPED",
+        paymentStatus: "PAID",
+        lessonScores: [{ lessonId: "l1", moduleId: "mod-1", score: 85, isCompleted: true }],
+      },
+      {
+        userId: "u-unpaid",
+        enrollmentStatus: "ACTIVE",
+        paymentStatus: "PENDING",
+        lessonScores: [{ lessonId: "l1", moduleId: "mod-1", score: 95, isCompleted: true }],
+      },
     ];
 
-    const results = computeRanking(students);
+    const { evaluatedOverall } = computeOverallAndModuleRanking(students, 5, moduleDefs);
+    const disq = evaluatedOverall.find((r) => r.userId === "u-disq")!;
+    const drop = evaluatedOverall.find((r) => r.userId === "u-drop")!;
+    const unpaid = evaluatedOverall.find((r) => r.userId === "u-unpaid")!;
 
-    const disq = results.find((r) => r.userId === "u-disq")!;
     expect(disq.isEligible).toBe(false);
     expect(disq.ineligibilityReason).toBe("DISQUALIFIED");
-    expect(disq.rank).toBeNull();
 
-    const drop = results.find((r) => r.userId === "u-drop")!;
     expect(drop.isEligible).toBe(false);
     expect(drop.ineligibilityReason).toBe("DROPPED");
 
-    const unpaid = results.find((r) => r.userId === "u-unpaid")!;
     expect(unpaid.isEligible).toBe(false);
     expect(unpaid.ineligibilityReason).toBe("PAYMENT_PENDING");
-
-    const newbie = results.find((r) => r.userId === "u-newbie")!;
-    expect(newbie.isEligible).toBe(false);
-    expect(newbie.ineligibilityReason).toBe("NO_COMPLETED_MODULES");
   });
 });

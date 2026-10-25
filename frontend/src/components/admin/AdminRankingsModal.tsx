@@ -39,10 +39,11 @@ export function AdminRankingsModal({ cohort, onClose }: AdminRankingsModalProps)
   const [loading, setLoading] = useState(true);
   const [recalculating, setRecalculating] = useState(false);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
+  const [selectedModuleId, setSelectedModuleId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"eligible" | "ineligible" | "history">("eligible");
 
-  async function fetchRankings(snapshotId?: string) {
+  async function fetchRankings(snapshotId?: string, modId = selectedModuleId) {
     if (!cohort?.id) return;
     try {
       if (snapshotId) {
@@ -55,12 +56,13 @@ export function AdminRankingsModal({ cohort, onClose }: AdminRankingsModalProps)
             snapshot: details.snapshot,
             eligible,
             ineligible,
+            modules: rankingsData?.modules || [],
             historicalSnapshots: rankingsData?.historicalSnapshots || [],
           });
         }
       } else {
         setLoading(true);
-        const data = await api.getAdminCohortRankings(cohort.id);
+        const data = await api.getAdminCohortRankings(cohort.id, modId !== "all" ? modId : undefined);
         setRankingsData(data);
       }
     } catch (err: any) {
@@ -72,8 +74,8 @@ export function AdminRankingsModal({ cohort, onClose }: AdminRankingsModalProps)
   }
 
   useEffect(() => {
-    void fetchRankings();
-  }, [cohort?.id]);
+    void fetchRankings(undefined, selectedModuleId);
+  }, [cohort?.id, selectedModuleId]);
 
   async function handleRecalculate() {
     if (!cohort?.id) return;
@@ -81,7 +83,7 @@ export function AdminRankingsModal({ cohort, onClose }: AdminRankingsModalProps)
     try {
       await api.recalculateAdminCohortRanking(cohort.id);
       toast.success(fr ? "Classement recalculé avec succès" : "Rankings recalculated successfully");
-      await fetchRankings();
+      await fetchRankings(undefined, selectedModuleId);
     } catch (err: any) {
       toast.error(err?.message || "Recalculation failed.");
     } finally {
@@ -92,7 +94,8 @@ export function AdminRankingsModal({ cohort, onClose }: AdminRankingsModalProps)
   function handleExportCsv() {
     if (!cohort?.id) return;
     const backendUrl = ((import.meta.env as any).VITE_BACKEND_URL || "http://localhost:4000").replace(/\/+$/, "");
-    window.open(`${backendUrl}/api/admin/cohorts/${cohort.id}/rankings/export`, "_blank");
+    const q = selectedModuleId !== "all" ? `?moduleId=${encodeURIComponent(selectedModuleId)}` : "";
+    window.open(`${backendUrl}/api/admin/cohorts/${cohort.id}/rankings/export${q}`, "_blank");
   }
 
   const snapshot = rankingsData?.snapshot;
@@ -240,6 +243,50 @@ export function AdminRankingsModal({ cohort, onClose }: AdminRankingsModalProps)
           </div>
         </div>
 
+        {/* Module Scope Filter */}
+        {rankingsData?.modules && rankingsData.modules.length > 0 && (
+          <div className="px-4 py-2.5 bg-muted/20 border-b border-border flex items-center gap-2 overflow-x-auto scrollbar-none">
+            <span className="text-xs font-semibold text-muted-foreground shrink-0 mr-1">
+              {fr ? "Portée :" : "Scope:"}
+            </span>
+            <button
+              onClick={() => {
+                setSelectedSnapshotId(null);
+                setSelectedModuleId("all");
+              }}
+              className={cn(
+                "px-3 py-1 rounded-lg text-xs font-semibold transition-all shrink-0",
+                selectedModuleId === "all"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "bg-card border border-border text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {t("leaderboard.allModules")}
+            </button>
+            {rankingsData.modules.map((m: any, idx: number) => {
+              const modTitle = typeof m.title === "object" ? L(m.title) : m.title;
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    setSelectedSnapshotId(null);
+                    setSelectedModuleId(m.id);
+                  }}
+                  className={cn(
+                    "px-3 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 max-w-[220px] truncate",
+                    selectedModuleId === m.id
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-card border border-border text-muted-foreground hover:text-foreground"
+                  )}
+                  title={modTitle}
+                >
+                  Module {idx + 1}: {modTitle}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Tab Controls & Search */}
         <div className="p-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-1.5 p-1 rounded-xl bg-muted/50 border border-border">
@@ -316,13 +363,15 @@ export function AdminRankingsModal({ cohort, onClose }: AdminRankingsModalProps)
                         {t("common.name")}
                       </th>
                       <th scope="col" className="py-2.5 px-3 text-center">
-                        {t("leaderboard.academicAverage")}
+                        {selectedModuleId !== "all"
+                          ? (fr ? "Note du Module" : "Module Score")
+                          : t("leaderboard.academicAverage")}
                       </th>
                       <th scope="col" className="py-2.5 px-3 text-center">
                         {t("leaderboard.academicPoints")}
                       </th>
                       <th scope="col" className="py-2.5 px-3 text-center">
-                        {t("leaderboard.modulesCompleted")}
+                        {fr ? "Leçons Validées" : "Lessons Completed"}
                       </th>
                       <th scope="col" className="py-2.5 px-3 text-right">
                         {fr ? "Évolution" : "Movement"}
@@ -377,8 +426,10 @@ export function AdminRankingsModal({ cohort, onClose }: AdminRankingsModalProps)
                         <td className="py-2.5 px-3 text-center text-xs font-medium text-muted-foreground">
                           {e.points.toFixed(2)} pts
                         </td>
-                        <td className="py-2.5 px-3 text-center text-xs text-muted-foreground">
-                          {e.completedModules} / {e.totalModules}
+                        <td className="py-2.5 px-3 text-center text-xs font-semibold text-foreground">
+                          {e.completedLessons !== undefined && e.totalLessons !== undefined
+                            ? `${e.completedLessons} / ${e.totalLessons}`
+                            : `${e.completedModules} / ${e.totalModules}`}
                         </td>
                         <td className="py-2.5 px-3 text-right">
                           {renderMovement(e.rankChange)}

@@ -13,9 +13,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Users,
-  ChevronRight,
   Crown,
   ArrowRight,
+  BookOpen,
+  Layers,
 } from "lucide-react";
 import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
 import { api } from "@/lib/api";
@@ -26,12 +27,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export interface AcademicPerformanceLeaderboardProps {
   cohortId?: string | undefined;
+  initialModuleId?: string | undefined;
   className?: string | undefined;
   compact?: boolean | undefined;
 }
 
 export function AcademicPerformanceLeaderboard({
   cohortId,
+  initialModuleId,
   className,
   compact = false,
 }: AcademicPerformanceLeaderboardProps) {
@@ -39,19 +42,20 @@ export function AcademicPerformanceLeaderboard({
   const L = useLocalized();
   const fr = locale === "fr";
 
+  const [selectedModuleId, setSelectedModuleId] = useState<string>(initialModuleId || "all");
   const [summary, setSummary] = useState<any>(null);
   const [leaderboard, setLeaderboard] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadData(showSpinner = false) {
+  async function loadData(showSpinner = false, moduleIdToFetch = selectedModuleId) {
     if (showSpinner) setRefreshing(true);
     setError(null);
     try {
       const [sumRes, leadRes] = await Promise.all([
-        api.getStudentRankingSummary(cohortId),
-        api.getStudentCohortLeaderboard(cohortId, 1, 50),
+        api.getStudentRankingSummary(cohortId, moduleIdToFetch),
+        api.getStudentCohortLeaderboard(cohortId, 1, 50, moduleIdToFetch),
       ]);
       setSummary(sumRes);
       setLeaderboard(leadRes);
@@ -65,53 +69,41 @@ export function AcademicPerformanceLeaderboard({
   }
 
   useEffect(() => {
-    void loadData();
-  }, [cohortId]);
+    void loadData(false, selectedModuleId);
+  }, [cohortId, selectedModuleId]);
 
   if (loading) {
     return (
-      <div className={cn("space-y-6", className)}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={cn("space-y-4", className)}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="panel p-5 space-y-3">
-              <Skeleton className="h-4 w-28 rounded-lg" />
-              <Skeleton className="h-8 w-20 rounded-lg" />
-              <Skeleton className="h-3 w-36 rounded-lg" />
+              <Skeleton className="h-4 w-24 rounded-md" />
+              <Skeleton className="h-8 w-16 rounded-md" />
+              <Skeleton className="h-3 w-32 rounded-md" />
             </div>
           ))}
         </div>
-        <div className="panel p-6 space-y-4">
-          <Skeleton className="h-6 w-48 rounded-lg" />
-          <Skeleton className="h-4 w-72 rounded-lg" />
-          <div className="space-y-3 pt-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 w-full rounded-xl" />
-            ))}
-          </div>
-        </div>
+        <Skeleton className="h-64 w-full rounded-2xl" />
       </div>
     );
   }
 
   if (error || !summary) {
     return (
-      <div className={cn("panel p-8 text-center space-y-4", className)}>
-        <div className="mx-auto size-12 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground">
-          <Trophy className="size-6" />
-        </div>
-        <div>
-          <h3 className="font-semibold text-foreground text-base">
-            {t("leaderboard.title")}
-          </h3>
-          <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-            {error || t("leaderboard.empty")}
-          </p>
-        </div>
+      <div className={cn("panel p-6 border-dashed text-center", className)}>
+        <AlertCircle className="size-8 mx-auto text-muted-foreground/60 mb-2" />
+        <h4 className="font-semibold text-sm text-foreground">
+          {t("leaderboard.empty")}
+        </h4>
+        <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
+          {error || t("leaderboard.completeOneModule")}
+        </p>
         <Button
           variant="outline"
           size="sm"
           onClick={() => loadData(true)}
-          className="rounded-xl gap-2 text-xs"
+          className="mt-4 gap-1.5 text-xs"
         >
           <RefreshCw className="size-3.5" />
           {t("common.retry")}
@@ -121,82 +113,162 @@ export function AcademicPerformanceLeaderboard({
   }
 
   const student = summary.studentEntry;
-  const isEligible = student?.isEligible;
-  const rank = student?.rank;
-  const average = student?.average ?? 0;
-  const points = student?.points ?? 0;
-  const completedModules = student?.completedModules ?? 0;
-  const totalModules = student?.totalModules ?? summary.totalModules ?? 0;
-  const rankChange = student?.rankChange;
-  const medal = student?.medal;
-
+  const rank = student?.rank ?? null;
+  const isEligible = student?.isEligible ?? false;
+  const average = Number(student?.average ?? 0);
+  const points = Number(student?.points ?? 0);
+  const maxPossiblePoints = Number(student?.maxPossiblePoints ?? 0);
+  const completedLessons = Number(student?.completedLessons ?? 0);
+  const totalLessons = Number(student?.totalLessons ?? summary.totalLessons ?? 0);
+  const rankChange = student?.rankChange ?? null;
+  const medal = student?.medal ?? null;
   const entries: any[] = leaderboard?.entries || [];
+  const modules: any[] = summary?.modules || [];
+  const isModuleSelected = selectedModuleId !== "all";
 
-  const renderMovement = (change: number | null | undefined) => {
-    if (change === null || change === undefined) {
+  // Helpers to render movement badge
+  const renderMovement = (delta: number | null) => {
+    if (delta === null) {
       return (
-        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 rounded-full border border-sky-200/50 dark:border-sky-800/40">
-          <Sparkles className="size-3" />
+        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 px-2 py-0.5 rounded-full border border-sky-200 dark:border-sky-800/40">
+          <Sparkles className="size-3 shrink-0" />
           {t("leaderboard.movementNew")}
         </span>
       );
     }
-    if (change > 0) {
+    if (delta > 0) {
       return (
-        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200/50 dark:border-emerald-800/40">
-          <ArrowUpRight className="size-3.5" />
-          {fr ? `+${change} pl.` : `Up ${change}`}
+        <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/40">
+          <ArrowUpRight className="size-3.5 shrink-0" />
+          {fr ? `+${delta}` : `+${delta}`}
         </span>
       );
     }
-    if (change < 0) {
+    if (delta < 0) {
       return (
-        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full border border-rose-200/50 dark:border-rose-800/40">
-          <ArrowDownRight className="size-3.5" />
-          {fr ? `${change} pl.` : `Down ${Math.abs(change)}`}
+        <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800/40">
+          <ArrowDownRight className="size-3.5 shrink-0" />
+          {delta}
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full border border-border">
-        <Minus className="size-3" />
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">
+        <Minus className="size-3 shrink-0" />
         {t("leaderboard.movementSame")}
       </span>
     );
   };
 
-  const renderMedalBadge = (m: string | null, r: number | null) => {
+  // Helper for medal badge
+  const renderMedalBadge = (m: "GOLD" | "SILVER" | "BRONZE" | null, r: number | null) => {
     if (m === "GOLD" || r === 1) {
       return (
-        <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-500/20 via-yellow-500/20 to-amber-500/10 border border-amber-500/40 text-amber-600 dark:text-amber-400 font-bold text-xs shadow-xs">
-          <Crown className="size-3.5 fill-amber-500 text-amber-600 dark:text-amber-400" />
-          <span>#1 {fr ? "Or" : "Gold"}</span>
-        </div>
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded-full border border-amber-300 dark:border-amber-700/60 shadow-xs">
+          <Crown className="size-3 fill-amber-500 text-amber-500" />
+          {t("leaderboard.goldMedal")}
+        </span>
       );
     }
     if (m === "SILVER" || r === 2) {
       return (
-        <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gradient-to-r from-slate-400/20 via-slate-300/20 to-slate-400/10 border border-slate-400/40 text-slate-700 dark:text-slate-300 font-bold text-xs shadow-xs">
-          <Medal className="size-3.5 text-slate-500 dark:text-slate-300" />
-          <span>#2 {fr ? "Argent" : "Silver"}</span>
-        </div>
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-800 dark:text-slate-200 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-300 dark:border-slate-700 shadow-xs">
+          <Medal className="size-3 text-slate-500" />
+          {t("leaderboard.silverMedal")}
+        </span>
       );
     }
     if (m === "BRONZE" || r === 3) {
       return (
-        <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-700/20 via-orange-600/20 to-amber-700/10 border border-amber-700/40 text-amber-800 dark:text-amber-500 font-bold text-xs shadow-xs">
-          <Award className="size-3.5 text-amber-700 dark:text-amber-500" />
-          <span>#3 {fr ? "Bronze" : "Bronze"}</span>
-        </div>
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-950 dark:text-amber-100 bg-amber-200/80 dark:bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-400 dark:border-amber-800 shadow-xs">
+          <Medal className="size-3 text-amber-700" />
+          {t("leaderboard.bronzeMedal")}
+        </span>
       );
     }
     return null;
   };
 
   return (
-    <div className={cn("space-y-6", className)}>
-      {/* KPI Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className={cn("space-y-5", className)}>
+      {/* Module Selector Tabs / Switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/80 pb-3">
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1 max-w-full scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setSelectedModuleId("all")}
+            className={cn(
+              "px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2",
+              selectedModuleId === "all"
+                ? "bg-primary text-primary-foreground shadow-xs font-bold"
+                : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <Layers className="size-3.5" />
+            <span>{fr ? "Classement général" : "Overall Ranking"}</span>
+            <Badge
+              variant={selectedModuleId === "all" ? "secondary" : "outline"}
+              className="text-[10px] h-4 px-1 py-0 font-normal"
+            >
+              {totalLessons} {fr ? "leçons" : "lessons"}
+            </Badge>
+          </button>
+
+          {modules.map((mod, idx) => {
+            const isSelected = selectedModuleId === mod.moduleId;
+            return (
+              <button
+                key={mod.moduleId}
+                type="button"
+                onClick={() => setSelectedModuleId(mod.moduleId)}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5",
+                  isSelected
+                    ? "bg-primary text-primary-foreground shadow-xs font-bold"
+                    : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <BookOpen className="size-3.5" />
+                <span>
+                  {fr ? `Module ${idx + 1}` : `Module ${idx + 1}`}
+                </span>
+                <span className="text-[10px] opacity-75">
+                  ({mod.totalLessons} {fr ? "l." : "l."})
+                </span>
+                {mod.studentRank && (
+                  <span
+                    className={cn(
+                      "text-[10px] px-1 rounded-sm font-bold",
+                      isSelected ? "bg-white/20 text-white" : "bg-primary/10 text-primary"
+                    )}
+                  >
+                    #{mod.studentRank}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => loadData(true)}
+            disabled={refreshing}
+            className="h-7 px-2 text-xs gap-1 hover:text-foreground"
+            title={t("leaderboard.lastCalculated")}
+          >
+            <RefreshCw className={cn("size-3", refreshing && "animate-spin")} />
+            <span className="hidden sm:inline">
+              {refreshing ? t("leaderboard.recalculating") : t("common.retry")}
+            </span>
+          </Button>
+        </div>
+      </div>
+
+      {/* 4 Primary KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Your Rank Card */}
         <div className="panel p-5 relative overflow-hidden bg-card border-border shadow-xs hover:shadow-md transition-shadow">
           <div className="flex items-start justify-between gap-2">
@@ -205,7 +277,7 @@ export function AcademicPerformanceLeaderboard({
                 {t("leaderboard.yourRank")}
               </p>
               <div className="mt-2 flex items-baseline gap-2">
-                {isEligible && rank ? (
+                {rank ? (
                   <>
                     <span className="font-display text-3xl font-bold tracking-tight text-foreground">
                       #{rank}
@@ -226,12 +298,18 @@ export function AcademicPerformanceLeaderboard({
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs">
-            {isEligible && rank ? (
+            {rank ? (
               medal ? (
                 renderMedalBadge(medal, rank)
               ) : (
                 <span className="text-muted-foreground">
-                  {fr ? "Top compétiteurs" : "Cohort standing"}
+                  {isModuleSelected
+                    ? fr
+                      ? "Rang dans ce module"
+                      : "Module standing"
+                    : fr
+                    ? "Rang général cohorte"
+                    : "Cohort standing"}
                 </span>
               )
             ) : (
@@ -239,20 +317,26 @@ export function AcademicPerformanceLeaderboard({
                 {t("leaderboard.notYetEligible")}
               </span>
             )}
-            {isEligible && renderMovement(rankChange)}
+            {renderMovement(rankChange)}
           </div>
         </div>
 
-        {/* Academic Average Card */}
+        {/* General Average / Module Score Card */}
         <div className="panel p-5 relative overflow-hidden bg-card border-border shadow-xs hover:shadow-md transition-shadow">
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                {t("leaderboard.academicAverage")}
+                {isModuleSelected
+                  ? fr
+                    ? "Note du module"
+                    : "Module Score"
+                  : fr
+                  ? "Moyenne générale"
+                  : "General Average"}
               </p>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="font-display text-3xl font-bold tracking-tight text-foreground">
-                  {isEligible ? `${average.toFixed(2)}%` : "0.00%"}
+                  {average.toFixed(2)}%
                 </span>
               </div>
             </div>
@@ -262,10 +346,53 @@ export function AcademicPerformanceLeaderboard({
           </div>
           <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
             <span>
-              {completedModules} / {totalModules} {t("leaderboard.modulesCompleted")}
+              {isModuleSelected
+                ? fr
+                  ? "Base : total leçons du module"
+                  : "Base: total module lessons"
+                : fr
+                ? `Base : ${totalLessons} leçons du cursus`
+                : `Base: all ${totalLessons} lessons`}
             </span>
             <span className="font-medium text-foreground">
               {fr ? "Moy. cohorte:" : "Cohort avg:"} {summary.cohortAverage.toFixed(2)}%
+            </span>
+          </div>
+        </div>
+
+        {/* Progress: Completed Lessons out of Total */}
+        <div className="panel p-5 relative overflow-hidden bg-card border-border shadow-xs hover:shadow-md transition-shadow">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {fr ? "Progression des leçons" : "Lessons Progress"}
+              </p>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="font-display text-3xl font-bold tracking-tight text-foreground">
+                  {completedLessons}/{totalLessons}
+                </span>
+                <span className="text-xs text-muted-foreground font-medium">
+                  {fr ? "leçons" : "lessons"}
+                </span>
+              </div>
+            </div>
+            <div className="size-10 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="size-5" />
+            </div>
+          </div>
+          <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+            <span>
+              {totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0}%{" "}
+              {fr ? "complété" : "completed"}
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              {totalLessons - completedLessons > 0
+                ? fr
+                  ? `${totalLessons - completedLessons} restantes`
+                  : `${totalLessons - completedLessons} remaining`
+                : fr
+                ? "Toutes terminées !"
+                : "All completed!"}
             </span>
           </div>
         </div>
@@ -277,11 +404,13 @@ export function AcademicPerformanceLeaderboard({
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 {t("leaderboard.academicPoints")}
               </p>
-              <div className="mt-2 flex items-baseline gap-2">
+              <div className="mt-2 flex items-baseline gap-1.5">
                 <span className="font-display text-3xl font-bold tracking-tight text-foreground">
-                  {isEligible ? points.toFixed(2) : "0.00"}
+                  {points.toFixed(1)}
                 </span>
-                <span className="text-xs text-muted-foreground font-medium">pts</span>
+                <span className="text-xs text-muted-foreground font-medium">
+                  / {maxPossiblePoints > 0 ? maxPossiblePoints.toFixed(0) : totalLessons * 100} pts
+                </span>
               </div>
             </div>
             <div className="size-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
@@ -289,47 +418,11 @@ export function AcademicPerformanceLeaderboard({
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-border flex items-center text-xs text-muted-foreground truncate">
-            <span title={t("leaderboard.pointsExplanation")} className="truncate">
-              {t("leaderboard.pointsExplanation")}
+            <span className="truncate">
+              {fr
+                ? "Leçons inachevées = 0 pt provisoire"
+                : "Unfinished lessons = 0 provisional pts"}
             </span>
-          </div>
-        </div>
-
-        {/* Cohort Composition Card */}
-        <div className="panel p-5 relative overflow-hidden bg-card border-border shadow-xs hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                {t("leaderboard.cohortSize")}
-              </p>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="font-display text-3xl font-bold tracking-tight text-foreground">
-                  {summary.totalStudents}
-                </span>
-                <span className="text-xs text-muted-foreground font-medium">
-                  {fr ? "inscrits" : "enrolled"}
-                </span>
-              </div>
-            </div>
-            <div className="size-10 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
-              <Users className="size-5" />
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-            <span>
-              {summary.eligibleStudents} {t("leaderboard.eligibleStudents")}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => loadData(true)}
-              disabled={refreshing}
-              className="h-6 px-2 text-xs gap-1 hover:text-foreground"
-              title={t("leaderboard.lastCalculated")}
-            >
-              <RefreshCw className={cn("size-3", refreshing && "animate-spin")} />
-              {refreshing ? t("leaderboard.recalculating") : t("common.retry")}
-            </Button>
           </div>
         </div>
       </div>
@@ -343,9 +436,7 @@ export function AcademicPerformanceLeaderboard({
               {t("leaderboard.notYetEligible")}
             </p>
             <p className="text-amber-800 dark:text-amber-300">
-              {student?.ineligibilityReason === "NO_COMPLETED_MODULES"
-                ? t("leaderboard.completeOneModule")
-                : student?.ineligibilityReason === "DISQUALIFIED"
+              {student?.ineligibilityReason === "DISQUALIFIED"
                 ? t("leaderboard.disqualifiedReason")
                 : student?.ineligibilityReason === "DROPPED"
                 ? t("leaderboard.droppedReason")
@@ -359,26 +450,30 @@ export function AcademicPerformanceLeaderboard({
 
       {/* Compact Mode: Top 3 Podium Preview Card with button to full leaderboard */}
       {compact ? (
-        <div className="panel p-5 sm:p-6 border-border bg-card space-y-4 shadow-xs">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="panel p-5 bg-card border-border space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/80 pb-3">
             <div>
-              <h3 className="font-display font-semibold text-base sm:text-lg text-foreground flex items-center gap-2">
-                <Trophy className="size-5 text-amber-500" />
-                {t("leaderboard.topThree")}
+              <h3 className="font-display font-semibold text-sm sm:text-base text-foreground flex items-center gap-2">
+                <Crown className="size-4 text-amber-500" />
+                {t("leaderboard.topThree")}{" "}
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({isModuleSelected
+                    ? fr
+                      ? "dans ce module"
+                      : "in this module"
+                    : fr
+                    ? "au classement général"
+                    : "overall"})
+                </span>
               </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {fr
-                  ? "Les 3 meilleurs apprenants au classement académique de votre cohorte."
-                  : "Current top 3 academic performers in your cohort."}
-              </p>
             </div>
             <Button
               asChild
               size="sm"
               variant="outline"
-              className="h-8 rounded-xl gap-1.5 text-xs font-semibold hover:border-primary hover:text-primary transition-all"
+              className="h-8 text-xs gap-1 font-semibold hover:border-primary hover:text-primary transition-colors"
             >
-              <Link to="/leaderboard" search={{ cohortId }}>
+              <Link to="/leaderboard" search={{ cohortId, moduleId: selectedModuleId !== "all" ? selectedModuleId : undefined }}>
                 {fr ? "Voir le classement complet" : "View Full Leaderboard"} <ArrowRight className="size-3.5" />
               </Link>
             </Button>
@@ -421,7 +516,7 @@ export function AcademicPerformanceLeaderboard({
                             {p.name}
                           </span>
                           <span className="text-[11px] text-muted-foreground">
-                            {Number(p.points).toFixed(2)} pts
+                            {Number(p.points).toFixed(1)} pts · {p.completedLessons}/{p.totalLessons} {fr ? "leçons" : "less."}
                           </span>
                         </div>
                       </div>
@@ -459,7 +554,7 @@ export function AcademicPerformanceLeaderboard({
           )}
 
           {/* Student standing footnote if not in top 3 */}
-          {isEligible && rank && rank > 3 && (
+          {rank && rank > 3 && (
             <div className="mt-2 pt-3 border-t border-border flex flex-wrap items-center justify-between text-xs text-muted-foreground gap-2">
               <div className="flex items-center gap-2">
                 <span className="font-medium text-foreground">
@@ -468,10 +563,10 @@ export function AcademicPerformanceLeaderboard({
                 <Badge variant="outline" className="font-bold text-primary">
                   #{rank}
                 </Badge>
-                <span>{average.toFixed(2)}%</span>
+                <span className="font-semibold text-foreground">{average.toFixed(2)}%</span>
                 <span>
-                  ({completedModules}/{totalModules}{" "}
-                  {fr ? "modules validés" : "modules completed"})
+                  ({completedLessons}/{totalLessons}{" "}
+                  {fr ? "leçons terminées" : "lessons completed"})
                 </span>
               </div>
               <div>{renderMovement(rankChange)}</div>
@@ -479,16 +574,26 @@ export function AcademicPerformanceLeaderboard({
           )}
         </div>
       ) : (
-        /* Full Cohort Leaderboard Table Section (Shown on /leaderboard) */
+        /* Full Leaderboard Table Section (Shown on /leaderboard) */
         <div className="panel overflow-hidden border-border bg-card">
           <div className="p-5 sm:p-6 border-b border-border flex flex-wrap items-center justify-between gap-4">
             <div>
               <h3 className="font-display font-semibold text-base sm:text-lg text-foreground flex items-center gap-2">
                 <Trophy className="size-5 text-amber-500" />
-                {t("leaderboard.title")}
+                {isModuleSelected
+                  ? fr
+                    ? "Classement du module sélectionné"
+                    : "Module Leaderboard"
+                  : t("leaderboard.title")}
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {t("leaderboard.subtitle")}
+                {isModuleSelected
+                  ? fr
+                    ? "Score calculé sur l'ensemble des leçons de ce module (leçons non faites = 0 pt)."
+                    : "Score computed across all lessons in this module (unfinished lessons = 0 pts)."
+                  : fr
+                  ? `Moyenne générale calculée sur les ${totalLessons} leçons du cursus (leçons non faites = 0 pt).`
+                  : `Overall average computed across all ${totalLessons} curriculum lessons (unfinished = 0 pts).`}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -520,13 +625,19 @@ export function AcademicPerformanceLeaderboard({
                       {t("common.name")}
                     </th>
                     <th scope="col" className="py-3 px-4 text-center">
-                      {t("leaderboard.academicAverage")}
+                      {isModuleSelected
+                        ? fr
+                          ? "Note module (%)"
+                          : "Module Score (%)"
+                        : fr
+                        ? "Moyenne générale (%)"
+                        : "Overall Avg (%)"}
                     </th>
                     <th scope="col" className="py-3 px-4 text-center">
                       {t("leaderboard.academicPoints")}
                     </th>
                     <th scope="col" className="py-3 px-4 text-center">
-                      {t("leaderboard.modulesCompleted")}
+                      {fr ? "Leçons terminées" : "Lessons Progress"}
                     </th>
                     <th scope="col" className="py-3 px-4 text-right">
                       {fr ? "Évolution" : "Movement"}
@@ -623,7 +734,7 @@ export function AcademicPerformanceLeaderboard({
                           </div>
                         </td>
 
-                        {/* Average Column */}
+                        {/* Average / Score Column */}
                         <td className="py-3.5 px-4 text-center font-display font-bold text-xs sm:text-sm text-foreground">
                           <span
                             className={cn(
@@ -633,21 +744,23 @@ export function AcademicPerformanceLeaderboard({
                               item.rank === 3 && "bg-amber-700/10 text-amber-800 dark:text-amber-500 font-bold"
                             )}
                           >
-                            {item.average.toFixed(2)}%
+                            {Number(item.average).toFixed(2)}%
                           </span>
                         </td>
 
                         {/* Points Column */}
                         <td className="py-3.5 px-4 text-center text-xs sm:text-sm font-semibold text-muted-foreground">
-                          {item.points.toFixed(2)}{" "}
-                          <span className="text-[10px] text-muted-foreground/70">pts</span>
+                          {Number(item.points).toFixed(1)}{" "}
+                          <span className="text-[10px] text-muted-foreground/70">
+                            / {item.maxPossiblePoints > 0 ? Number(item.maxPossiblePoints).toFixed(0) : item.totalLessons * 100} pts
+                          </span>
                         </td>
 
-                        {/* Modules Completed */}
+                        {/* Lessons Progress */}
                         <td className="py-3.5 px-4 text-center text-xs text-muted-foreground">
                           <span className="inline-flex items-center gap-1 font-medium">
                             <CheckCircle2 className="size-3.5 text-emerald-500" />
-                            {item.completedModules} / {item.totalModules}
+                            {item.completedLessons} / {item.totalLessons}
                           </span>
                         </td>
 
@@ -666,11 +779,4 @@ export function AcademicPerformanceLeaderboard({
       )}
     </div>
   );
-}
-
-function RankingServiceMedal(rank: number | null): "GOLD" | "SILVER" | "BRONZE" | null {
-  if (rank === 1) return "GOLD";
-  if (rank === 2) return "SILVER";
-  if (rank === 3) return "BRONZE";
-  return null;
 }

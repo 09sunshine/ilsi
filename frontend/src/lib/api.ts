@@ -762,19 +762,27 @@ export const api = {
   },
 
   // Academic Leaderboard & Ranking APIs
-  getStudentRankingSummary: (cohortId?: string) => {
-    const q = cohortId ? `?cohortId=${encodeURIComponent(cohortId)}` : "";
+  getStudentRankingSummary: (cohortId?: string, moduleId?: string) => {
+    const params = new URLSearchParams();
+    if (cohortId) params.set("cohortId", cohortId);
+    if (moduleId && moduleId !== "all") params.set("moduleId", moduleId);
+    const q = params.toString() ? `?${params.toString()}` : "";
     return request<any>(`/api/student/rankings/summary${q}`);
   },
-  getStudentCohortLeaderboard: (cohortId?: string, page = 1, limit = 50) => {
+  getStudentCohortLeaderboard: (cohortId?: string, page = 1, limit = 50, moduleId?: string) => {
     const params = new URLSearchParams();
     if (cohortId) params.set("cohortId", cohortId);
     params.set("page", page.toString());
     params.set("limit", limit.toString());
+    if (moduleId && moduleId !== "all") params.set("moduleId", moduleId);
     return request<any>(`/api/student/rankings/leaderboard?${params.toString()}`);
   },
-  getAdminCohortRankings: (cohortId: string) =>
-    request<any>(`/api/admin/cohorts/${encodeURIComponent(cohortId)}/rankings`),
+  getAdminCohortRankings: (cohortId: string, moduleId?: string) => {
+    const params = new URLSearchParams();
+    if (moduleId && moduleId !== "all") params.set("moduleId", moduleId);
+    const q = params.toString() ? `?${params.toString()}` : "";
+    return request<any>(`/api/admin/cohorts/${encodeURIComponent(cohortId)}/rankings${q}`);
+  },
   recalculateAdminCohortRanking: (cohortId: string) =>
     request<any>(`/api/admin/cohorts/${encodeURIComponent(cohortId)}/rankings/recalculate`, {
       method: "POST",

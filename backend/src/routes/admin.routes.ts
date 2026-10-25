@@ -4343,7 +4343,8 @@ router.post("/quiz-answers/:id/grade", async (req: Request, res: Response, next:
 router.get("/cohorts/:id/rankings", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id as string;
-    const rankings = await RankingService.getAdminCohortRankings(id);
+    const moduleId = req.query.moduleId as string | undefined;
+    const rankings = await RankingService.getAdminCohortRankings(id, moduleId);
     if (!rankings) {
       throw new AppError(404, ErrorCodes.COHORT_NOT_FOUND, "Cohort or ranking not found");
     }
@@ -4438,7 +4439,8 @@ router.get("/cohorts/:id/rankings/snapshots/:snapshotId", async (req: Request, r
 router.get("/cohorts/:id/rankings/export", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id as string;
-    const rankings = await RankingService.getAdminCohortRankings(id);
+    const moduleId = req.query.moduleId as string | undefined;
+    const rankings = await RankingService.getAdminCohortRankings(id, moduleId);
     if (!rankings) {
       throw new AppError(404, ErrorCodes.COHORT_NOT_FOUND, "No ranking available for export");
     }
