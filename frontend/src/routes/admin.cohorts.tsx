@@ -15,6 +15,7 @@ import { EditCurriculumModal } from "@/components/admin/EditCurriculumModal";
 import { DeleteCohortModal } from "@/components/admin/DeleteCohortModal";
 import { AdminRankingsModal } from "@/components/admin/AdminRankingsModal";
 import { BookOpen, Check, Edit3, ExternalLink, FileText, Plus, RefreshCw, Trash2, Video, Trophy } from "lucide-react";
+import { toDatetimeLocal, datetimeLocalToIso, formatLiveSchedule } from "@/lib/liveSchedule";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/cohorts")({
@@ -47,22 +48,6 @@ function AdminCohorts() {
   const [editingMeetUrl, setEditingMeetUrl] = useState<Record<string, string>>({});
   const [editingStartsAt, setEditingStartsAt] = useState<Record<string, string>>({});
   const [savingSession, setSavingSession] = useState<string | null>(null);
-
-  const toDatetimeLocal = (isoString?: string | null): string => {
-    if (!isoString) return "";
-    try {
-      const d = new Date(isoString);
-      if (isNaN(d.getTime())) return "";
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      const hours = String(d.getHours()).padStart(2, "0");
-      const minutes = String(d.getMinutes()).padStart(2, "0");
-      return `${year}-${month}-${day}T${hours}:${minutes}`;
-    } catch {
-      return "";
-    }
-  };
 
   const fetchCohorts = async () => {
     setLoading(true);
@@ -111,16 +96,39 @@ function AdminCohorts() {
     fetchCohorts();
   }, []);
 
-  const handleUpdateMeetUrl = async (sessionId: string) => {
+  const handleUpdateMeetUrl = async (cohortId: string, sessionId: string) => {
     setSavingSession(sessionId);
     try {
-      await api.updateLiveSession(sessionId, {
-        meetUrl: editingMeetUrl[sessionId],
-        startsAt: editingStartsAt[sessionId] ? new Date(editingStartsAt[sessionId]).toISOString() : undefined,
+      const rawStart = editingStartsAt[sessionId];
+      const startsAtIso = datetimeLocalToIso(rawStart);
+      const meetUrlVal = (editingMeetUrl[sessionId] ?? "").trim();
+
+      const updated = await api.updateLiveSession(sessionId, {
+        meetUrl: meetUrlVal,
+        startsAt: startsAtIso,
       });
-      toast.success("Meeting link & schedule updated successfully!");
+
+      setLiveSessions((prev) => {
+        const cohortSessions = prev[cohortId] || [];
+        return {
+          ...prev,
+          [cohortId]: cohortSessions.map((s: any) =>
+            s.id === sessionId
+              ? {
+                  ...s,
+                  ...(updated || {}),
+                  meet_url: meetUrlVal,
+                  starts_at: startsAtIso || s.starts_at,
+                  ends_at: (updated as any)?.ends_at || (updated as any)?.endsAt || s.ends_at,
+                }
+              : s
+          ),
+        };
+      });
+
+      toast.success(fr ? "Lien et date de session mis à jour !" : "Meeting link & schedule updated successfully!");
     } catch {
-      toast.error("Failed to update meeting details.");
+      toast.error(fr ? "Échec de mise à jour de la session." : "Failed to update meeting details.");
     } finally {
       setSavingSession(null);
     }
@@ -325,7 +333,9 @@ function AdminCohorts() {
                           <div key={s.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-border bg-surface/50 p-2.5 min-w-0">
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-xs font-medium">{s.title_en}</p>
-                              <p className="text-[10px] text-muted-foreground">{new Date(s.starts_at).toLocaleString()}</p>
+                              <p className="text-[10px] text-muted-foreground font-medium">
+                                {formatLiveSchedule(s, locale).fullScheduleFormatted}
+                              </p>
                             </div>
                             <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto min-w-0">
                               <Input
@@ -350,7 +360,7 @@ function AdminCohorts() {
                                 size="sm"
                                 className="h-8 sm:h-7 px-2 shrink-0"
                                 disabled={savingSession === s.id}
-                                onClick={() => handleUpdateMeetUrl(s.id)}
+                                onClick={() => handleUpdateMeetUrl(c.id, s.id)}
                                 title="Save meeting URL"
                               >
                                 {savingSession === s.id ? (

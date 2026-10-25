@@ -14,6 +14,7 @@ import { NotificationService } from "../services/NotificationService.js";
 import { supabaseAdmin } from "../integrations/supabase/client.js";
 import { invalidateVideoUrlCache } from "../services/VideoStorageService.js";
 import { RankingService } from "../services/RankingService.js";
+import { invalidateStudentDashboardServiceCache } from "../services/StudentDashboardService.js";
 
 const router = Router();
 
@@ -344,6 +345,7 @@ router.patch("/cohorts/:id", async (req: Request, res: Response, next: NextFunct
       );
     }
 
+    invalidateStudentDashboardServiceCache();
     res.json({ success: true, data: resRow.rows[0], message: "Cohort updated successfully" });
   } catch (error) {
     next(error);
@@ -1918,6 +1920,8 @@ router.post(
       customMeetUrl: meetUrl,
     });
 
+    invalidateStudentDashboardServiceCache();
+
     res.status(201).json({
       success: true,
       data: created,
@@ -1944,7 +1948,22 @@ router.get("/cohorts/:cohortId/live-sessions", async (req: Request, res: Respons
        ORDER BY ls.starts_at ASC`,
       [cohortId]
     );
-    res.json({ success: true, data: sessionsRes.rows });
+
+    const mapped = sessionsRes.rows.map((row) => {
+      const startsAtIso = row.starts_at instanceof Date ? row.starts_at.toISOString() : new Date(row.starts_at).toISOString();
+      const endsAtIso = row.ends_at instanceof Date ? row.ends_at.toISOString() : new Date(row.ends_at).toISOString();
+      return {
+        ...row,
+        starts_at: startsAtIso,
+        ends_at: endsAtIso,
+        startsAt: startsAtIso,
+        endsAt: endsAtIso,
+        meetUrl: row.meet_url,
+        meetingUrl: row.meet_url,
+      };
+    });
+
+    res.json({ success: true, data: mapped });
   } catch (err) {
     next(err);
   }
@@ -1967,6 +1986,25 @@ router.patch(
         throw new AppError(404, ErrorCodes.LIVE_SESSION_NOT_FOUND, "Live session not found");
       }
 
+      const existingRow = existing.rows[0];
+      let finalStartsAt: string | null = null;
+      if (startsAt) {
+        const parsedStart = new Date(startsAt);
+        if (!isNaN(parsedStart.getTime())) finalStartsAt = parsedStart.toISOString();
+      }
+
+      let finalEndsAt: string | null = null;
+      if (endsAt) {
+        const parsedEnd = new Date(endsAt);
+        if (!isNaN(parsedEnd.getTime())) finalEndsAt = parsedEnd.toISOString();
+      } else if (finalStartsAt) {
+        // If start date changed but end date was not passed, preserve or default duration (min 60 mins)
+        const prevStart = new Date(existingRow.starts_at).getTime();
+        const prevEnd = new Date(existingRow.ends_at).getTime();
+        const durationMs = prevEnd > prevStart ? prevEnd - prevStart : 60 * 60 * 1000;
+        finalEndsAt = new Date(new Date(finalStartsAt).getTime() + durationMs).toISOString();
+      }
+
       const updated = await pool.query(
         `UPDATE live_sessions
          SET meet_url = COALESCE($1, meet_url),
@@ -1983,8 +2021,8 @@ router.patch(
         [
           meetUrl ?? null,
           recordingUrl ?? null,
-          startsAt ? new Date(startsAt).toISOString() : null,
-          endsAt ? new Date(endsAt).toISOString() : null,
+          finalStartsAt,
+          finalEndsAt,
           titleEn ?? null,
           titleFr ?? null,
           instructorName ?? null,
@@ -1993,9 +2031,23 @@ router.patch(
         ]
       );
 
+      invalidateStudentDashboardServiceCache();
+
+      const row = updated.rows[0];
+      const startsAtIso = row.starts_at instanceof Date ? row.starts_at.toISOString() : new Date(row.starts_at).toISOString();
+      const endsAtIso = row.ends_at instanceof Date ? row.ends_at.toISOString() : new Date(row.ends_at).toISOString();
+
       res.json({
         success: true,
-        data: updated.rows[0],
+        data: {
+          ...row,
+          starts_at: startsAtIso,
+          ends_at: endsAtIso,
+          startsAt: startsAtIso,
+          endsAt: endsAtIso,
+          meetUrl: row.meet_url,
+          meetingUrl: row.meet_url,
+        },
         message: "Live session updated successfully",
       });
     } catch (err) {
@@ -2012,6 +2064,7 @@ router.delete("/live-sessions/:id", async (req: Request, res: Response, next: Ne
   try {
     const { id } = req.params;
     await pool.query(`DELETE FROM live_sessions WHERE id = $1`, [id]);
+    invalidateStudentDashboardServiceCache();
     res.json({ success: true, message: "Live session deleted successfully" });
   } catch (err) {
     next(err);

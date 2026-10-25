@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
 import { api } from "@/lib/api";
+import { formatLiveSchedule } from "@/lib/liveSchedule";
 
 export const Route = createFileRoute("/live")({
   head: () => ({
@@ -41,18 +42,6 @@ function LivePage() {
     void loadSessions();
   }, []);
 
-  const fmt = (d: string) => {
-    try {
-      return new Date(d).toLocaleDateString(fr ? "fr-FR" : "en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
-    } catch {
-      return d;
-    }
-  };
-
   return (
     <AppShell title={t("nav.live")}>
       <div className="mx-auto max-w-4xl space-y-3">
@@ -60,31 +49,35 @@ function LivePage() {
           <EmptyState icon={<Radio className="size-5" />} title={t("common.empty")} />
         ) : (
           sessionList.map((s) => {
+            const sch = formatLiveSchedule(s, locale);
+            const targetUrl = sch.recordingUrl || sch.meetingUrl;
             return (
               <article key={s.id} className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="truncate font-display text-base font-semibold">{L(s.title)}</h2>
-                    <Badge variant={s.status === "ENDED" ? "secondary" : "default"}>{s.status}</Badge>
+                    <Badge variant={sch.isEnded ? "secondary" : sch.isLive ? "destructive" : "default"}>
+                      {sch.isLive ? (fr ? "En direct" : "Live now") : s.status}
+                    </Badge>
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">{L(s.description)}</p>
                   <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      <CalendarDays className="size-3.5" /> {fmt(s.date)} · {s.startTime}–{s.endTime}
+                    <span className="inline-flex items-center gap-1 font-medium">
+                      <CalendarDays className="size-3.5 text-primary" /> {sch.fullScheduleFormatted}
                     </span>
-                    {s.instructor ? <span>{s.instructor}</span> : null}
+                    {s.instructor ? <span>· {s.instructor}</span> : null}
                   </p>
                 </div>
                 <div className="shrink-0">
-                  {s.recordingUrl ? (
+                  {sch.recordingUrl ? (
                     <Button asChild size="sm" variant="outline">
-                      <a href={s.recordingUrl} target="_blank" rel="noopener noreferrer">
+                      <a href={sch.recordingUrl} target="_blank" rel="noopener noreferrer">
                         <Video className="size-4" /> {t("dash.watchRecording")}
                       </a>
                     </Button>
                   ) : (
                     <Button asChild size="sm">
-                      <a href={s.meetingUrl ?? "#"} target="_blank" rel="noopener noreferrer">
+                      <a href={targetUrl || "#"} target="_blank" rel="noopener noreferrer">
                         <Radio className="size-4" /> {t("dash.join")}
                       </a>
                     </Button>

@@ -290,8 +290,11 @@ export const api = {
   getAdminDashboard: () => request<any>("/api/admin/dashboard"),
   getCohorts: () => request<any[]>("/api/admin/cohorts"),
   createCohort: (data: any) => request<any>("/api/admin/cohorts", { method: "POST", body: JSON.stringify(data) }),
-  updateCohort: (id: string, data: any) =>
-    request<any>(`/api/admin/cohorts/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  updateCohort: async (id: string, data: any) => {
+    const res = await request<any>(`/api/admin/cohorts/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+    invalidateStudentDashboardCache(id);
+    return res;
+  },
   deleteCohort: (id: string) =>
     request<{ success: boolean; message: string }>(`/api/admin/cohorts/${id}`, { method: "DELETE" }),
   createFullCourse: (data: any) => request<any>("/api/admin/programs/full", { method: "POST", body: JSON.stringify(data) }),
@@ -491,11 +494,21 @@ export const api = {
   getAdminContactMessages: () => request<any[]>("/api/admin/contact-messages"),
   updateContactMessageStatus: (id: string, status: string) =>
     request<any>(`/api/admin/contact-messages/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
-  createLiveSession: (data: any) => request<any>("/api/admin/live-sessions", { method: "POST", body: JSON.stringify(data) }),
-  updateLiveSession: (id: string, data: any) =>
-    request<any>(`/api/admin/live-sessions/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-  deleteLiveSession: (id: string) =>
-    request<any>(`/api/admin/live-sessions/${id}`, { method: "DELETE" }),
+  createLiveSession: async (data: any) => {
+    const res = await request<any>("/api/admin/live-sessions", { method: "POST", body: JSON.stringify(data) });
+    invalidateStudentDashboardCache(data?.cohortId);
+    return res;
+  },
+  updateLiveSession: async (id: string, data: any) => {
+    const res = await request<any>(`/api/admin/live-sessions/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+    invalidateStudentDashboardCache();
+    return res;
+  },
+  deleteLiveSession: async (id: string) => {
+    const res = await request<any>(`/api/admin/live-sessions/${id}`, { method: "DELETE" });
+    invalidateStudentDashboardCache();
+    return res;
+  },
   getCohortLiveSessions: (cohortId: string) =>
     request<any[]>(`/api/admin/cohorts/${cohortId}/live-sessions`),
   getSettings: () => request<any>("/api/admin/settings"),

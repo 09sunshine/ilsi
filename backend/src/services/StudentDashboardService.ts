@@ -448,21 +448,35 @@ export class StudentDashboardService {
       : 0;
 
     // 6. Live sessions
-    const upcomingLive = liveSessionsRes.rows.map((s) => ({
-      id: s.id,
-      cohortId: s.cohort_id,
-      moduleId: s.module_id,
-      title: { en: s.title_en, fr: s.title_fr },
-      description: { en: s.description_en, fr: s.description_fr },
-      date: s.starts_at instanceof Date ? s.starts_at.toISOString().split("T")[0] : new Date(s.starts_at).toISOString().split("T")[0],
-      startTime: s.starts_at instanceof Date ? s.starts_at.toTimeString().substring(0, 5) : new Date(s.starts_at).toTimeString().substring(0, 5),
-      endTime: s.ends_at instanceof Date ? s.ends_at.toTimeString().substring(0, 5) : new Date(s.ends_at).toTimeString().substring(0, 5),
-      timezone: s.timezone,
-      meetingUrl: s.meet_url || (s.id ? `https://meet.jit.si/ilsi-live-${s.id.substring(0, 8)}` : "https://meet.jit.si/ilsi-live"),
-      recordingUrl: s.recording_url,
-      instructor: s.instructor_name,
-      status: s.status,
-    }));
+    const upcomingLive = liveSessionsRes.rows.map((s) => {
+      const startsAtIso = s.starts_at instanceof Date ? s.starts_at.toISOString() : new Date(s.starts_at).toISOString();
+      const endsAtIso = s.ends_at instanceof Date ? s.ends_at.toISOString() : new Date(s.ends_at).toISOString();
+      const meetUrlVal = s.meet_url || (s.id ? `https://meet.jit.si/ilsi-live-${s.id.substring(0, 8)}` : "https://meet.jit.si/ilsi-live");
+      return {
+        id: s.id,
+        cohortId: s.cohort_id,
+        moduleId: s.module_id,
+        lessonId: s.lesson_id,
+        title: { en: s.title_en, fr: s.title_fr },
+        titleEn: s.title_en,
+        titleFr: s.title_fr,
+        description: { en: s.description_en, fr: s.description_fr },
+        startsAt: startsAtIso,
+        endsAt: endsAtIso,
+        starts_at: startsAtIso,
+        ends_at: endsAtIso,
+        date: startsAtIso.split("T")[0],
+        startTime: startsAtIso.substring(11, 16),
+        endTime: endsAtIso.substring(11, 16),
+        timezone: s.timezone || en.timezone || "UTC",
+        meetUrl: meetUrlVal,
+        meetingUrl: meetUrlVal,
+        meet_url: meetUrlVal,
+        recordingUrl: s.recording_url,
+        instructor: s.instructor_name,
+        status: s.status,
+      };
+    });
 
     // 7. Attendance calculation in-memory from liveSessionsRes
     const pastSessions = liveSessionsRes.rows.filter((s) => new Date(s.starts_at) <= now);

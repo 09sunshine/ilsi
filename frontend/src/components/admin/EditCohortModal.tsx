@@ -29,22 +29,7 @@ import {
   convertEurToUsd,
   translateText,
 } from "@/lib/translation";
-
-function toDatetimeLocal(isoString?: string | null): string {
-  if (!isoString) return "";
-  try {
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return "";
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const hours = String(d.getHours()).padStart(2, "0");
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
-  } catch {
-    return "";
-  }
-}
+import { toDatetimeLocal, datetimeLocalToIso, formatLiveSchedule } from "@/lib/liveSchedule";
 
 interface Props {
   cohort: any | null;
@@ -125,13 +110,32 @@ export function EditCohortModal({ cohort, isOpen, onClose, onUpdated }: Props) {
   const handleSaveSession = async (s: any) => {
     try {
       setSavingSessionId(s.id);
-      await api.updateLiveSession(s.id, {
-        meetUrl: s.meet_url,
-        startsAt: s.starts_at ? new Date(s.starts_at).toISOString() : undefined,
-        endsAt: s.ends_at ? new Date(s.ends_at).toISOString() : undefined,
+      const startsAtIso = datetimeLocalToIso(s.starts_at);
+      const endsAtIso = datetimeLocalToIso(s.ends_at);
+      const meetUrlVal = (s.meet_url ?? "").trim();
+
+      const updated = await api.updateLiveSession(s.id, {
+        meetUrl: meetUrlVal,
+        startsAt: startsAtIso,
+        endsAt: endsAtIso,
         titleEn: s.title_en,
         titleFr: s.title_fr,
       });
+
+      setLiveSessions((prev) =>
+        prev.map((item) =>
+          item.id === s.id
+            ? {
+                ...item,
+                ...(updated || {}),
+                meet_url: meetUrlVal,
+                starts_at: startsAtIso || item.starts_at,
+                ends_at: endsAtIso || (updated as any)?.ends_at || (updated as any)?.endsAt || item.ends_at,
+              }
+            : item
+        )
+      );
+
       toast.success(fr ? "Session en direct mise à jour !" : "Live session updated successfully!");
     } catch (err: any) {
       toast.error(err.message || "Failed to update live session");
@@ -291,10 +295,12 @@ export function EditCohortModal({ cohort, isOpen, onClose, onUpdated }: Props) {
       for (const s of liveSessions) {
         if (s.id) {
           try {
+            const startsAtIso = datetimeLocalToIso(s.starts_at);
+            const endsAtIso = datetimeLocalToIso(s.ends_at);
             await api.updateLiveSession(s.id, {
-              meetUrl: s.meet_url,
-              startsAt: s.starts_at ? new Date(s.starts_at).toISOString() : undefined,
-              endsAt: s.ends_at ? new Date(s.ends_at).toISOString() : undefined,
+              meetUrl: (s.meet_url ?? "").trim(),
+              startsAt: startsAtIso,
+              endsAt: endsAtIso,
               titleEn: s.title_en,
               titleFr: s.title_fr,
             });

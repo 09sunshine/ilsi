@@ -23,6 +23,7 @@ import { moduleLessonCompletion, moduleState, overallProgress } from "@/lib/acce
 import { NOW } from "@/lib/clock";
 import { cn, resolveMediaUrl } from "@/lib/utils";
 import { api, getCachedStudentDashboard } from "@/lib/api";
+import { formatLiveSchedule } from "@/lib/liveSchedule";
 import { AcademicPerformanceLeaderboard } from "@/components/academic/AcademicPerformanceLeaderboard";
 
 export const Route = createFileRoute("/dashboard")({
@@ -166,7 +167,10 @@ function DashboardPage() {
   };
 
   const upcoming = liveSessionsList
-    .filter((s: any) => s.date && new Date(s.date) >= now)
+    .filter((s: any) => {
+      const sch = formatLiveSchedule(s, locale);
+      return !sch.isEnded;
+    })
     .slice(0, 3);
   const sessionCards = upcoming.length ? upcoming : liveSessionsList.slice(-3);
 
@@ -458,70 +462,84 @@ function DashboardPage() {
           <div className="grid gap-4 md:grid-cols-3">
             {sessionCards.map((s: any, i: number) => {
               const highlight = i === 0;
+              const sch = formatLiveSchedule(s, locale);
+              const sessionUrl = sch.recordingUrl || sch.meetingUrl;
               return (
                 <article
                   key={s.id}
                   className={cn(
-                    "rounded-2xl border p-4",
+                    "rounded-2xl border p-4 flex flex-col justify-between",
                     highlight
-                      ? "border-transparent bg-primary text-primary-foreground"
-                      : "border-border bg-card",
+                      ? "border-transparent bg-primary text-primary-foreground shadow-sm"
+                      : "border-border bg-card shadow-xs",
                   )}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={cn(
-                        "text-[10px] font-semibold uppercase tracking-[0.12em]",
-                        highlight ? "opacity-80" : "text-muted-foreground",
-                      )}
-                    >
-                      {fr ? "Session live" : "Live session"}
-                    </span>
-                    <span
-                      className={cn(
-                        "rounded-md px-2 py-0.5 text-[10px] font-semibold",
-                        highlight ? "bg-primary-foreground/15" : "bg-surface text-muted-foreground",
-                      )}
-                    >
-                      60 {fr ? "min" : "mins"}
-                    </span>
-                  </div>
-                  <h3 className="mt-3 line-clamp-2 font-display text-sm font-semibold">{L(s.title)}</h3>
-                  <p className={cn("mt-1 text-[11px]", highlight ? "opacity-80" : "text-muted-foreground")}>
-                    {fmtDate(s.date)} · {s.startTime}–{s.endTime} · {s.instructor}
-                  </p>
-                  {highlight ? (
-                    <Button asChild size="sm" variant="secondary" className="mt-4 rounded-full">
-                      <a
-                        href={s.recordingUrl ?? s.meetingUrl ?? (s.id ? `https://meet.jit.si/ilsi-live-${s.id.substring(0, 8)}` : "#")}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {s.recordingUrl ? (
-                          <>
-                            <Video className="size-4" /> {t("dash.watchRecording")}
-                          </>
-                        ) : (
-                          <>
-                            <Radio className="size-4" /> {t("dash.join")}
-                          </>
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={cn(
+                          "text-[10px] font-semibold uppercase tracking-[0.12em] flex items-center gap-1.5",
+                          highlight ? "opacity-90" : "text-muted-foreground",
                         )}
-                      </a>
-                    </Button>
-                  ) : (
-                    <div className="mt-4 flex items-center justify-between gap-2">
-                      <span className="inline-flex rounded-full border border-warning/50 px-3 py-1 text-[11px] font-semibold text-warning-foreground">
-                        {fr ? "À venir" : "Upcoming"}
+                      >
+                        {sch.isLive ? (
+                          <>
+                            <span className="flex h-2 w-2 relative">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                            </span>
+                            <span className="text-rose-500 font-bold">{fr ? "En direct" : "Live now"}</span>
+                          </>
+                        ) : sch.isEnded ? (
+                          fr ? "Session passée" : "Past session"
+                        ) : (
+                          fr ? "Session live" : "Live session"
+                        )}
                       </span>
-                      {s.meetingUrl && (
-                        <Button asChild size="sm" variant="outline" className="h-7 text-xs rounded-full">
-                          <a href={s.meetingUrl} target="_blank" rel="noopener noreferrer">
-                            <Radio className="size-3 mr-1" /> {t("dash.join")}
-                          </a>
-                        </Button>
-                      )}
+                      <span
+                        className={cn(
+                          "rounded-md px-2 py-0.5 text-[10px] font-semibold",
+                          highlight ? "bg-primary-foreground/15" : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        60 {fr ? "min" : "mins"}
+                      </span>
                     </div>
-                  )}
+                    <h3 className="mt-3 line-clamp-2 font-display text-sm font-semibold">{L(s.title)}</h3>
+                    <p className={cn("mt-1 text-[11px]", highlight ? "opacity-90 font-medium" : "text-muted-foreground")}>
+                      {sch.fullScheduleFormatted} {s.instructor ? `· ${s.instructor}` : ""}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between gap-2 pt-2 border-t border-border/40">
+                    <span className="text-[11px] font-medium opacity-80 truncate">
+                      {sch.isLive
+                        ? fr ? "Session en cours" : "Session in progress"
+                        : sch.isEnded
+                        ? fr ? "Terminée" : "Completed"
+                        : fr ? "À venir" : "Scheduled"}
+                    </span>
+                    {sessionUrl && (
+                      <Button
+                        asChild
+                        size="sm"
+                        variant={highlight ? "secondary" : "outline"}
+                        className={cn("rounded-full h-7 px-3 text-xs font-semibold", highlight ? "shadow-2xs" : "")}
+                      >
+                        <a href={sessionUrl} target="_blank" rel="noopener noreferrer">
+                          {sch.recordingUrl ? (
+                            <>
+                              <Video className="size-3 mr-1" /> {t("dash.watchRecording")}
+                            </>
+                          ) : (
+                            <>
+                              <Radio className="size-3 mr-1" /> {t("dash.join")}
+                            </>
+                          )}
+                        </a>
+                      </Button>
+                    )}
+                  </div>
                 </article>
               );
             })}

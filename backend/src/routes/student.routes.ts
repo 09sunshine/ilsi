@@ -645,21 +645,34 @@ router.get("/cohorts/:cohortId/live-sessions", async (req: Request, res: Respons
 
     res.json({
       success: true,
-      data: sessionsRes.rows.map((s) => ({
-        id: s.id,
-        cohortId: s.cohort_id,
-        moduleId: s.module_id,
-        title: { en: s.title_en, fr: s.title_fr },
-        description: { en: s.description_en, fr: s.description_fr },
-        date: s.starts_at.toISOString().split("T")[0],
-        startTime: s.starts_at.toTimeString().substring(0, 5),
-        endTime: s.ends_at.toTimeString().substring(0, 5),
-        timezone: s.timezone,
-        meetUrl: s.meet_url,
-        recordingUrl: s.recording_url,
-        instructor: s.instructor_name,
-        status: s.status,
-      })),
+      data: sessionsRes.rows.map((s) => {
+        const startsAtIso = s.starts_at instanceof Date ? s.starts_at.toISOString() : new Date(s.starts_at).toISOString();
+        const endsAtIso = s.ends_at instanceof Date ? s.ends_at.toISOString() : new Date(s.ends_at).toISOString();
+        const meetUrlVal = s.meet_url || (s.id ? `https://meet.jit.si/ilsi-live-${s.id.substring(0, 8)}` : "https://meet.jit.si/ilsi-live");
+        return {
+          id: s.id,
+          cohortId: s.cohort_id,
+          moduleId: s.module_id,
+          title: { en: s.title_en, fr: s.title_fr },
+          titleEn: s.title_en,
+          titleFr: s.title_fr,
+          description: { en: s.description_en, fr: s.description_fr },
+          startsAt: startsAtIso,
+          endsAt: endsAtIso,
+          starts_at: startsAtIso,
+          ends_at: endsAtIso,
+          date: startsAtIso.split("T")[0],
+          startTime: startsAtIso.substring(11, 16),
+          endTime: endsAtIso.substring(11, 16),
+          timezone: s.timezone || "UTC",
+          meetUrl: meetUrlVal,
+          meetingUrl: meetUrlVal,
+          meet_url: meetUrlVal,
+          recordingUrl: s.recording_url,
+          instructor: s.instructor_name,
+          status: s.status,
+        };
+      }),
     });
   } catch (error) {
     next(error);
@@ -749,21 +762,34 @@ router.get("/live-sessions/:id", async (req: Request, res: Response, next: NextF
 
     res.json({
       success: true,
-      data: {
-        id: session.id,
-        cohortId: session.cohort_id,
-        moduleId: session.module_id,
-        title: { en: session.title_en, fr: session.title_fr },
-        description: { en: session.description_en, fr: session.description_fr },
-        date: session.starts_at.toISOString().split("T")[0],
-        startTime: session.starts_at.toTimeString().substring(0, 5),
-        endTime: session.ends_at.toTimeString().substring(0, 5),
-        timezone: session.timezone,
-        meetUrl: session.meet_url,
-        recordingUrl: session.recording_url,
-        instructor: session.instructor_name,
-        status: session.status,
-      },
+      data: (() => {
+        const startsAtIso = session.starts_at instanceof Date ? session.starts_at.toISOString() : new Date(session.starts_at).toISOString();
+        const endsAtIso = session.ends_at instanceof Date ? session.ends_at.toISOString() : new Date(session.ends_at).toISOString();
+        const meetUrlVal = session.meet_url || (session.id ? `https://meet.jit.si/ilsi-live-${session.id.substring(0, 8)}` : "https://meet.jit.si/ilsi-live");
+        return {
+          id: session.id,
+          cohortId: session.cohort_id,
+          moduleId: session.module_id,
+          title: { en: session.title_en, fr: session.title_fr },
+          titleEn: session.title_en,
+          titleFr: session.title_fr,
+          description: { en: session.description_en, fr: session.description_fr },
+          startsAt: startsAtIso,
+          endsAt: endsAtIso,
+          starts_at: startsAtIso,
+          ends_at: endsAtIso,
+          date: startsAtIso.split("T")[0],
+          startTime: startsAtIso.substring(11, 16),
+          endTime: endsAtIso.substring(11, 16),
+          timezone: session.timezone || "UTC",
+          meetUrl: meetUrlVal,
+          meetingUrl: meetUrlVal,
+          meet_url: meetUrlVal,
+          recordingUrl: session.recording_url,
+          instructor: session.instructor_name,
+          status: session.status,
+        };
+      })(),
     });
   } catch (error) {
     next(error);
@@ -789,21 +815,34 @@ router.get("/live-sessions", async (req: Request, res: Response, next: NextFunct
       [req.user!.id]
     );
 
-    const sessions = sessionsRes.rows.map((s) => ({
-      id: s.id,
-      cohortId: s.cohort_id,
-      moduleId: s.module_id,
-      title: { en: s.title_en, fr: s.title_fr },
-      description: { en: s.description_en, fr: s.description_fr },
-      date: s.starts_at.toISOString().split("T")[0],
-      startTime: s.starts_at.toTimeString().substring(0, 5),
-      endTime: s.ends_at.toTimeString().substring(0, 5),
-      timezone: s.timezone,
-      meetingUrl: s.meet_url || (s.id ? `https://meet.jit.si/ilsi-live-${s.id.substring(0, 8)}` : "https://meet.jit.si/ilsi-live"),
-      recordingUrl: s.recording_url,
-      instructor: s.instructor_name,
-      status: s.status,
-    }));
+    const sessions = sessionsRes.rows.map((s) => {
+      const startsAtIso = s.starts_at instanceof Date ? s.starts_at.toISOString() : new Date(s.starts_at).toISOString();
+      const endsAtIso = s.ends_at instanceof Date ? s.ends_at.toISOString() : new Date(s.ends_at).toISOString();
+      const meetUrlVal = s.meet_url || (s.id ? `https://meet.jit.si/ilsi-live-${s.id.substring(0, 8)}` : "https://meet.jit.si/ilsi-live");
+      return {
+        id: s.id,
+        cohortId: s.cohort_id,
+        moduleId: s.module_id,
+        title: { en: s.title_en, fr: s.title_fr },
+        titleEn: s.title_en,
+        titleFr: s.title_fr,
+        description: { en: s.description_en, fr: s.description_fr },
+        startsAt: startsAtIso,
+        endsAt: endsAtIso,
+        starts_at: startsAtIso,
+        ends_at: endsAtIso,
+        date: startsAtIso.split("T")[0],
+        startTime: startsAtIso.substring(11, 16),
+        endTime: endsAtIso.substring(11, 16),
+        timezone: s.timezone || "UTC",
+        meetUrl: meetUrlVal,
+        meetingUrl: meetUrlVal,
+        meet_url: meetUrlVal,
+        recordingUrl: s.recording_url,
+        instructor: s.instructor_name,
+        status: s.status,
+      };
+    });
 
     res.json({ success: true, data: sessions });
   } catch (error) {
