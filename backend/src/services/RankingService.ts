@@ -128,10 +128,13 @@ export class RankingService {
         ? await client.query(
             `SELECT l.id, l.module_id, l.order_index, l.title_en, l.title_fr, l.mandatory
              FROM lessons l
-             WHERE l.module_id = ANY($1::uuid[])
-               AND (l.status IS NULL OR l.status != 'ARCHIVED')
+             LEFT JOIN cohort_lessons cl ON cl.lesson_id = l.id AND cl.cohort_id = $1
+             WHERE l.module_id = ANY($2::uuid[])
+               AND (l.status IS NULL OR l.status = 'PUBLISHED')
+               AND (cl.status IS NULL OR cl.status != 'ARCHIVED')
+               AND (cl.is_published IS NULL OR cl.is_published = TRUE)
              ORDER BY l.module_id, l.order_index ASC`,
-            [moduleIds]
+            [cohortId, moduleIds]
           )
         : { rows: [] };
 
@@ -714,7 +717,12 @@ export class RankingService {
     // Fetch cohort modules list with per-module student performance
     const modulesRes = await pool.query(
       `SELECT m.id, m.order_index, m.title_en, m.title_fr,
-              (SELECT COUNT(*) FROM lessons l WHERE l.module_id = m.id AND (l.status IS NULL OR l.status != 'ARCHIVED'))::int as total_lessons,
+              (SELECT COUNT(*) FROM lessons l 
+               LEFT JOIN cohort_lessons cl ON cl.lesson_id = l.id AND cl.cohort_id = $1
+               WHERE l.module_id = m.id 
+                 AND (l.status IS NULL OR l.status = 'PUBLISHED')
+                 AND (cl.status IS NULL OR cl.status != 'ARCHIVED')
+                 AND (cl.is_published IS NULL OR cl.is_published = TRUE))::int as total_lessons,
               cm.score, cm.rank, cm.completed_lessons, cm.points
        FROM modules m
        JOIN cohorts c ON c.id = $1
@@ -1020,7 +1028,12 @@ export class RankingService {
     // Fetch cohort modules list
     const modulesRes = await pool.query(
       `SELECT m.id, m.order_index, m.title_en, m.title_fr,
-              (SELECT COUNT(*) FROM lessons l WHERE l.module_id = m.id AND (l.status IS NULL OR l.status != 'ARCHIVED'))::int as total_lessons
+              (SELECT COUNT(*) FROM lessons l 
+               LEFT JOIN cohort_lessons cl ON cl.lesson_id = l.id AND cl.cohort_id = $1
+               WHERE l.module_id = m.id 
+                 AND (l.status IS NULL OR l.status = 'PUBLISHED')
+                 AND (cl.status IS NULL OR cl.status != 'ARCHIVED')
+                 AND (cl.is_published IS NULL OR cl.is_published = TRUE))::int as total_lessons
        FROM modules m
        JOIN cohorts c ON c.id = $1
        WHERE (m.cohort_id = $1 OR (m.program_id = c.program_id AND m.cohort_id IS NULL))

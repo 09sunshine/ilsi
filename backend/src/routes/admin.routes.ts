@@ -2834,6 +2834,15 @@ router.delete("/modules/:id", async (req: Request, res: Response, next: NextFunc
     const { id } = req.params;
     const force = req.query.force === "true" || req.query.force === undefined;
 
+    // Detect affected cohort(s) before deleting
+    const cohortRes = await pool.query(
+      `SELECT DISTINCT cohort_id FROM modules WHERE id = $1 AND cohort_id IS NOT NULL
+       UNION
+       SELECT DISTINCT cl.cohort_id FROM cohort_lessons cl JOIN lessons l ON l.id = cl.lesson_id WHERE l.module_id = $1`,
+      [id]
+    );
+    const affectedCohortIds = cohortRes.rows.map((r: any) => r.cohort_id).filter(Boolean);
+
     if (force) {
       // Cascade delete progress, quiz attempts, and cohort_lessons to ensure complete deletion
       await pool.query(`DELETE FROM module_progress WHERE module_id = $1`, [id]);
@@ -2850,6 +2859,13 @@ router.delete("/modules/:id", async (req: Request, res: Response, next: NextFunc
         [id]
       );
       await pool.query(`DELETE FROM modules WHERE id = $1 RETURNING id`, [id]);
+
+      for (const cId of affectedCohortIds) {
+        void RankingService.recalculateCohortRanking(cId, "MODULE_DELETED").catch((e) =>
+          console.warn("[RankingService] Recalculate failed after module deletion:", e)
+        );
+      }
+
       res.json({ success: true, message: "Module deleted successfully" });
       return;
     }
@@ -2865,6 +2881,13 @@ router.delete("/modules/:id", async (req: Request, res: Response, next: NextFunc
     if (progressRes.rows.length > 0) {
       await pool.query(`UPDATE modules SET status = 'ARCHIVED', updated_at = NOW() WHERE id = $1`, [id]);
       await pool.query(`UPDATE lessons SET status = 'ARCHIVED', updated_at = NOW() WHERE module_id = $1`, [id]);
+
+      for (const cId of affectedCohortIds) {
+        void RankingService.recalculateCohortRanking(cId, "MODULE_ARCHIVED").catch((e) =>
+          console.warn("[RankingService] Recalculate failed after module archival:", e)
+        );
+      }
+
       res.json({
         success: true,
         archived: true,
@@ -2874,6 +2897,13 @@ router.delete("/modules/:id", async (req: Request, res: Response, next: NextFunc
     }
 
     await pool.query(`DELETE FROM modules WHERE id = $1 RETURNING id`, [id]);
+
+    for (const cId of affectedCohortIds) {
+      void RankingService.recalculateCohortRanking(cId, "MODULE_DELETED").catch((e) =>
+        console.warn("[RankingService] Recalculate failed after module deletion:", e)
+      );
+    }
+
     res.json({ success: true, message: "Module deleted successfully" });
   } catch (error) {
     next(error);
@@ -3240,12 +3270,29 @@ router.delete("/lessons/:id", async (req: Request, res: Response, next: NextFunc
     const { id } = req.params;
     const force = req.query.force === "true" || req.query.force === undefined;
 
+    // Detect affected cohort(s) before deleting
+    const cohortLessonsRes = await pool.query(
+      `SELECT DISTINCT cohort_id FROM cohort_lessons WHERE lesson_id = $1
+       UNION
+       SELECT DISTINCT m.cohort_id FROM lessons l JOIN modules m ON m.id = l.module_id WHERE l.id = $1 AND m.cohort_id IS NOT NULL`,
+      [id]
+    );
+    const affectedCohortIds = cohortLessonsRes.rows.map((r: any) => r.cohort_id).filter(Boolean);
+
     if (force) {
       // Cascade delete progress, quiz attempts, and cohort_lessons to ensure complete deletion
       await pool.query(`DELETE FROM lesson_progress WHERE lesson_id = $1`, [id]);
       await pool.query(`DELETE FROM quiz_attempts WHERE lesson_id = $1`, [id]);
       await pool.query(`DELETE FROM cohort_lessons WHERE lesson_id = $1`, [id]);
       await pool.query(`DELETE FROM lessons WHERE id = $1 RETURNING id`, [id]);
+
+      // Auto-recalculate rankings for affected cohorts
+      for (const cId of affectedCohortIds) {
+        void RankingService.recalculateCohortRanking(cId, "LESSON_DELETED").catch((e) =>
+          console.warn("[RankingService] Recalculate failed after lesson deletion:", e)
+        );
+      }
+
       res.json({ success: true, message: "Lesson deleted successfully" });
       return;
     }
@@ -3264,6 +3311,14 @@ router.delete("/lessons/:id", async (req: Request, res: Response, next: NextFunc
         `UPDATE cohort_lessons SET status = 'ARCHIVED', is_published = FALSE, updated_at = NOW() WHERE lesson_id = $1`,
         [id]
       );
+
+      // Auto-recalculate rankings for affected cohorts
+      for (const cId of affectedCohortIds) {
+        void RankingService.recalculateCohortRanking(cId, "LESSON_ARCHIVED").catch((e) =>
+          console.warn("[RankingService] Recalculate failed after lesson archival:", e)
+        );
+      }
+
       res.json({
         success: true,
         archived: true,
@@ -3273,6 +3328,13 @@ router.delete("/lessons/:id", async (req: Request, res: Response, next: NextFunc
     }
 
     await pool.query(`DELETE FROM lessons WHERE id = $1 RETURNING id`, [id]);
+
+    for (const cId of affectedCohortIds) {
+      void RankingService.recalculateCohortRanking(cId, "LESSON_DELETED").catch((e) =>
+        console.warn("[RankingService] Recalculate failed after lesson deletion:", e)
+      );
+    }
+
     res.json({ success: true, message: "Lesson deleted successfully" });
   } catch (error) {
     next(error);
@@ -3746,6 +3808,11 @@ router.delete("/cohort-lessons/:id", async (req: Request, res: Response, next: N
         `UPDATE cohort_lessons SET status = 'ARCHIVED', is_published = FALSE, updated_at = NOW() WHERE id = $1`,
         [id]
       );
+
+      void RankingService.recalculateCohortRanking(cohort_id, "COHORT_LESSON_ARCHIVED").catch((e) =>
+        console.warn("[RankingService] Recalculate failed after cohort lesson archival:", e)
+      );
+
       res.json({
         success: true,
         archived: true,
@@ -3755,6 +3822,11 @@ router.delete("/cohort-lessons/:id", async (req: Request, res: Response, next: N
     }
 
     await pool.query(`DELETE FROM cohort_lessons WHERE id = $1`, [id]);
+
+    void RankingService.recalculateCohortRanking(cohort_id, "COHORT_LESSON_DELETED").catch((e) =>
+      console.warn("[RankingService] Recalculate failed after cohort lesson deletion:", e)
+    );
+
     res.json({ success: true, message: "Cohort lesson assignment removed successfully" });
   } catch (error) {
     next(error);
