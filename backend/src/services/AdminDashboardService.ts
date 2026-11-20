@@ -54,20 +54,20 @@ export class AdminDashboardService {
     const studentQuery = isFiltered
       ? `SELECT 
            COUNT(*) as total_students,
-           COUNT(*) FILTER (WHERE status = 'ACTIVE') as active_students,
+           COUNT(*) FILTER (WHERE status = 'ACTIVE' AND COALESCE(is_hidden, FALSE) = FALSE) as active_students,
            COUNT(*) FILTER (WHERE payment_status = 'PAID') as paid_students,
            COUNT(*) FILTER (WHERE payment_status = 'PENDING') as pending_payment_students,
            COUNT(*) FILTER (WHERE status = 'COMPLETED') as completed_students,
-           COUNT(*) FILTER (WHERE status = 'DISQUALIFIED') as disqualified_students
+           COUNT(*) FILTER (WHERE status = 'DISQUALIFIED' OR is_hidden = TRUE) as disqualified_students
          FROM enrollments
          WHERE cohort_id = $1`
       : `SELECT 
            (SELECT COUNT(*) FROM users WHERE role IN ('PARTICIPANT', 'STUDENT')) as total_students,
-           COUNT(*) FILTER (WHERE status = 'ACTIVE') as active_students,
+           COUNT(*) FILTER (WHERE status = 'ACTIVE' AND COALESCE(is_hidden, FALSE) = FALSE) as active_students,
            COUNT(*) FILTER (WHERE payment_status = 'PAID') as paid_students,
            COUNT(*) FILTER (WHERE payment_status = 'PENDING') as pending_payment_students,
            COUNT(*) FILTER (WHERE status = 'COMPLETED') as completed_students,
-           COUNT(*) FILTER (WHERE status = 'DISQUALIFIED') as disqualified_students
+           COUNT(*) FILTER (WHERE status = 'DISQUALIFIED' OR is_hidden = TRUE) as disqualified_students
          FROM enrollments`;
 
     // 3. Payments KPI Query (multi-currency USD & EUR support)
@@ -91,7 +91,7 @@ export class AdminDashboardService {
       SELECT c.id, c.name_en, c.name_fr, c.start_date, c.end_date, c.capacity, c.status,
              c.fee_amount, c.fee_currency, c.timezone,
              p.title_en as program_title_en, p.title_fr as program_title_fr,
-             (SELECT COUNT(*) FROM enrollments e WHERE e.cohort_id = c.id) as enrolled_count,
+             (SELECT COUNT(*) FROM enrollments e WHERE e.cohort_id = c.id AND e.status != 'DISQUALIFIED' AND COALESCE(e.is_hidden, FALSE) = FALSE) as enrolled_count,
              (SELECT COUNT(*) FROM enrollments e WHERE e.cohort_id = c.id AND e.payment_status = 'PAID') as paid_count
       FROM cohorts c
       JOIN programs p ON p.id = c.program_id

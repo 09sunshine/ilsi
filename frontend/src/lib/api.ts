@@ -804,5 +804,23 @@ export const api = {
     request<any[]>(`/api/admin/cohorts/${encodeURIComponent(cohortId)}/rankings/snapshots`),
   getAdminSnapshotDetails: (snapshotId: string) =>
     request<any>(`/api/admin/cohorts/any/rankings/snapshots/${encodeURIComponent(snapshotId)}`),
+
+  // Cohort Participant Removal, Restoration & Manual Bonus Points
+  removeStudentFromCohort: (cohortId: string, userId: string, reason?: string) =>
+    request<any>(`/api/admin/cohorts/${encodeURIComponent(cohortId)}/students/${encodeURIComponent(userId)}/remove`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  restoreStudentToCohort: (cohortId: string, userId: string) =>
+    request<any>(`/api/admin/cohorts/${encodeURIComponent(cohortId)}/students/${encodeURIComponent(userId)}/restore`, {
+      method: "POST",
+    }),
+  addStudentPoints: (cohortId: string, userId: string, data: { points: number; reason?: string }) =>
+    request<any>(`/api/admin/cohorts/${encodeURIComponent(cohortId)}/students/${encodeURIComponent(userId)}/points`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  getStudentPointsHistory: (cohortId: string, userId: string) =>
+    request<any[]>(`/api/admin/cohorts/${encodeURIComponent(cohortId)}/students/${encodeURIComponent(userId)}/points-history`),
 };
 

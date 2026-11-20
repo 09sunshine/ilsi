@@ -618,27 +618,41 @@ router.delete("/cohorts/:id", async (req: Request, res: Response, next: NextFunc
 router.get("/cohorts/:id/students", async (req: Request, res: Response, next: NextFunction) => {
   try {
     const cohortId = req.params.id as string;
-    const studentsRes = await pool.query(
-      `SELECT u.id as user_id, u.name, u.email, u.role, u.status as user_status, u.first_login,
-              p.first_name, p.last_name, p.phone, p.country, p.city, p.onboarding_completed,
-              e.id as enrollment_id, e.status as enrollment_status, e.payment_status,
-              e.enrolled_at, e.start_at, e.end_at, e.completed_at,
-              COALESCE(
-                (SELECT ROUND(AVG(CASE WHEN lp.completed THEN 100 ELSE 0 END))
-                 FROM lessons l
-                 JOIN modules m ON m.id = l.module_id
-                 LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = u.id
-                 WHERE m.cohort_id = $1),
-                0
-              ) as progress_percentage
-       FROM enrollments e
-       JOIN users u ON u.id = e.user_id
-       LEFT JOIN profiles p ON p.user_id = u.id
-       WHERE e.cohort_id = $1
-       ORDER BY e.enrolled_at DESC`,
-      [cohortId]
-    );
+    const statusFilter = (req.query.status as string)?.toUpperCase();
 
+    let query = `
+      SELECT u.id as user_id, u.name, u.email, u.role, u.status as user_status, u.first_login,
+             p.first_name, p.last_name, p.phone, p.country, p.city, p.onboarding_completed,
+             e.id as enrollment_id, e.status as enrollment_status, e.payment_status,
+             COALESCE(e.bonus_points, 0) as bonus_points,
+             COALESCE(e.is_hidden, FALSE) as is_hidden,
+             e.disqualified_at, e.disqualification_reason,
+             e.enrolled_at, e.start_at, e.end_at, e.completed_at,
+             COALESCE(
+               (SELECT ROUND(AVG(CASE WHEN lp.completed THEN 100 ELSE 0 END))
+                FROM lessons l
+                JOIN modules m ON m.id = l.module_id
+                LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = u.id
+                WHERE m.cohort_id = $1),
+               0
+             ) as progress_percentage
+      FROM enrollments e
+      JOIN users u ON u.id = e.user_id
+      LEFT JOIN profiles p ON p.user_id = u.id
+      WHERE e.cohort_id = $1
+    `;
+
+    const params: any[] = [cohortId];
+
+    if (statusFilter === "ACTIVE") {
+      query += ` AND e.status != 'DISQUALIFIED' AND COALESCE(e.is_hidden, FALSE) = FALSE`;
+    } else if (statusFilter === "DISQUALIFIED") {
+      query += ` AND (e.status = 'DISQUALIFIED' OR e.is_hidden = TRUE)`;
+    }
+
+    query += ` ORDER BY e.enrolled_at DESC`;
+
+    const studentsRes = await pool.query(query, params);
     res.json({ success: true, data: studentsRes.rows });
   } catch (error) {
     next(error);
@@ -1413,6 +1427,10 @@ router.get("/participants", async (req: Request, res: Response, next: NextFuncti
                    'paymentStatus', e.payment_status,
                    'certStatus',    e.certification_status,
                    'enrollStatus',  e.status,
+                   'bonusPoints',   COALESCE(e.bonus_points, 0),
+                   'isHidden',      COALESCE(e.is_hidden, FALSE),
+                   'disqualifiedAt', e.disqualified_at,
+                   'disqualificationReason', e.disqualification_reason,
                    'totalLessons',  COALESCE(clc.total_lessons, 0),
                    'completedLessons', COALESCE(ucd.done_lessons, 0),
                    'progress',      CASE WHEN COALESCE(clc.total_lessons, 0) > 0
@@ -1455,6 +1473,10 @@ router.get("/participants", async (req: Request, res: Response, next: NextFuncti
         paymentStatus: string;
         certStatus: string;
         enrollStatus: string;
+        bonusPoints?: number;
+        isHidden?: boolean;
+        disqualifiedAt?: string | null;
+        disqualificationReason?: string | null;
         totalLessons?: number;
         completedLessons?: number;
         progress?: number;
@@ -1487,17 +1509,25 @@ router.get("/participants", async (req: Request, res: Response, next: NextFuncti
           paymentStatus: c.paymentStatus || "UNPAID",
           certStatus: c.certStatus || "NOT_CERTIFIED",
           enrollStatus: c.enrollStatus,
+          bonusPoints: Number(c.bonusPoints || 0),
+          isHidden: Boolean(c.isHidden),
+          disqualifiedAt: c.disqualifiedAt,
+          disqualificationReason: c.disqualificationReason,
           progress: c.progress ?? 0,
           completedLessons: c.completedLessons ?? 0,
           totalLessons: c.totalLessons ?? 0,
         })),
+        bonusPoints: Number(primary?.bonusPoints || 0),
+        isHidden: Boolean(primary?.isHidden),
+        disqualifiedAt: primary?.disqualifiedAt,
+        disqualificationReason: primary?.disqualificationReason,
         paymentStatus: r.has_paid ? "PAID" : (primary?.paymentStatus || "UNPAID"),
         certification: r.first_cert_status || "NOT_CERTIFIED",
         suspended: r.status === "SUSPENDED",
         firstLogin: r.first_login,
-        isDisqualified: cohorts.some((c) => c.enrollStatus === "DISQUALIFIED") || r.status === "DISQUALIFIED",
-        enrollStatus: (cohorts.some((c) => c.enrollStatus === "DISQUALIFIED") || r.status === "DISQUALIFIED") ? "DISQUALIFIED" : (primary?.enrollStatus || "ACTIVE"),
-        status: (cohorts.some((c) => c.enrollStatus === "DISQUALIFIED") || r.status === "DISQUALIFIED") ? "DISQUALIFIED" : r.status,
+        isDisqualified: cohorts.some((c) => c.enrollStatus === "DISQUALIFIED" || c.isHidden) || r.status === "DISQUALIFIED",
+        enrollStatus: (cohorts.some((c) => c.enrollStatus === "DISQUALIFIED" || c.isHidden) || r.status === "DISQUALIFIED") ? "DISQUALIFIED" : (primary?.enrollStatus || "ACTIVE"),
+        status: (cohorts.some((c) => c.enrollStatus === "DISQUALIFIED" || c.isHidden) || r.status === "DISQUALIFIED") ? "DISQUALIFIED" : r.status,
         joinedAt: r.created_at ? r.created_at.toISOString() : new Date().toISOString(),
       };
     });
@@ -4603,3 +4633,272 @@ router.get("/cohorts/:id/rankings/export", async (req: Request, res: Response, n
 });
 
 export default router;
+
+/**
+ * POST /api/admin/cohorts/:cohortId/students/:userId/remove
+ * Disqualifies/removes a student from a specific cohort without deleting their global account.
+ * Hides them from active participant lists, leaderboards, and cohort community.
+ */
+router.post(
+  "/cohorts/:cohortId/students/:userId/remove",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const cohortId = req.params.cohortId as string;
+      const userId = req.params.userId as string;
+      const { reason } = req.body || {};
+
+      const checkRes = await pool.query(
+        `SELECT id, status, is_hidden FROM enrollments WHERE cohort_id = $1 AND user_id = $2`,
+        [cohortId, userId]
+      );
+
+      if (checkRes.rows.length === 0) {
+        throw new AppError(404, ErrorCodes.ENROLLMENT_NOT_FOUND, "Enrollment not found for this cohort and user");
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+
+        await client.query(
+          `UPDATE enrollments
+           SET status = 'DISQUALIFIED',
+               is_hidden = TRUE,
+               disqualified_at = NOW(),
+               disqualification_reason = $3,
+               updated_at = NOW()
+           WHERE cohort_id = $1 AND user_id = $2`,
+          [cohortId, userId, reason || "ADMIN_DISQUALIFICATION"]
+        );
+
+        // Audit log
+        await client.query(
+          `INSERT INTO audit_logs (user_id, action, resource_type, resource_id, metadata)
+           VALUES ($1, 'REMOVE_STUDENT_FROM_COHORT', 'enrollment', $2, $3)`,
+          [
+            (req as any).user?.id || null,
+            checkRes.rows[0].id,
+            JSON.stringify({ cohortId, userId, reason: reason || "ADMIN_DISQUALIFICATION", timestamp: new Date().toISOString() }),
+          ]
+        );
+
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
+
+      // Automatically recalculate rankings so the leaderboard excludes the disqualified student
+      void RankingService.recalculateCohortRanking(cohortId, "ADMIN_STUDENT_REMOVAL").catch((e) =>
+        console.warn("[RankingService] Recalculate failed after student removal:", e)
+      );
+
+      invalidateAdminParticipantsCache();
+      invalidateAdminOverviewCache();
+
+      res.json({
+        success: true,
+        message: "Student successfully removed and hidden from this cohort without deleting account.",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/admin/cohorts/:cohortId/students/:userId/restore
+ * Restores a disqualified/removed student back to ACTIVE status in the cohort.
+ */
+router.post(
+  "/cohorts/:cohortId/students/:userId/restore",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const cohortId = req.params.cohortId as string;
+      const userId = req.params.userId as string;
+
+      const checkRes = await pool.query(
+        `SELECT id FROM enrollments WHERE cohort_id = $1 AND user_id = $2`,
+        [cohortId, userId]
+      );
+
+      if (checkRes.rows.length === 0) {
+        throw new AppError(404, ErrorCodes.ENROLLMENT_NOT_FOUND, "Enrollment not found for this cohort and user");
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+
+        await client.query(
+          `UPDATE enrollments
+           SET status = 'ACTIVE',
+               is_hidden = FALSE,
+               disqualified_at = NULL,
+               disqualification_reason = NULL,
+               updated_at = NOW()
+           WHERE cohort_id = $1 AND user_id = $2`,
+          [cohortId, userId]
+        );
+
+        await client.query(
+          `INSERT INTO audit_logs (user_id, action, resource_type, resource_id, metadata)
+           VALUES ($1, 'RESTORE_STUDENT_TO_COHORT', 'enrollment', $2, $3)`,
+          [
+            (req as any).user?.id || null,
+            checkRes.rows[0].id,
+            JSON.stringify({ cohortId, userId, timestamp: new Date().toISOString() }),
+          ]
+        );
+
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
+
+      // Automatically recalculate rankings to restore student to leaderboard
+      void RankingService.recalculateCohortRanking(cohortId, "ADMIN_STUDENT_RESTORE").catch((e) =>
+        console.warn("[RankingService] Recalculate failed after student restore:", e)
+      );
+
+      invalidateAdminParticipantsCache();
+      invalidateAdminOverviewCache();
+
+      res.json({
+        success: true,
+        message: "Student successfully restored to active status in this cohort.",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/admin/cohorts/:cohortId/students/:userId/points
+ * Manually adds bonus points to a student in a cohort.
+ * Automatically recalculates leaderboard rankings and returns updated totals and rank.
+ */
+router.post(
+  "/cohorts/:cohortId/students/:userId/points",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const cohortId = req.params.cohortId as string;
+      const userId = req.params.userId as string;
+      const { points, reason } = req.body || {};
+
+      const pointsNumber = Number(points);
+      if (typeof pointsNumber !== "number" || isNaN(pointsNumber)) {
+        throw new AppError(400, ErrorCodes.VALIDATION_ERROR, "Points must be a valid number");
+      }
+
+      const client = await pool.connect();
+      let updatedBonusPoints = 0;
+      try {
+        await client.query("BEGIN");
+
+        const updateRes = await client.query(
+          `UPDATE enrollments
+           SET bonus_points = COALESCE(bonus_points, 0) + $1,
+               updated_at = NOW()
+           WHERE cohort_id = $2 AND user_id = $3
+           RETURNING id, bonus_points`,
+          [pointsNumber, cohortId, userId]
+        );
+
+        if (updateRes.rows.length === 0) {
+          throw new AppError(404, ErrorCodes.ENROLLMENT_NOT_FOUND, "Enrollment not found for this cohort and user");
+        }
+
+        updatedBonusPoints = Number(updateRes.rows[0].bonus_points);
+
+        // Record in points adjustments audit table
+        await client.query(
+          `INSERT INTO cohort_point_adjustments (cohort_id, user_id, points_added, reason, adjusted_by)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [cohortId, userId, pointsNumber, reason || "Admin manual adjustment", (req as any).user?.id || null]
+        );
+
+        // Audit log
+        await client.query(
+          `INSERT INTO audit_logs (user_id, action, resource_type, resource_id, metadata)
+           VALUES ($1, 'MANUAL_POINTS_ADJUSTED', 'enrollment', $2, $3)`,
+          [
+            (req as any).user?.id || null,
+            updateRes.rows[0].id,
+            JSON.stringify({ cohortId, userId, pointsAdded: pointsNumber, totalBonusPoints: updatedBonusPoints, reason }),
+          ]
+        );
+
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
+
+      // Recalculate cohort rankings immediately with new points
+      const newSnapshot = await RankingService.recalculateCohortRanking(cohortId, "ADMIN_MANUAL_POINTS");
+
+      // Fetch the student's updated ranking entry from the newly calculated snapshot
+      let newEntry = null;
+      if (newSnapshot) {
+        const entryRes = await pool.query(
+          `SELECT rank, points, average, completed_lessons, total_lessons, is_eligible
+           FROM cohort_ranking_entries
+           WHERE snapshot_id = $1 AND user_id = $2`,
+          [newSnapshot.id, userId]
+        );
+        newEntry = entryRes.rows[0] || null;
+      }
+
+      invalidateAdminParticipantsCache();
+
+      res.json({
+        success: true,
+        pointsAdded: pointsNumber,
+        currentBonusPoints: updatedBonusPoints,
+        newTotalPoints: newEntry ? Number(newEntry.points) : null,
+        newRank: newEntry?.rank ? Number(newEntry.rank) : null,
+        newAverage: newEntry ? Number(newEntry.average) : null,
+        message: `Successfully added ${pointsNumber} points. Ranking recalculated.`,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/admin/cohorts/:cohortId/students/:userId/points-history
+ * Retrieves audit log of manual point adjustments for a student.
+ */
+router.get(
+  "/cohorts/:cohortId/students/:userId/points-history",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const cohortId = req.params.cohortId as string;
+      const userId = req.params.userId as string;
+
+      const historyRes = await pool.query(
+        `SELECT pa.id, pa.points_added, pa.reason, pa.created_at,
+                u.name as adjusted_by_name, u.email as adjusted_by_email
+         FROM cohort_point_adjustments pa
+         LEFT JOIN users u ON u.id = pa.adjusted_by
+         WHERE pa.cohort_id = $1 AND pa.user_id = $2
+         ORDER BY pa.created_at DESC`,
+        [cohortId, userId]
+      );
+
+      res.json({ success: true, data: historyRes.rows });
+    } catch (error) {
+      next(error);
+    }
+  }
+);

@@ -53,7 +53,7 @@ export class StudentDashboardService {
                 c.fee_amount, c.fee_currency, c.timezone,
                 c.thumbnail_url as cohort_thumbnail_url,
                 p.thumbnail_url as program_thumbnail_url,
-                (SELECT COUNT(*) FROM enrollments en WHERE en.cohort_id = c.id AND en.status = 'ACTIVE') as enrolled_count,
+                (SELECT COUNT(*) FROM enrollments en WHERE en.cohort_id = c.id AND en.status = 'ACTIVE' AND COALESCE(en.is_hidden, FALSE) = FALSE) as enrolled_count,
                 p.id as program_id, p.slug as program_slug, p.title_en as prog_title_en, p.title_fr as prog_title_fr,
                 p.tagline_en, p.tagline_fr, p.description_en, p.description_fr,
                 p.duration_weeks, p.module_count, p.price, p.price_eur, p.currency
@@ -62,6 +62,7 @@ export class StudentDashboardService {
          JOIN programs p ON p.id = c.program_id
          WHERE e.user_id = $1
            AND e.status IN ('ACTIVE', 'COMPLETED', 'DISQUALIFIED')
+           AND COALESCE(e.is_hidden, FALSE) = FALSE
            AND e.payment_status IN ('PAID', 'NOT_REQUIRED')
          ORDER BY 
            CASE WHEN e.status = 'ACTIVE' THEN 1 WHEN e.status = 'COMPLETED' THEN 2 ELSE 3 END,

@@ -400,29 +400,28 @@ export class QuizEngineService {
 
       const attemptId = attemptRes.rows[0].id;
 
-      // If participant fails across all attempts allowed, permanently disqualify in database
+      // If participant fails across all attempts allowed, disqualify and hide them from this cohort
       if (isDisqualified) {
         if (resolvedCohortId) {
           await client.query(
             `UPDATE enrollments 
-             SET status = 'DISQUALIFIED', updated_at = NOW() 
+             SET status = 'DISQUALIFIED', is_hidden = TRUE, disqualified_at = NOW(), disqualification_reason = 'FAILED_MAX_QUIZ_ATTEMPTS', updated_at = NOW() 
              WHERE user_id = $1 AND cohort_id = $2`,
             [userId, resolvedCohortId]
+          );
+          // Automatically recalculate cohort rankings to exclude disqualified user
+          void RankingService.recalculateCohortRanking(resolvedCohortId, "QUIZ_DISQUALIFICATION").catch((e) =>
+            console.warn("[RankingService] Recalculate failed after quiz disqualification:", e)
           );
         } else {
           await client.query(
             `UPDATE enrollments 
-             SET status = 'DISQUALIFIED', updated_at = NOW() 
+             SET status = 'DISQUALIFIED', is_hidden = TRUE, disqualified_at = NOW(), disqualification_reason = 'FAILED_MAX_QUIZ_ATTEMPTS', updated_at = NOW() 
              WHERE user_id = $1`,
             [userId]
           );
         }
-        await client.query(
-          `UPDATE users 
-           SET status = 'DISQUALIFIED', updated_at = NOW() 
-           WHERE id = $1`,
-          [userId]
-        );
+        // NOTE: We preserve the account in the users table so the user can register for other courses
       }
 
       // Notify student of quiz result / disqualification

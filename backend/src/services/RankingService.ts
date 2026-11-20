@@ -154,14 +154,18 @@ export class RankingService {
         lessonsByModule.set(l.module_id, list);
       }
 
-      // 4. Fetch all enrolled students
+      // 4. Fetch all enrolled students (excluding disqualified/hidden from cohort ranking)
       const studentsRes = await client.query(
         `SELECT e.user_id, e.status as enrollment_status, e.payment_status,
+                COALESCE(e.bonus_points, 0) as bonus_points,
+                COALESCE(e.is_hidden, FALSE) as is_hidden,
                 u.name, u.email, p.first_name, p.last_name, p.avatar_url
          FROM enrollments e
          JOIN users u ON u.id = e.user_id
          LEFT JOIN profiles p ON p.user_id = u.id
-         WHERE e.cohort_id = $1`,
+         WHERE e.cohort_id = $1
+           AND e.status != 'DISQUALIFIED'
+           AND COALESCE(e.is_hidden, FALSE) = FALSE`,
         [cohortId]
       );
 
@@ -382,6 +386,10 @@ export class RankingService {
           });
         }
 
+        // Add admin-awarded manual bonus points (in addition to quiz/lesson points)
+        const bonusPoints = Number(st.bonus_points) || 0;
+        overallPoints += bonusPoints;
+
         // Formula: Overall average = Total points obtained ÷ Total curriculum lessons
         // (Unfinished lessons count as 0 provisional points)
         const overallAvg = totalCohortLessons > 0 ? Number((overallPoints / totalCohortLessons).toFixed(2)) : 0.0;
@@ -523,26 +531,44 @@ export class RankingService {
 
       const finalOverallEntries: StudentRankingEntryDTO[] = [];
 
-      for (const st of evaluatedOverall) {
-        let rankChange: number | null = null;
-        if (st.isEligible && st.rank !== null) {
-          if (previousRankMap.has(st.userId)) {
-            const prevRank = previousRankMap.get(st.userId)!;
-            rankChange = prevRank - st.rank; // Positive = gained places, Negative = lost places
-          } else {
-            rankChange = null; // New to ranking
-          }
-        }
+      if (evaluatedOverall.length > 0) {
+        const valueRows: string[] = [];
+        const params: any[] = [];
+        let pIdx = 1;
 
-        await client.query(
-          `INSERT INTO cohort_ranking_entries (
-             snapshot_id, cohort_id, user_id, rank, average, points,
-             completed_modules, total_required_modules,
-             completed_lessons, total_lessons, max_possible_points,
-             is_eligible, ineligibility_reason, rank_change
-           )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-          [
+        for (const st of evaluatedOverall) {
+          let rankChange: number | null = null;
+          if (st.isEligible && st.rank !== null) {
+            if (previousRankMap.has(st.userId)) {
+              const prevRank = previousRankMap.get(st.userId)!;
+              rankChange = prevRank - st.rank; // Positive = gained places, Negative = lost places
+            } else {
+              rankChange = null; // New to ranking
+            }
+          }
+
+          finalOverallEntries.push({
+            userId: st.userId,
+            name: st.name,
+            avatarUrl: st.avatarUrl,
+            rank: st.rank,
+            average: st.average,
+            points: st.points,
+            maxPossiblePoints: st.maxPossiblePoints,
+            completedLessons: st.completedLessons,
+            totalLessons: st.totalLessons,
+            completedModules: 0,
+            totalModules: totalRequiredModules,
+            isEligible: st.isEligible,
+            ineligibilityReason: st.ineligibilityReason,
+            rankChange,
+            medal: this.getMedal(st.rank),
+          });
+
+          valueRows.push(
+            `($${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++})`
+          );
+          params.push(
             snapshotId,
             cohortId,
             st.userId,
@@ -556,30 +582,27 @@ export class RankingService {
             st.maxPossiblePoints,
             st.isEligible,
             st.ineligibilityReason,
-            rankChange,
-          ]
-        );
+            rankChange
+          );
+        }
 
-        finalOverallEntries.push({
-          userId: st.userId,
-          name: st.name,
-          avatarUrl: st.avatarUrl,
-          rank: st.rank,
-          average: st.average,
-          points: st.points,
-          maxPossiblePoints: st.maxPossiblePoints,
-          completedLessons: st.completedLessons,
-          totalLessons: st.totalLessons,
-          completedModules: 0,
-          totalModules: totalRequiredModules,
-          isEligible: st.isEligible,
-          ineligibilityReason: st.ineligibilityReason,
-          rankChange,
-          medal: this.getMedal(st.rank),
-        });
+        await client.query(
+          `INSERT INTO cohort_ranking_entries (
+             snapshot_id, cohort_id, user_id, rank, average, points,
+             completed_modules, total_required_modules,
+             completed_lessons, total_lessons, max_possible_points,
+             is_eligible, ineligibility_reason, rank_change
+           )
+           VALUES ${valueRows.join(", ")}`,
+          params
+        );
       }
 
-      // Persist module entries
+      // Persist module entries in batch
+      const moduleValueRows: string[] = [];
+      const moduleParams: any[] = [];
+      let mIdx = 1;
+
       for (const m of modulesRes.rows) {
         const modEntries = evaluatedByModule.get(m.id) || [];
         const priorModRanks = previousModuleRankMap.get(m.id);
@@ -594,28 +617,48 @@ export class RankingService {
             }
           }
 
+          moduleValueRows.push(
+            `($${mIdx++}, $${mIdx++}, $${mIdx++}, $${mIdx++}, $${mIdx++}, $${mIdx++}, $${mIdx++}, $${mIdx++}, $${mIdx++}, $${mIdx++}, $${mIdx++}, $${mIdx++}, $${mIdx++})`
+          );
+          moduleParams.push(
+            snapshotId,
+            cohortId,
+            m.id,
+            st.userId,
+            st.rank,
+            st.score,
+            st.points,
+            st.completedLessons,
+            st.totalLessons,
+            st.maxPossiblePoints,
+            st.isEligible,
+            st.ineligibilityReason,
+            modRankChange
+          );
+        }
+      }
+
+      if (moduleValueRows.length > 0) {
+        const CHUNK_SIZE = 400;
+        for (let i = 0; i < moduleValueRows.length; i += CHUNK_SIZE) {
+          const chunkCount = Math.min(CHUNK_SIZE, moduleValueRows.length - i);
+          const chunkParams = moduleParams.slice(i * 13, (i + chunkCount) * 13);
+          let pNum = 1;
+          const reindexedRows: string[] = [];
+          for (let c = 0; c < chunkCount; c++) {
+            reindexedRows.push(
+              `($${pNum++}, $${pNum++}, $${pNum++}, $${pNum++}, $${pNum++}, $${pNum++}, $${pNum++}, $${pNum++}, $${pNum++}, $${pNum++}, $${pNum++}, $${pNum++}, $${pNum++})`
+            );
+          }
+
           await client.query(
             `INSERT INTO cohort_module_ranking_entries (
                snapshot_id, cohort_id, module_id, user_id, rank, score, points,
                completed_lessons, total_lessons, max_possible_points,
                is_eligible, ineligibility_reason, rank_change
              )
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-            [
-              snapshotId,
-              cohortId,
-              m.id,
-              st.userId,
-              st.rank,
-              st.score,
-              st.points,
-              st.completedLessons,
-              st.totalLessons,
-              st.maxPossiblePoints,
-              st.isEligible,
-              st.ineligibilityReason,
-              modRankChange,
-            ]
+             VALUES ${reindexedRows.join(", ")}`,
+            chunkParams
           );
         }
       }
@@ -694,7 +737,7 @@ export class RankingService {
       const enrollRes = await pool.query(
         `SELECT cohort_id 
          FROM enrollments 
-         WHERE user_id = $1 AND status IN ('ACTIVE', 'COMPLETED')
+         WHERE user_id = $1 AND status IN ('ACTIVE', 'COMPLETED') AND COALESCE(is_hidden, FALSE) = FALSE AND status != 'DISQUALIFIED'
          ORDER BY enrolled_at DESC 
          LIMIT 1`,
         [userId]

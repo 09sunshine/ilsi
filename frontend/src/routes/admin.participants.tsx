@@ -14,6 +14,9 @@ import {
   UserPlus,
   Users,
   X,
+  Award,
+  RotateCcw,
+  UserMinus,
 } from "lucide-react";
 import { AppShell } from "@/components/app/AppShell";
 import { EmptyState } from "@/components/states";
@@ -22,6 +25,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { DeleteParticipantModal } from "@/components/admin/DeleteParticipantModal";
+import { AddBonusPointsModal } from "@/components/admin/AddBonusPointsModal";
+import { RemoveFromCohortModal } from "@/components/admin/RemoveFromCohortModal";
 import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -78,6 +83,43 @@ function AdminParticipants() {
 
   // Participant Deletion State
   const [participantToDelete, setParticipantToDelete] = useState<Participant | null>(null);
+
+  // Bonus Points & Removal States
+  const [selectedCohortFilter, setSelectedCohortFilter] = useState<string>("ALL");
+  const [studentForBonusPoints, setStudentForBonusPoints] = useState<any | null>(null);
+  const [studentToRemove, setStudentToRemove] = useState<any | null>(null);
+  const [restoringUserId, setRestoringUserId] = useState<string | null>(null);
+
+  const fetchParticipants = async () => {
+    try {
+      setLoading(true);
+      const parts = await api.getParticipants();
+      if (Array.isArray(parts)) {
+        setRows(parts);
+      }
+    } catch (err: any) {
+      console.warn("Could not refresh participants:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestoreStudent = async (cohortId: string, userId: string) => {
+    try {
+      setRestoringUserId(userId);
+      await api.restoreStudentToCohort(cohortId, userId);
+      toast.success(
+        fr
+          ? "Participant réintégré dans la cohorte avec succès !"
+          : "Participant restored to cohort successfully!"
+      );
+      await fetchParticipants();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to restore participant.");
+    } finally {
+      setRestoringUserId(null);
+    }
+  };
 
   const fetchCohorts = async () => {
     try {
@@ -143,25 +185,36 @@ function AdminParticipants() {
   const isParticipantDisqualified = (p: Participant) => {
     return Boolean(
       (p as any).isDisqualified ||
+      (p as any).isHidden ||
       (p as any).enrollStatus === "DISQUALIFIED" ||
       (p as any).status === "DISQUALIFIED" ||
-      (p as any).cohorts?.some((c: any) => c.enrollStatus === "DISQUALIFIED" || c.status === "DISQUALIFIED")
+      (p as any).cohorts?.some((c: any) => c.enrollStatus === "DISQUALIFIED" || c.status === "DISQUALIFIED" || c.isHidden)
     );
   };
 
   const visible = useMemo(() => {
     const term = q.trim().toLowerCase();
     let filtered = rows;
+
+    if (selectedCohortFilter !== "ALL") {
+      filtered = filtered.filter(
+        (p: any) =>
+          p.cohortId === selectedCohortFilter ||
+          p.cohorts?.some((c: any) => c.cohortId === selectedCohortFilter)
+      );
+    }
+
     if (statusFilter === "DISQUALIFIED") {
       filtered = filtered.filter(isParticipantDisqualified);
     } else if (statusFilter === "ACTIVE") {
       filtered = filtered.filter((p) => !isParticipantDisqualified(p));
     }
+
     if (!term) return filtered;
     return filtered.filter((p) =>
       `${p.firstName} ${p.lastName} ${p.email} ${p.country || ""}`.toLowerCase().includes(term)
     );
-  }, [rows, q, statusFilter]);
+  }, [rows, q, statusFilter, selectedCohortFilter]);
 
   const paidCount = rows.filter((p) => p.paymentStatus === "PAID").length;
   const otpCount = rows.filter((p) => p.firstLogin).length;
@@ -300,6 +353,21 @@ function AdminParticipants() {
               />
             </div>
 
+            {cohortsList.length > 0 && (
+              <select
+                value={selectedCohortFilter}
+                onChange={(e) => setSelectedCohortFilter(e.target.value)}
+                className="h-9 rounded-md border border-input bg-card px-2.5 text-xs shadow-xs font-medium text-foreground focus:outline-hidden focus:ring-1 focus:ring-ring"
+              >
+                <option value="ALL">{fr ? "Toutes les cohortes" : "All Cohorts"}</option>
+                {cohortsList.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {typeof c.name === "object" ? L(c.name) : c.name || c.id}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5 text-xs">
               <button
                 type="button"
@@ -380,6 +448,8 @@ function AdminParticipants() {
                     progress?: number;
                     completedLessons?: number;
                     totalLessons?: number;
+                    bonusPoints?: number;
+                    isHidden?: boolean;
                   }> =
                     (p as any).cohorts?.length
                       ? (p as any).cohorts
@@ -393,9 +463,24 @@ function AdminParticipants() {
                               progress: p.progress,
                               completedLessons: p.completedLessons,
                               totalLessons: p.totalLessons,
+                              bonusPoints: (p as any).bonusPoints,
+                              isHidden: (p as any).isHidden,
                             },
                           ]
                         : [];
+
+                  const activeCohort =
+                    selectedCohortFilter !== "ALL"
+                      ? allCohorts.find((c) => c.cohortId === selectedCohortFilter) || allCohorts[0]
+                      : allCohorts[0];
+
+                  const isDisqualifiedInActiveCohort = activeCohort
+                    ? Boolean(
+                        activeCohort.enrollStatus === "DISQUALIFIED" ||
+                        activeCohort.isHidden ||
+                        (p as any).status === "DISQUALIFIED"
+                      )
+                    : isDisqualified;
 
                   return (
                     <tr
@@ -444,6 +529,11 @@ function AdminParticipants() {
                                 {c.paymentStatus === "PAID" && (
                                   <span className="rounded bg-success/10 px-1 py-0.5 text-[9px] font-semibold text-success">
                                     PAID
+                                  </span>
+                                )}
+                                {Number(c.bonusPoints || 0) > 0 && (
+                                  <span className="rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-1 py-0.5 text-[9px] font-semibold flex items-center gap-0.5">
+                                    +{c.bonusPoints} pts
                                   </span>
                                 )}
                                 {c.enrollStatus === "DISQUALIFIED" && (
@@ -557,16 +647,77 @@ function AdminParticipants() {
                         )}
                       </td>
                       <td className="p-4 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setParticipantToDelete(p)}
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                          title={fr ? "Supprimer le participant" : "Delete participant"}
-                          aria-label={fr ? "Supprimer le participant" : "Delete participant"}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {activeCohort && !isDisqualifiedInActiveCohort && (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  setStudentForBonusPoints({
+                                    cohortId: activeCohort.cohortId,
+                                    student: {
+                                      userId: p.id,
+                                      name: `${p.firstName} ${p.lastName}`,
+                                      currentPoints: Number(activeCohort.bonusPoints ?? (p as any).bonusPoints ?? 0),
+                                    },
+                                  })
+                                }
+                                className="h-8 px-2 text-xs text-amber-600 dark:text-amber-400 hover:text-amber-700 hover:bg-amber-500/10 border-amber-200 dark:border-amber-900/40 gap-1"
+                                title={fr ? "Ajouter des points bonus" : "Add bonus points"}
+                              >
+                                <Award className="size-3.5 text-amber-500" />
+                                <span className="hidden md:inline font-medium">{fr ? "+ Points" : "+ Points"}</span>
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  setStudentToRemove({
+                                    cohortId: activeCohort.cohortId,
+                                    cohortName: activeCohort.name ? L(activeCohort.name) : undefined,
+                                    student: {
+                                      userId: p.id,
+                                      name: `${p.firstName} ${p.lastName}`,
+                                      email: p.email,
+                                    },
+                                  })
+                                }
+                                className="h-8 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20 gap-1"
+                                title={fr ? "Exclure de la cohorte" : "Remove from cohort (preserves user account)"}
+                              >
+                                <UserMinus className="size-3.5" />
+                                <span className="hidden md:inline font-medium">{fr ? "Exclure" : "Remove"}</span>
+                              </Button>
+                            </>
+                          )}
+
+                          {activeCohort && isDisqualifiedInActiveCohort && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={restoringUserId === p.id}
+                              onClick={() => handleRestoreStudent(activeCohort.cohortId, p.id)}
+                              className="h-8 px-2 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 border-emerald-200 dark:border-emerald-900/40 gap-1 font-medium"
+                              title={fr ? "Réintégrer dans la cohorte" : "Restore student to cohort"}
+                            >
+                              <RotateCcw className={cn("size-3.5 text-emerald-500", restoringUserId === p.id && "animate-spin")} />
+                              <span className="hidden md:inline">{fr ? "Réintégrer" : "Restore"}</span>
+                            </Button>
+                          )}
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setParticipantToDelete(p)}
+                            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            title={fr ? "Supprimer définitivement le compte" : "Delete user account permanently"}
+                            aria-label={fr ? "Supprimer le compte" : "Delete participant account"}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -791,6 +942,33 @@ function AdminParticipants() {
             setParticipantToDelete(null);
           }}
         />
+
+        {/* Modal: Add Bonus Points */}
+        {studentForBonusPoints && (
+          <AddBonusPointsModal
+            isOpen={!!studentForBonusPoints}
+            onClose={() => setStudentForBonusPoints(null)}
+            cohortId={studentForBonusPoints.cohortId}
+            student={studentForBonusPoints.student}
+            onPointsAdded={() => {
+              void fetchParticipants();
+            }}
+          />
+        )}
+
+        {/* Modal: Remove Student from Cohort */}
+        {studentToRemove && (
+          <RemoveFromCohortModal
+            isOpen={!!studentToRemove}
+            onClose={() => setStudentToRemove(null)}
+            cohortId={studentToRemove.cohortId}
+            cohortName={studentToRemove.cohortName}
+            student={studentToRemove.student}
+            onRemoved={() => {
+              void fetchParticipants();
+            }}
+          />
+        )}
       </div>
     </AppShell>
   );

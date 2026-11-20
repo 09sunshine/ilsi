@@ -29,7 +29,7 @@ export class CommunityService {
       `SELECT 1 FROM (
          SELECT cohort_id, user_id FROM cohort_instructors WHERE cohort_id = $1 AND user_id = $2
          UNION ALL
-         SELECT cohort_id, user_id FROM enrollments WHERE cohort_id = $1 AND user_id = $2 AND status IN ('ACTIVE', 'COMPLETED') AND payment_status IN ('PAID', 'NOT_REQUIRED')
+         SELECT cohort_id, user_id FROM enrollments WHERE cohort_id = $1 AND user_id = $2 AND status IN ('ACTIVE', 'COMPLETED') AND status != 'DISQUALIFIED' AND COALESCE(is_hidden, FALSE) = FALSE AND payment_status IN ('PAID', 'NOT_REQUIRED')
        ) q LIMIT 1`,
       [cohortId, userId]
     );
@@ -84,6 +84,8 @@ export class CommunityService {
        JOIN programs p ON p.id = c.program_id
        WHERE e.user_id = $1 
          AND e.status IN ('ACTIVE', 'COMPLETED')
+         AND e.status != 'DISQUALIFIED'
+         AND COALESCE(e.is_hidden, FALSE) = FALSE
          AND e.payment_status IN ('PAID', 'NOT_REQUIRED')
        ORDER BY start_date DESC`,
       [userId]
@@ -674,7 +676,7 @@ export class CommunityService {
                   ELSE EXISTS(
                     SELECT 1 FROM cohort_instructors ci WHERE ci.cohort_id = p.cohort_id AND ci.user_id = $2
                     UNION ALL
-                    SELECT 1 FROM enrollments e WHERE e.cohort_id = p.cohort_id AND e.user_id = $2 AND e.status IN ('ACTIVE', 'COMPLETED') AND e.payment_status IN ('PAID', 'NOT_REQUIRED')
+                    SELECT 1 FROM enrollments e WHERE e.cohort_id = p.cohort_id AND e.user_id = $2 AND e.status IN ('ACTIVE', 'COMPLETED') AND e.status != 'DISQUALIFIED' AND COALESCE(e.is_hidden, FALSE) = FALSE AND e.payment_status IN ('PAID', 'NOT_REQUIRED')
                   )
                 END as has_access,
                 cr.id as reaction_id,
@@ -706,7 +708,7 @@ export class CommunityService {
                   ELSE EXISTS(
                     SELECT 1 FROM cohort_instructors ci WHERE ci.cohort_id = p.cohort_id AND ci.user_id = $2
                     UNION ALL
-                    SELECT 1 FROM enrollments e WHERE e.cohort_id = p.cohort_id AND e.user_id = $2 AND e.status IN ('ACTIVE', 'COMPLETED') AND e.payment_status IN ('PAID', 'NOT_REQUIRED')
+                    SELECT 1 FROM enrollments e WHERE e.cohort_id = p.cohort_id AND e.user_id = $2 AND e.status IN ('ACTIVE', 'COMPLETED') AND e.status != 'DISQUALIFIED' AND COALESCE(e.is_hidden, FALSE) = FALSE AND e.payment_status IN ('PAID', 'NOT_REQUIRED')
                   )
                 END as has_access,
                 cr.id as reaction_id,
@@ -1030,7 +1032,7 @@ export class CommunityService {
       sql += ` AND EXISTS (
         SELECT 1 FROM enrollments e 
         JOIN cohorts c ON c.id = e.cohort_id 
-        WHERE e.user_id = u.id AND c.program_id = $${values.length}
+        WHERE e.user_id = u.id AND c.program_id = $${values.length} AND e.status IN ('ACTIVE', 'COMPLETED') AND e.status != 'DISQUALIFIED' AND COALESCE(e.is_hidden, FALSE) = FALSE
       )`;
     }
 

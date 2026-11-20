@@ -16,6 +16,9 @@ import {
   Sparkles,
   Users,
   Search,
+  Plus,
+  UserMinus,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
@@ -24,6 +27,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AddBonusPointsModal } from "@/components/admin/AddBonusPointsModal";
+import { RemoveFromCohortModal } from "@/components/admin/RemoveFromCohortModal";
 
 interface AdminRankingsModalProps {
   cohort: any;
@@ -42,6 +47,25 @@ export function AdminRankingsModal({ cohort, onClose }: AdminRankingsModalProps)
   const [selectedModuleId, setSelectedModuleId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"eligible" | "ineligible" | "history">("eligible");
+
+  // Actions state
+  const [studentForBonusPoints, setStudentForBonusPoints] = useState<any | null>(null);
+  const [studentToRemove, setStudentToRemove] = useState<any | null>(null);
+  const [restoringUserId, setRestoringUserId] = useState<string | null>(null);
+
+  async function handleRestore(userId: string) {
+    if (!cohort?.id) return;
+    try {
+      setRestoringUserId(userId);
+      await api.restoreStudentToCohort(cohort.id, userId);
+      toast.success(fr ? "Apprenant réintégré avec succès !" : "Student restored to cohort successfully!");
+      await fetchRankings(undefined, selectedModuleId);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to restore student.");
+    } finally {
+      setRestoringUserId(null);
+    }
+  }
 
   async function fetchRankings(snapshotId?: string, modId = selectedModuleId) {
     if (!cohort?.id) return;
@@ -376,6 +400,9 @@ export function AdminRankingsModal({ cohort, onClose }: AdminRankingsModalProps)
                       <th scope="col" className="py-2.5 px-3 text-right">
                         {fr ? "Évolution" : "Movement"}
                       </th>
+                      <th scope="col" className="py-2.5 px-3 text-right">
+                        {fr ? "Actions" : "Actions"}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -434,6 +461,43 @@ export function AdminRankingsModal({ cohort, onClose }: AdminRankingsModalProps)
                         <td className="py-2.5 px-3 text-right">
                           {renderMovement(e.rankChange)}
                         </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setStudentForBonusPoints({
+                                  userId: e.userId,
+                                  name: e.name,
+                                  currentPoints: e.points,
+                                  currentRank: e.rank,
+                                })
+                              }
+                              className="h-7 px-2 text-[11px] gap-1 font-semibold text-amber-700 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 shadow-xs"
+                              title={fr ? "Ajouter des points manuels" : "Add manual points"}
+                            >
+                              <Plus className="size-3" />
+                              {fr ? "Points" : "Points"}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                setStudentToRemove({
+                                  userId: e.userId,
+                                  name: e.name,
+                                })
+                              }
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                              title={fr ? "Retirer de la cohorte" : "Remove from cohort"}
+                            >
+                              <UserMinus className="size-3.5" />
+                            </Button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -458,6 +522,9 @@ export function AdminRankingsModal({ cohort, onClose }: AdminRankingsModalProps)
                       </th>
                       <th scope="col" className="py-2.5 px-3">
                         {fr ? "Raison d'inégibilité" : "Ineligibility Reason"}
+                      </th>
+                      <th scope="col" className="py-2.5 px-3 text-right">
+                        {fr ? "Actions" : "Actions"}
                       </th>
                     </tr>
                   </thead>
@@ -484,6 +551,22 @@ export function AdminRankingsModal({ cohort, onClose }: AdminRankingsModalProps)
                               ? fr ? "Aucun module validé" : "No completed modules"
                               : ie.ineligibilityReason}
                           </Badge>
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          {ie.ineligibilityReason === "DISQUALIFIED" && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={restoringUserId === ie.userId}
+                              onClick={() => handleRestore(ie.userId)}
+                              className="h-7 px-2 text-[11px] gap-1 font-semibold text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10 shadow-xs"
+                              title={fr ? "Réintégrer dans la cohorte" : "Restore to cohort"}
+                            >
+                              <RotateCcw className="size-3" />
+                              {fr ? "Réintégrer" : "Restore"}
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -549,6 +632,31 @@ export function AdminRankingsModal({ cohort, onClose }: AdminRankingsModalProps)
           )}
         </div>
       </div>
+
+      {/* Add Manual Bonus Points Modal */}
+      <AddBonusPointsModal
+        isOpen={!!studentForBonusPoints}
+        onClose={() => setStudentForBonusPoints(null)}
+        cohortId={cohort?.id}
+        student={studentForBonusPoints}
+        onPointsAdded={() => {
+          setStudentForBonusPoints(null);
+          void fetchRankings(undefined, selectedModuleId);
+        }}
+      />
+
+      {/* Remove from Cohort Modal */}
+      <RemoveFromCohortModal
+        isOpen={!!studentToRemove}
+        onClose={() => setStudentToRemove(null)}
+        cohortId={cohort?.id}
+        cohortName={typeof cohort?.name === "object" ? L(cohort.name) : cohort?.name}
+        student={studentToRemove}
+        onRemoved={() => {
+          setStudentToRemove(null);
+          void fetchRankings(undefined, selectedModuleId);
+        }}
+      />
     </div>
   );
 }
