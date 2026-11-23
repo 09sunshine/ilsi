@@ -176,6 +176,15 @@ export class PaymentService {
         : Number(program_price);
     }
 
+    // Security guard: Ensure tuition fee is strictly positive and finite
+    if (!officialAmount || isNaN(officialAmount) || officialAmount <= 0 || !isFinite(officialAmount)) {
+      throw new AppError(
+        400,
+        ErrorCodes.VALIDATION_ERROR,
+        "Cohort tuition fee must be strictly positive and greater than 0."
+      );
+    }
+
     // Resolve customer email if not supplied
     let resolvedEmail = customerEmail;
     if (!resolvedEmail && targetUserId) {
@@ -370,7 +379,16 @@ export class PaymentService {
         return { status: "PAID", message: "Payment already verified" };
       }
 
-      // 2. Anti-tampering checks: verify amount and currency match database record
+      // 2. Anti-tampering checks: verify amount is strictly positive and matches record
+      const officialAmount = Number(payment.amount);
+      if (!officialAmount || isNaN(officialAmount) || officialAmount <= 0 || !isFinite(officialAmount)) {
+        throw new AppError(
+          400,
+          "INVALID_PAYMENT_AMOUNT",
+          "Payment record has invalid or non-positive amount. Cannot verify payment."
+        );
+      }
+
       if (options?.expectedAmount !== undefined && options?.expectedCurrency !== "HTG") {
         if (Math.abs(Number(payment.amount) - options.expectedAmount) > 0.05) {
           throw new AppError(
@@ -592,6 +610,11 @@ export class PaymentService {
     });
 
     if (verification.status === "PAID") {
+      // Security guard: Ensure returned amount is positive
+      if (verification.amount !== undefined && (isNaN(verification.amount) || verification.amount <= 0)) {
+        throw new AppError(400, "TAMPERED_PAYMENT", "Provider returned a non-positive payment amount.");
+      }
+
       // Replay prevention: verify this external ID is not attributed to another payment
       const replayCheck = await pool.query(
         `SELECT id FROM payments WHERE provider_payment_id = $1 AND id != $2`,

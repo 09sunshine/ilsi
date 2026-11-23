@@ -371,6 +371,32 @@ router.post(
         );
       }
 
+      // Authoritative security check: verify that a verified PAID record with amount > 0 exists in payments table
+      const payRecordCheck = await pool.query(
+        `SELECT id, amount, currency, status FROM payments 
+         WHERE application_id = $1 AND status = 'PAID' AND amount > 0 
+         LIMIT 1`,
+        [app.id]
+      );
+      if (payRecordCheck.rows.length === 0) {
+        const userPayCheck = app.user_id
+          ? await pool.query(
+              `SELECT id, amount, currency, status FROM payments 
+               WHERE user_id = $1 AND cohort_id = $2 AND status = 'PAID' AND amount > 0 
+               LIMIT 1`,
+              [app.user_id, app.cohort_id]
+            )
+          : { rows: [] };
+
+        if (userPayCheck.rows.length === 0) {
+          throw new AppError(
+            400,
+            ErrorCodes.VALIDATION_ERROR,
+            "No verified completed tuition payment was found. Please complete payment before activating."
+          );
+        }
+      }
+
       // 2. Hash the permanent password
       const hashedPassword = await hashPassword(password);
 

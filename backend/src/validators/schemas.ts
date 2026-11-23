@@ -64,36 +64,47 @@ export const applicationSchemas = {
 };
 
 export const paymentSchemas = {
-  createIntent: z.object({
-    cohortId: z.string().optional(),
-    enrollmentId: z.string().optional(),
-    applicationId: z.string().optional(),
-    currency: z.enum(["USD", "EUR", "HTG"]).optional(),
-    provider: z.string().optional(),
-    paymMethod: z.string().optional(),
-    phoneNumber: z.string().optional(),
-  }),
-  enrollmentPayment: z.object({
-    currency: z.enum(["USD", "EUR", "HTG"]).optional(),
-    provider: z.string().optional(),
-    paymMethod: z.string().optional(),
-    phoneNumber: z.string().optional(),
-  }),
-  verifySession: z.object({
-    sessionId: z.string().min(1, "sessionId is required"),
-    paymentId: z.string().optional(),
-  }),
-  verifyPayment: z.object({
-    paymentId: z.string().min(1, "paymentId is required"),
-    providerTransactionId: z.string().optional(),
-  }),
-  verifyProvider: z.object({
-    provider: z.string().min(1, "provider is required"),
-    paymentId: z.string().optional(),
-    orderId: z.string().optional(),
-    referenceId: z.string().optional(),
-    transactionId: z.string().optional(),
-  }),
+  createIntent: z
+    .object({
+      cohortId: z.string().optional(),
+      enrollmentId: z.string().optional(),
+      applicationId: z.string().optional(),
+      currency: z.enum(["USD", "EUR", "HTG"]).optional(),
+      provider: z.string().optional(),
+      paymMethod: z.string().optional(),
+      phoneNumber: z.string().optional(),
+    })
+    .strict(),
+  enrollmentPayment: z
+    .object({
+      currency: z.enum(["USD", "EUR", "HTG"]).optional(),
+      provider: z.string().optional(),
+      paymMethod: z.string().optional(),
+      phoneNumber: z.string().optional(),
+    })
+    .strict(),
+  verifySession: z
+    .object({
+      sessionId: z.string().min(1, "sessionId is required"),
+      paymentId: z.string().optional(),
+    })
+    .strict(),
+  verifyPayment: z
+    .object({
+      paymentId: z.string().min(1, "paymentId is required"),
+      providerTransactionId: z.string().optional(),
+    })
+    .strict(),
+  verifyProvider: z
+    .object({
+      provider: z.string().min(1, "provider is required"),
+      paymentId: z.string().optional(),
+      orderId: z.string().optional(),
+      referenceId: z.string().optional(),
+      transactionId: z.string().optional(),
+      applicationId: z.string().optional(),
+    })
+    .strict(),
 };
 
 export const progressSchemas = {

@@ -96,6 +96,10 @@ export class PaymPaymentProvider implements PaymentProvider {
     currency: string = "USD",
     overrideRate?: number
   ): { htgAmount: number; exchangeRate: number; isConverted: boolean } {
+    if (!amount || isNaN(amount) || amount <= 0) {
+      throw new Error("Payment amount must be strictly positive and greater than 0.");
+    }
+
     const upperCurrency = currency.toUpperCase();
     if (upperCurrency === "HTG") {
       const htg = Math.round(amount * 100) / 100;
@@ -274,14 +278,15 @@ export class PaymPaymentProvider implements PaymentProvider {
         method?: string;
       };
 
-      const transStatus = String(data.trans_status || data.status || "").toLowerCase().trim();
+      // In Pay'm API, data.status: true is merely an API-level indicator that the lookup succeeded.
+      // The true payment status is strictly in data.trans_status ("ok" = paid, "no" = pending/awaiting OTP).
+      const transStatus = String(data.trans_status || "").toLowerCase().trim();
       const isOk =
         transStatus === "ok" ||
         transStatus === "success" ||
         transStatus === "succes" ||
         transStatus === "completed" ||
-        transStatus === "paid" ||
-        data.status === true;
+        transStatus === "paid";
 
       const resolvedTxId = data.transaction_id || providerPaymentId || data.refference_id || `paym_${Date.now()}`;
 
@@ -302,11 +307,22 @@ export class PaymPaymentProvider implements PaymentProvider {
         };
       }
 
+      if (["failed", "cancelled", "canceled", "error"].includes(transStatus)) {
+        return {
+          status: "FAILED",
+          providerPaymentId: resolvedTxId,
+          metadata: {
+            transStatus: data.trans_status,
+            message: data.message,
+          },
+        };
+      }
+
       return {
         status: "PENDING",
         providerPaymentId: resolvedTxId,
         metadata: {
-          transStatus: data.trans_status,
+          transStatus: data.trans_status || "no",
           message: data.message,
         },
       };
@@ -363,7 +379,7 @@ export class PaymPaymentProvider implements PaymentProvider {
     }
 
     const data = typeof payload === "string" ? JSON.parse(payload) : payload;
-    const eventType = data.event || "transaction.status_changed";
+    const eventType = String(data.event || "transaction.status_changed").trim();
 
     // Handle both nested { transaction: { ... } } and flat { transaction_id: ... } payloads
     const transaction =
@@ -387,14 +403,27 @@ export class PaymPaymentProvider implements PaymentProvider {
 
     const eventId = `paym_evt_${providerPaymentId || Date.now()}_${Date.now()}`;
 
+    // transaction.created is merely session initiation (user opened checkout/OTP screen), NOT payment!
+    if (eventType === "transaction.created") {
+      return {
+        eventId,
+        eventType,
+        paymentId: paymentReference,
+        providerPaymentId,
+        status: "PENDING",
+        rawPayload: data,
+      };
+    }
+
     // Normalize status ("ok", "success", "succes", "paid", "completed")
+    // Do NOT include "true" as a paid status because boolean response flags must never authorize payments.
     const rawStatus = String(
+      transaction?.trans_status ||
       transaction?.new_status ||
       transaction?.status ||
-      transaction?.trans_status ||
+      data?.trans_status ||
       data?.new_status ||
       data?.status ||
-      data?.trans_status ||
       ""
     ).toLowerCase().trim();
 
@@ -404,8 +433,7 @@ export class PaymPaymentProvider implements PaymentProvider {
       rawStatus === "success" ||
       rawStatus === "succes" ||
       rawStatus === "paid" ||
-      rawStatus === "completed" ||
-      rawStatus === "true"
+      rawStatus === "completed"
     ) {
       status = "PAID";
     } else if (
@@ -415,6 +443,8 @@ export class PaymPaymentProvider implements PaymentProvider {
       rawStatus === "canceled"
     ) {
       status = "FAILED";
+    } else {
+      status = "PENDING";
     }
 
     return {

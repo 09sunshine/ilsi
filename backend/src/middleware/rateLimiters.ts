@@ -87,12 +87,38 @@ export const formSubmissionLimiter = rateLimit({
 export const paymentLimiter = rateLimit({
   ...baseOptions,
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 60, // limit each IP to 60 payment operations per 15 minutes
+  max: 60, // limit each IP to 60 general payment operations per 15 minutes
   message: {
     success: false,
     error: {
       code: "PAYMENT_RATE_LIMIT",
       message: "Too many payment operations from this IP. Please try again in a few minutes.",
+    },
+  },
+});
+
+export const paymentIntentLimiter = rateLimit({
+  ...baseOptions,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 15, // limit checkout intent creation to 15 per 15 minutes per IP to avoid intent flooding
+  message: {
+    success: false,
+    error: {
+      code: "PAYMENT_INTENT_RATE_LIMIT",
+      message: "Too many checkout attempts initiated. Please wait 15 minutes before creating another session.",
+    },
+  },
+});
+
+export const paymentVerificationLimiter = rateLimit({
+  ...baseOptions,
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 25, // limit verification calls to 25 per 5 minutes per IP to prevent provider hammering
+  message: {
+    success: false,
+    error: {
+      code: "PAYMENT_VERIFICATION_RATE_LIMIT",
+      message: "Too many payment verification attempts. Please wait a few moments before trying again.",
     },
   },
 });

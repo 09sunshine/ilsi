@@ -3,23 +3,23 @@ import { PaymentService } from "../services/PaymentService.js";
 import { PaymentProviderRegistry } from "../services/payments/PaymentProvider.js";
 import { requireAuth, requireRole } from "../middleware/rbac.js";
 import { validateRequest } from "../middleware/validate.js";
-import { paymentLimiter } from "../middleware/rateLimiters.js";
+import {
+  paymentLimiter,
+  paymentIntentLimiter,
+  paymentVerificationLimiter,
+} from "../middleware/rateLimiters.js";
 import { pool } from "../database/pool.js";
 import { AppError, ErrorCodes } from "../constants/errors.js";
 import { paymentSchemas } from "../validators/schemas.js";
 
 const router = Router();
 
-// Apply payment rate limiter
+// Apply general payment rate limiter to client-facing payment operations (excluding webhooks)
 const paymentPrefixes = [
   "/create-intent",
   "/enrollments",
   "/verify-session",
   "/verify-provider",
-  "/webhook",
-  "/paypal/webhook",
-  "/paym/webhook",
-  "/webhook/paym",
   "/applications",
 ];
 
@@ -56,6 +56,7 @@ router.get("/methods", (_req: Request, res: Response) => {
  */
 router.post(
   "/create-intent",
+  paymentIntentLimiter,
   validateRequest({ body: paymentSchemas.createIntent }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -132,6 +133,7 @@ router.post(
 router.post(
   "/enrollments/:id/payment",
   requireAuth,
+  paymentIntentLimiter,
   validateRequest({ body: paymentSchemas.enrollmentPayment }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -229,6 +231,7 @@ router.get(
  */
 router.post(
   "/verify-provider",
+  paymentVerificationLimiter,
   validateRequest({ body: paymentSchemas.verifyProvider }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -254,6 +257,7 @@ router.post(
  */
 router.post(
   "/verify-session",
+  paymentVerificationLimiter,
   validateRequest({ body: paymentSchemas.verifySession }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -274,6 +278,7 @@ router.post(
   "/verify",
   requireAuth,
   requireRole(["ADMIN", "SUPER_ADMIN"]),
+  paymentVerificationLimiter,
   validateRequest({ body: paymentSchemas.verifyPayment }),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
