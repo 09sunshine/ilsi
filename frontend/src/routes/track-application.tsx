@@ -42,6 +42,7 @@ const searchSchema = z.object({
   order_id: z.string().optional(),
   PayerID: z.string().optional(),
   refference_id: z.string().optional(),
+  reference_id: z.string().optional(),
   id_transaction: z.string().optional(),
   transaction_id: z.string().optional(),
   status: z.string().optional(),
@@ -135,7 +136,9 @@ function TrackApplicationPage() {
         search.provider === "paym" ||
         search.payment === "paym_return" ||
         Boolean(search.refference_id) ||
-        Boolean(search.id_transaction);
+        Boolean(search.reference_id) ||
+        Boolean(search.id_transaction) ||
+        Boolean(search.transaction_id);
 
       const isStripeReturn = search.payment === "success" && search.session_id;
 
@@ -153,14 +156,19 @@ function TrackApplicationPage() {
           } else if (active && (res.status === "PENDING" || res.status === "processing")) {
             toast.info(t("payment.pending"));
           }
+          const targetLookup = lookup || res.applicationId;
+          if (active && targetLookup) {
+            setQuery(targetLookup);
+            fetchStatus(targetLookup);
+          }
         } catch (err: any) {
           if (active) {
             toast.error(err.message || t("payment.failed"));
+            if (lookup) fetchStatus(lookup);
           }
         } finally {
           if (active) {
             setVerifyingPayment(false);
-            if (lookup) fetchStatus(lookup);
           }
         }
       } else if (isPaymReturn) {
@@ -168,7 +176,7 @@ function TrackApplicationPage() {
         try {
           const res = await api.verifyProviderPayment({
             provider: "paym",
-            referenceId: search.refference_id,
+            referenceId: search.refference_id || search.reference_id,
             transactionId: search.id_transaction || search.transaction_id,
             paymentId: search.payment_id,
             applicationId: lookup,
@@ -178,14 +186,19 @@ function TrackApplicationPage() {
           } else if (active && (res.status === "PENDING" || res.status === "processing")) {
             toast.info(t("payment.pending"));
           }
+          const targetLookup = lookup || res.applicationId;
+          if (active && targetLookup) {
+            setQuery(targetLookup);
+            fetchStatus(targetLookup);
+          }
         } catch (err: any) {
           if (active) {
             toast.error(err.message || t("payment.failed"));
+            if (lookup) fetchStatus(lookup);
           }
         } finally {
           if (active) {
             setVerifyingPayment(false);
-            if (lookup) fetchStatus(lookup);
           }
         }
       } else if (isStripeReturn) {
@@ -233,7 +246,9 @@ function TrackApplicationPage() {
     search.token,
     search.order_id,
     search.refference_id,
+    search.reference_id,
     search.id_transaction,
+    search.transaction_id,
     search.status,
   ]);
 

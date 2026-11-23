@@ -155,6 +155,7 @@ app.use("/api/contact", contactRoutes);
 app.use("/api", authRoutes);
 app.use("/api/programs", programRoutes);
 app.use("/api", applicationRoutes);
+app.use("/api/v1/payments", paymentRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api", paymentRoutes); // also mounts /api/enrollments/:id/payment, etc.
 app.use("/api/student", studentRoutes);

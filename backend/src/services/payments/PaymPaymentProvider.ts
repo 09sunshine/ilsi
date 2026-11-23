@@ -274,7 +274,15 @@ export class PaymPaymentProvider implements PaymentProvider {
         method?: string;
       };
 
-      const isOk = data.trans_status === "ok";
+      const transStatus = String(data.trans_status || data.status || "").toLowerCase().trim();
+      const isOk =
+        transStatus === "ok" ||
+        transStatus === "success" ||
+        transStatus === "succes" ||
+        transStatus === "completed" ||
+        transStatus === "paid" ||
+        data.status === true;
+
       const resolvedTxId = data.transaction_id || providerPaymentId || data.refference_id || `paym_${Date.now()}`;
 
       if (isOk) {
@@ -341,7 +349,13 @@ export class PaymPaymentProvider implements PaymentProvider {
    */
   async handleWebhook(payload: any, signature?: string, headers?: any): Promise<WebhookResult> {
     const rawBody = (headers?.rawBody || headers?.rawPayload) || JSON.stringify(payload);
-    const signatureHeader = signature || headers?.["x-webhook-signature"];
+    const signatureHeader =
+      signature ||
+      headers?.["x-webhook-signature"] ||
+      headers?.["X-Webhook-Signature"] ||
+      headers?.["x-signature"] ||
+      headers?.["X-Signature"] ||
+      headers?.["signature"];
 
     // Validate signature
     if (!this.verifyWebhookSignature(rawBody, signatureHeader)) {
@@ -350,18 +364,56 @@ export class PaymPaymentProvider implements PaymentProvider {
 
     const data = typeof payload === "string" ? JSON.parse(payload) : payload;
     const eventType = data.event || "transaction.status_changed";
-    const transaction = data.transaction || {};
 
-    const eventId = `paym_evt_${transaction.transaction_id || Date.now()}_${transaction.new_status || "update"}`;
-    const paymentReference = transaction.reference_id || transaction.refference_id;
-    const providerPaymentId = transaction.transaction_id;
+    // Handle both nested { transaction: { ... } } and flat { transaction_id: ... } payloads
+    const transaction =
+      data && typeof data.transaction === "object" && data.transaction !== null
+        ? data.transaction
+        : data;
 
-    // "ok" represents confirmed/paid, "no" or "pending" represents pending, "failed" represents failed
-    const newStatus = transaction.new_status || transaction.status;
+    const paymentReference =
+      transaction?.reference_id ||
+      transaction?.refference_id ||
+      data?.reference_id ||
+      data?.refference_id ||
+      data?.order_id ||
+      data?.merchant_reference;
+
+    const providerPaymentId =
+      transaction?.transaction_id ||
+      transaction?.id_transaction ||
+      data?.transaction_id ||
+      data?.id_transaction;
+
+    const eventId = `paym_evt_${providerPaymentId || Date.now()}_${Date.now()}`;
+
+    // Normalize status ("ok", "success", "succes", "paid", "completed")
+    const rawStatus = String(
+      transaction?.new_status ||
+      transaction?.status ||
+      transaction?.trans_status ||
+      data?.new_status ||
+      data?.status ||
+      data?.trans_status ||
+      ""
+    ).toLowerCase().trim();
+
     let status = "PENDING";
-    if (newStatus === "ok") {
+    if (
+      rawStatus === "ok" ||
+      rawStatus === "success" ||
+      rawStatus === "succes" ||
+      rawStatus === "paid" ||
+      rawStatus === "completed" ||
+      rawStatus === "true"
+    ) {
       status = "PAID";
-    } else if (newStatus === "failed") {
+    } else if (
+      rawStatus === "failed" ||
+      rawStatus === "error" ||
+      rawStatus === "cancelled" ||
+      rawStatus === "canceled"
+    ) {
       status = "FAILED";
     }
 

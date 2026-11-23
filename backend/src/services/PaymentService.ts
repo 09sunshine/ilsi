@@ -561,7 +561,7 @@ export class PaymentService {
     }
 
     const payRes = await pool.query(
-      `SELECT id, amount, currency, status, provider, internal_reference, provider_order_id, provider_payment_id
+      `SELECT id, application_id, enrollment_id, user_id, amount, currency, status, provider, internal_reference, provider_order_id, provider_payment_id
        FROM payments
        WHERE id::text = $1 OR internal_reference = $1 OR provider_order_id = $1 OR provider_payment_id = $1
        LIMIT 1`,
@@ -574,7 +574,13 @@ export class PaymentService {
 
     const record = payRes.rows[0];
     if (record.status === "PAID") {
-      return { status: "PAID", message: "Payment was already verified." };
+      return {
+        status: "PAID",
+        message: "Payment was already verified.",
+        applicationId: record.application_id,
+        enrollmentId: record.enrollment_id,
+        userId: record.user_id,
+      };
     }
 
     // Call provider verification
@@ -595,16 +601,26 @@ export class PaymentService {
         throw new AppError(409, "REPLAY_DETECTED", "This provider transaction has already been credited to another payment.");
       }
 
-      return await this.verifyPayment(record.id, verification.providerPaymentId, {
+      const verified = await this.verifyPayment(record.id, verification.providerPaymentId, {
         expectedAmount: verification.amount,
         expectedCurrency: verification.currency,
         providerOrderId: orderId || record.provider_order_id,
       });
+
+      return {
+        ...verified,
+        applicationId: record.application_id,
+        enrollmentId: record.enrollment_id,
+        userId: record.user_id,
+      };
     }
 
     return {
       status: verification.status || "PENDING",
       message: "Payment verification has not completed yet with provider.",
+      applicationId: record.application_id,
+      enrollmentId: record.enrollment_id,
+      userId: record.user_id,
     };
   }
 
