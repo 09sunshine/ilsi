@@ -20,6 +20,15 @@ export interface GeneratedEmail {
 const DEFAULT_SITE_URL = "https://www.ilsicampus.org";
 
 /**
+ * Ensures links in emails always point to the production deployment URL https://www.ilsicampus.org
+ * Replaces any localhost or 127.0.0.1 references if accidentally passed by local development environments.
+ */
+function ensureProductionLink(url?: string): string {
+  if (!url) return "https://www.ilsicampus.org/track-application";
+  return url.replace(/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, "https://www.ilsicampus.org");
+}
+
+/**
  * Base email layout wrapper with ILSI branding
  */
 function wrapBaseLayout(title: string, badgeHtml: string, contentHtml: string, trackingNumber: string, candidateEmail: string): string {
@@ -132,9 +141,12 @@ export function generateAcceptedEmail(data: EmailTemplateData): GeneratedEmail {
     siteUrl = DEFAULT_SITE_URL,
   } = data;
 
-  const paymentLink =
+  const effectiveSiteUrl = ensureProductionLink(siteUrl ? `${siteUrl}/track-application` : `${DEFAULT_SITE_URL}/track-application`).replace(/\/track-application.*$/, "");
+
+  const paymentLink = ensureProductionLink(
     data.paymentLink ||
-    `${siteUrl}/track-application?id=${encodeURIComponent(trackingNumber)}&email=${encodeURIComponent(candidateEmail)}`;
+    `${effectiveSiteUrl}/track-application?id=${encodeURIComponent(trackingNumber)}&email=${encodeURIComponent(candidateEmail)}`
+  );
 
   const feeDisplay = feeAmount ? `${feeAmount} ${feeCurrency}` : "Selon le tarif officiel de la cohorte";
 
@@ -301,9 +313,12 @@ export function generateWaitlistedEmail(data: EmailTemplateData): GeneratedEmail
     siteUrl = DEFAULT_SITE_URL,
   } = data;
 
-  const trackingLink =
+  const effectiveSiteUrl = ensureProductionLink(siteUrl ? `${siteUrl}/track-application` : `${DEFAULT_SITE_URL}/track-application`).replace(/\/track-application.*$/, "");
+
+  const trackingLink = ensureProductionLink(
     data.trackingLink ||
-    `${siteUrl}/track-application?id=${encodeURIComponent(trackingNumber)}&email=${encodeURIComponent(candidateEmail)}`;
+    `${effectiveSiteUrl}/track-application?id=${encodeURIComponent(trackingNumber)}&email=${encodeURIComponent(candidateEmail)}`
+  );
 
   const badgeHtml = `
     <div style="display: inline-block; background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 9999px; padding: 6px 18px; color: #92400e; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
@@ -398,9 +413,12 @@ export function generateRejectedEmail(data: EmailTemplateData): GeneratedEmail {
     siteUrl = DEFAULT_SITE_URL,
   } = data;
 
-  const trackingLink =
+  const effectiveSiteUrl = ensureProductionLink(siteUrl ? `${siteUrl}/track-application` : `${DEFAULT_SITE_URL}/track-application`).replace(/\/track-application.*$/, "");
+
+  const trackingLink = ensureProductionLink(
     data.trackingLink ||
-    `${siteUrl}/track-application?id=${encodeURIComponent(trackingNumber)}&email=${encodeURIComponent(candidateEmail)}`;
+    `${effectiveSiteUrl}/track-application?id=${encodeURIComponent(trackingNumber)}&email=${encodeURIComponent(candidateEmail)}`
+  );
 
   const badgeHtml = `
     <div style="display: inline-block; background-color: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 9999px; padding: 6px 18px; color: #475569; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">

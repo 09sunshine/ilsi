@@ -22,11 +22,21 @@ export interface EmailSendResult {
 
 export class EmailService {
   /**
-   * Determine frontend URL for deep linking
+   * Determine frontend URL for email deep linking.
+   * Guarantees all email links strictly point to the production deployment URL https://www.ilsicampus.org
+   * and never use localhost.
    */
   private static getFrontendUrl(): string {
-    const configured = process.env.FRONTEND_URL || "https://www.ilsicampus.org";
-    return configured.replace(/\/$/, "");
+    const configured = (process.env.FRONTEND_URL || "").trim().replace(/\/$/, "");
+    if (
+      configured &&
+      !configured.includes("localhost") &&
+      !configured.includes("127.0.0.1") &&
+      configured.startsWith("https://")
+    ) {
+      return configured;
+    }
+    return "https://www.ilsicampus.org";
   }
 
   /**
