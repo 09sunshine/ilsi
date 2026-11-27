@@ -333,6 +333,49 @@ describe("Payment Providers Integration & Security Test Suite", () => {
       ).rejects.toThrow(/invalid pay'm webhook signature/i);
     });
 
+    it("ensures Pay'm webhook returns status=PENDING for transaction.created", async () => {
+      process.env.PAYM_CLIENT_SECRET = "test_secret_key_123";
+      const payload = {
+        event: "transaction.created",
+        transaction: {
+          reference_id: "ilsi_ref_123",
+          transaction_id: "paym_tx_999",
+          status: "pending",
+        },
+      };
+      const rawBody = JSON.stringify(payload);
+      const signature = crypto.createHmac("sha256", "test_secret_key_123").update(rawBody).digest("hex");
+
+      const webhookResult = await paym.handleWebhook(payload, `sha256=${signature}`, {
+        rawBody,
+      });
+
+      expect(webhookResult.status).toBe("PENDING");
+      expect(webhookResult.eventType).toBe("transaction.created");
+      expect(webhookResult.paymentId).toBe("ilsi_ref_123");
+    });
+
+    it("ensures Pay'm webhook returns status=PENDING when trans_status is 'no'", async () => {
+      process.env.PAYM_CLIENT_SECRET = "test_secret_key_123";
+      const payload = {
+        event: "transaction.status_changed",
+        transaction: {
+          reference_id: "ilsi_ref_123",
+          transaction_id: "paym_tx_999",
+          trans_status: "no",
+        },
+      };
+      const rawBody = JSON.stringify(payload);
+      const signature = crypto.createHmac("sha256", "test_secret_key_123").update(rawBody).digest("hex");
+
+      const webhookResult = await paym.handleWebhook(payload, `sha256=${signature}`, {
+        rawBody,
+      });
+
+      expect(webhookResult.status).toBe("PENDING");
+      expect(webhookResult.eventType).toBe("transaction.status_changed");
+    });
+
     it("dynamically fetches and caches live exchange rates with fallback", async () => {
       PaymPaymentProvider.resetRateCache();
 
@@ -483,6 +526,32 @@ describe("Payment Providers Integration & Security Test Suite", () => {
       });
       expect(res2.alreadyProcessed).toBe(true);
       expect(res2.message).toContain("idempotent ignore");
+    });
+
+    it("does NOT mark payment as PAID when webhook status is PENDING (e.g. transaction.created or unconfirmed OTP)", async () => {
+      let verifyPaymentCalled = false;
+      const originalVerify = (PaymentService as any).verifyPayment;
+      (PaymentService as any).verifyPayment = vi.fn().mockImplementation(async () => {
+        verifyPaymentCalled = true;
+      });
+
+      try {
+        const res = await PaymentService.handleWebhookEvent({
+          provider: "PAYM",
+          eventId: "EVT_PENDING_TEST_1",
+          eventType: "transaction.created",
+          payload: {
+            paymentId: "pay_pending_1",
+            transaction: { reference_id: "pay_pending_1" },
+          },
+          status: "PENDING",
+        });
+
+        expect(res.alreadyProcessed).toBe(false);
+        expect(verifyPaymentCalled).toBe(false);
+      } finally {
+        (PaymentService as any).verifyPayment = originalVerify;
+      }
     });
   });
 

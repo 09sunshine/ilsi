@@ -161,6 +161,13 @@ function TrackApplicationPage() {
             setQuery(targetLookup);
             fetchStatus(targetLookup);
           }
+          // Clean up one-time payment query parameters from URL history to avoid re-triggering on page refresh
+          if (typeof window !== "undefined" && window.history?.replaceState) {
+            const cleanUrl = targetLookup
+              ? `/track-application?id=${encodeURIComponent(targetLookup)}`
+              : "/track-application";
+            window.history.replaceState({}, "", cleanUrl);
+          }
         } catch (err: any) {
           if (active) {
             toast.error(err.message || t("payment.failed"));
@@ -190,6 +197,13 @@ function TrackApplicationPage() {
           if (active && targetLookup) {
             setQuery(targetLookup);
             fetchStatus(targetLookup);
+          }
+          // Clean up one-time payment query parameters from URL history to avoid re-triggering on page refresh
+          if (typeof window !== "undefined" && window.history?.replaceState) {
+            const cleanUrl = targetLookup
+              ? `/track-application?id=${encodeURIComponent(targetLookup)}`
+              : "/track-application";
+            window.history.replaceState({}, "", cleanUrl);
           }
         } catch (err: any) {
           if (active) {
@@ -375,7 +389,7 @@ function TrackApplicationPage() {
     appData?.status === "SELECTED" ||
     appData?.status === "ENROLLED";
 
-  const isPaid = appData?.payment?.status === "PAID" || appData?.status === "ENROLLED";
+  const isPaid = appData?.payment?.status === "PAID";
   const needsPasswordSetup = isPaid && !appData?.account?.isActivated;
 
   return (
@@ -471,7 +485,7 @@ function TrackApplicationPage() {
                 </div>
 
                 <div className="shrink-0">
-                  {isPaid || appData.status === "ENROLLED" ? (
+                  {isPaid ? (
                     <Badge className="bg-success text-success-foreground text-sm px-3 py-1 gap-1.5 shadow-sm">
                       <ShieldCheck className="size-4" />
                       Enrolled & Confirmed
@@ -500,7 +514,7 @@ function TrackApplicationPage() {
 
               {/* Status Explanation Box */}
               <div className="mt-5 rounded-xl border p-4 bg-muted/40">
-                {isPaid || appData.status === "ENROLLED" ? (
+                {isPaid ? (
                   <div className="flex items-start gap-3">
                     <CheckCircle2 className="size-5 text-success shrink-0 mt-0.5" />
                     <div>

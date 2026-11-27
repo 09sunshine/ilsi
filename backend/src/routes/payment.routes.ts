@@ -307,14 +307,8 @@ router.post("/paypal/webhook", async (req: Request, res: Response, next: NextFun
       eventId: webhookResult.eventId,
       eventType: webhookResult.eventType,
       payload: webhookResult.rawPayload,
+      status: webhookResult.status,
     });
-
-    if (webhookResult.status === "PAID" && webhookResult.paymentId && !result.alreadyProcessed) {
-      await PaymentService.verifyPayment(
-        webhookResult.paymentId,
-        webhookResult.providerPaymentId
-      );
-    }
 
     res.json({ received: true, ...result });
   } catch (error) {
@@ -342,14 +336,8 @@ router.post(["/paym/webhook", "/webhook/paym"], async (req: Request, res: Respon
       eventId: webhookResult.eventId,
       eventType: webhookResult.eventType,
       payload: webhookResult.rawPayload,
+      status: webhookResult.status,
     });
-
-    if (webhookResult.status === "PAID" && webhookResult.paymentId && !result.alreadyProcessed) {
-      await PaymentService.verifyPayment(
-        webhookResult.paymentId,
-        webhookResult.providerPaymentId
-      );
-    }
 
     res.json({ received: true, ...result });
   } catch (error) {
@@ -375,18 +363,8 @@ router.post("/webhook", async (req: Request, res: Response, next: NextFunction) 
       eventId: webhookResult.eventId,
       eventType: webhookResult.eventType,
       payload: webhookResult.rawPayload,
+      status: webhookResult.status,
     });
-
-    const isDonation =
-      webhookResult.rawPayload?.data?.object?.metadata?.type === "DONATION" ||
-      Boolean(webhookResult.rawPayload?.data?.object?.metadata?.donationId);
-
-    if (!isDonation && webhookResult.paymentId && !result.alreadyProcessed) {
-      await PaymentService.verifyPayment(
-        webhookResult.paymentId,
-        webhookResult.providerPaymentId
-      );
-    }
 
     res.json({ received: true, ...result });
   } catch (error) {

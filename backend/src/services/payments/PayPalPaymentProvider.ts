@@ -339,8 +339,27 @@ export class PayPalPaymentProvider implements PaymentProvider {
     let providerPaymentId: string | undefined = resource.id;
 
     let status = "PENDING";
-    if (eventType === "PAYMENT.CAPTURE.COMPLETED" || eventType === "CHECKOUT.ORDER.APPROVED") {
+    if (eventType === "PAYMENT.CAPTURE.COMPLETED") {
       status = "PAID";
+    } else if (eventType === "CHECKOUT.ORDER.APPROVED") {
+      // Order approved by customer on PayPal. Must attempt server-side capture to settle payment!
+      const orderId = resource.id;
+      if (orderId) {
+        try {
+          const captureResult = await this.captureOrder(orderId);
+          if (captureResult?.status === "COMPLETED") {
+            status = "PAID";
+            const captureId =
+              captureResult.purchase_units?.[0]?.payments?.captures?.[0]?.id || orderId;
+            providerPaymentId = captureId;
+          } else {
+            status = "PENDING";
+          }
+        } catch (captureErr: any) {
+          console.warn(`[PayPal Webhook] Capture attempt for approved order ${orderId} note:`, captureErr.message);
+          status = "PENDING";
+        }
+      }
     } else if (eventType === "PAYMENT.CAPTURE.DENIED" || eventType === "CHECKOUT.ORDER.VOIDED") {
       status = "FAILED";
     }

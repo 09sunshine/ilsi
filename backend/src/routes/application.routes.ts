@@ -225,18 +225,55 @@ router.post(
           : Number(app.program_price || 95);
       const officialCurrency = app.fee_currency || app.program_currency || "USD";
 
-      // If application is accepted and payment is pending, generate or return checkout session
-      const isPaid = enrollment?.payment_status === "PAID" || app.app_payment_status === "PAID";
+      // Authoritative database verification:
+      // An applicant is ONLY paid if:
+      // 1. officialTuition is 0 (free cohort)
+      // OR
+      // 2. A verified record exists in payments table with status = 'PAID' and amount > 0
+      let verifiedPayment: any = null;
+      if (officialTuition > 0) {
+        const payRes = await pool.query(
+          `SELECT id, amount, currency, status, provider, paid_at FROM payments 
+           WHERE (application_id = $1 OR (user_id = $2 AND cohort_id = $3))
+             AND status = 'PAID' AND amount > 0
+           ORDER BY paid_at DESC NULLS LAST, created_at DESC LIMIT 1`,
+          [app.id, userAccount?.id || null, app.cohort_id || null]
+        );
+        if (payRes.rows.length > 0) {
+          verifiedPayment = payRes.rows[0];
+        }
+      }
+
+      const isPaid = officialTuition === 0 || Boolean(verifiedPayment);
+
+      // Self-healing data consistency:
+      // If no verified payment exists for a paid cohort, but the application or enrollment was prematurely marked ENROLLED/PAID:
+      let effectiveStatus = app.status;
+      if (!isPaid && (effectiveStatus === "ENROLLED" || app.app_payment_status === "PAID")) {
+        effectiveStatus = "ACCEPTED";
+        await pool.query(
+          `UPDATE applications SET status = 'ACCEPTED', payment_status = 'NOT_REQUIRED', updated_at = NOW() WHERE id = $1`,
+          [app.id]
+        );
+        if (enrollment && (enrollment.payment_status === "PAID" || enrollment.status === "ACTIVE")) {
+          await pool.query(
+            `UPDATE enrollments SET status = 'PAYMENT_PENDING', payment_status = 'PENDING', updated_at = NOW() WHERE id = $1`,
+            [enrollment.id]
+          );
+        }
+      }
+
       let paymentInfo: any = {
         status: isPaid ? "PAID" : "PENDING",
+        isPaid,
         feeAmount: officialTuition,
         feeCurrency: officialCurrency,
-        amount: officialTuition,
-        currency: officialCurrency,
+        amount: verifiedPayment?.amount ? Number(verifiedPayment.amount) : officialTuition,
+        currency: verifiedPayment?.currency || officialCurrency,
         checkoutUrl: null,
       };
 
-      if (app.status === "ACCEPTED" || app.status === "SELECTED") {
+      if (effectiveStatus === "ACCEPTED" || effectiveStatus === "SELECTED") {
         if (!isPaid && app.cohort_id) {
           try {
             const defaultProvider = PaymentService.isProviderEnabled("PAYPAL")
@@ -274,7 +311,7 @@ router.post(
         success: true,
         data: {
           applicationId: app.id,
-          status: app.status,
+          status: effectiveStatus,
           submittedAt: app.submitted_at ? app.submitted_at.toISOString() : null,
           applicant: {
             firstName: app.first_name,
@@ -357,38 +394,36 @@ router.post(
 
       const app = appRes.rows[0];
 
-      // Verify applicant is admitted and payment is confirmed
-      const isPaid = app.payment_status === "PAID";
+      // Verify applicant is admitted
       const isAdmitted = app.status === "ENROLLED" || app.status === "ACCEPTED" || app.status === "SELECTED";
       if (!isAdmitted) {
         throw new AppError(400, ErrorCodes.VALIDATION_ERROR, "Application is not accepted yet.");
       }
-      if (!isPaid) {
-        throw new AppError(
-          400,
-          ErrorCodes.VALIDATION_ERROR,
-          "Please complete your cohort tuition payment before activating your student account."
-        );
-      }
 
-      // Authoritative security check: verify that a verified PAID record with amount > 0 exists in payments table
-      const payRecordCheck = await pool.query(
-        `SELECT id, amount, currency, status FROM payments 
-         WHERE application_id = $1 AND status = 'PAID' AND amount > 0 
-         LIMIT 1`,
+      // Check official fee
+      const feeRes = await pool.query(
+        `SELECT c.fee_amount, p.price as program_price 
+         FROM applications a
+         JOIN programs p ON p.id = a.program_id
+         LEFT JOIN cohorts c ON c.id = a.cohort_id
+         WHERE a.id = $1`,
         [app.id]
       );
-      if (payRecordCheck.rows.length === 0) {
-        const userPayCheck = app.user_id
-          ? await pool.query(
-              `SELECT id, amount, currency, status FROM payments 
-               WHERE user_id = $1 AND cohort_id = $2 AND status = 'PAID' AND amount > 0 
-               LIMIT 1`,
-              [app.user_id, app.cohort_id]
-            )
-          : { rows: [] };
+      const feeRow = feeRes.rows[0];
+      const officialTuition = Number(feeRow?.fee_amount) > 0
+        ? Number(feeRow.fee_amount)
+        : Number(feeRow?.program_price || 95);
 
-        if (userPayCheck.rows.length === 0) {
+      // Authoritative security check: verify that a verified PAID record with amount > 0 exists in payments table
+      if (officialTuition > 0) {
+        const payRecordCheck = await pool.query(
+          `SELECT id, amount, currency, status FROM payments 
+           WHERE (application_id = $1 OR (user_id IN (SELECT id FROM users WHERE LOWER(email) = $2) AND cohort_id = $3))
+             AND status = 'PAID' AND amount > 0 
+           LIMIT 1`,
+          [app.id, normalizedEmail, app.cohort_id]
+        );
+        if (payRecordCheck.rows.length === 0) {
           throw new AppError(
             400,
             ErrorCodes.VALIDATION_ERROR,

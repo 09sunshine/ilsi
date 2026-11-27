@@ -793,11 +793,13 @@ export class PaymentService {
     eventId,
     eventType,
     payload,
+    status = "PAID",
   }: {
     provider?: string;
     eventId: string;
     eventType: string;
     payload: any;
+    status?: string;
   }) {
     // 1. Check if event was already processed
     const existing = await pool.query(
@@ -840,7 +842,7 @@ export class PaymentService {
         payload.data?.object?.client_reference_id ||
         payload.resource?.custom_id;
 
-      if (donationId) {
+      if (donationId && status === "PAID") {
         await DonationService.completeDonationFromWebhook({
           donationId,
           sessionId: payload.data?.object?.id?.startsWith("cs_") ? payload.data?.object?.id : undefined,
@@ -858,8 +860,16 @@ export class PaymentService {
         payload.data?.object?.client_reference_id ||
         payload.resource?.custom_id;
 
-      if (paymentId) {
+      // CRITICAL SECURITY ENFORCEMENT:
+      // NEVER mark a cohort tuition payment as PAID unless the provider webhook has
+      // explicitly verified that the transaction succeeded and funds were settled!
+      // Events like 'transaction.created' or pending/failed/voided events must NEVER activate enrollment.
+      if (paymentId && status === "PAID") {
         await this.verifyPayment(paymentId, providerTransactionId);
+      } else if (paymentId) {
+        console.log(
+          `[PaymentService.handleWebhookEvent] Recorded webhook event ${eventType} for payment ${paymentId} with status '${status}'. Payment remains pending.`
+        );
       }
     }
 
