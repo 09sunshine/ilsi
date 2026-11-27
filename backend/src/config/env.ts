@@ -70,9 +70,16 @@ const envSchema = z.object({
     }, z.number().positive())
     .default(132.0),
 
-  // Email
+  // Email (EmailJS & Resend Transactional Delivery)
   EMAIL_FROM: z.string().default("admissions@ilsi-leadership.org"),
   RESEND_API_KEY: z.string().default(""),
+  EMAILJS_SERVICE_ID: z.string().default(""),
+  EMAILJS_TEMPLATE_ID: z.string().default(""),
+  EMAILJS_TEMPLATE_ID_ACCEPTED: z.string().default(""),
+  EMAILJS_TEMPLATE_ID_WAITLISTED: z.string().default(""),
+  EMAILJS_TEMPLATE_ID_REJECTED: z.string().default(""),
+  EMAILJS_PUBLIC_KEY: z.string().default(""),
+  EMAILJS_PRIVATE_KEY: z.string().default(""),
 });
 
 export const env = envSchema.parse(process.env);

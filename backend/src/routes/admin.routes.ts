@@ -15,6 +15,7 @@ import { supabaseAdmin } from "../integrations/supabase/client.js";
 import { invalidateVideoUrlCache } from "../services/VideoStorageService.js";
 import { RankingService } from "../services/RankingService.js";
 import { invalidateStudentDashboardServiceCache } from "../services/StudentDashboardService.js";
+import { EmailService } from "../services/email/EmailService.js";
 
 const router = Router();
 
@@ -1864,6 +1865,20 @@ router.patch(
             });
           }
         }
+      }
+
+      // Automatically dispatch candidate notification email for acceptance, waitlist, or rejection
+      // Dispatched asynchronously via setImmediate to guarantee ultra-fast API response time (100-300ms SLA)
+      if (status === "ACCEPTED" || status === "SELECTED" || status === "WAITLISTED" || status === "REJECTED") {
+        setImmediate(() => {
+          EmailService.sendApplicationStatusEmail({
+            applicationId: updatedApp.id,
+            newStatus: status,
+            notes: notes || updatedApp.notes,
+          }).catch((err) => {
+            console.error(`[Admin Route] Background status email error for application ${updatedApp.id}:`, err);
+          });
+        });
       }
 
       res.json({ success: true, data: updatedApp, message: "Application status updated" });
