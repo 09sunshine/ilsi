@@ -295,8 +295,30 @@ export class PaymentProviderRegistry {
     };
   }
 
+  /**
+   * Normalizes any provider identifier or alias to its canonical system key.
+   * Seamlessly resolves user-facing names ("MonCash/NatCash", "moncash", "natcash") to "PAYM".
+   */
+  static normalizeProviderName(name: string = "PAYPAL"): string {
+    const raw = (name || "PAYPAL").trim().toUpperCase();
+    if (
+      raw === "PAYM" ||
+      raw === "MONCASH" ||
+      raw === "NATCASH" ||
+      raw === "MONCASH/NATCASH" ||
+      raw.includes("MONCASH") ||
+      raw.includes("NATCASH")
+    ) {
+      return "PAYM";
+    }
+    if (raw === "PAYPAL") return "PAYPAL";
+    if (raw === "STRIPE") return "STRIPE";
+    if (raw === "MANUAL") return "MANUAL";
+    return raw;
+  }
+
   static getProvider(name: string = "PAYPAL"): PaymentProvider {
-    const normalized = name.toUpperCase();
+    const normalized = this.normalizeProviderName(name);
     if (!this.providers[normalized]) {
       if (normalized === "PAYPAL") this.providers.PAYPAL = new PayPalPaymentProvider();
       else if (normalized === "PAYM") this.providers.PAYM = new PaymPaymentProvider();
@@ -308,7 +330,7 @@ export class PaymentProviderRegistry {
   }
 
   static isProviderEnabled(name: string): boolean {
-    const normalized = name.toUpperCase();
+    const normalized = this.normalizeProviderName(name);
     if (normalized === "PAYPAL") {
       return process.env.PAYPAL_ENABLED !== undefined
         ? String(process.env.PAYPAL_ENABLED).toLowerCase() === "true"

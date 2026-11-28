@@ -134,6 +134,8 @@ function TrackApplicationPage() {
 
       const isPaymReturn =
         search.provider === "paym" ||
+        search.provider === "moncash" ||
+        search.provider === "natcash" ||
         search.payment === "paym_return" ||
         Boolean(search.refference_id) ||
         Boolean(search.reference_id) ||
@@ -283,7 +285,11 @@ function TrackApplicationPage() {
       typeof selectedProvider === "string"
         ? selectedProvider
         : (selectedProvider as any)?.provider || "paypal";
-    return (raw || "paypal").toLowerCase();
+    const lower = (raw || "paypal").toLowerCase().trim();
+    if (lower === "paym" || lower.includes("moncash") || lower.includes("natcash")) {
+      return "paym";
+    }
+    return lower;
   };
 
   const getProviderButtonLabel = (): string => {

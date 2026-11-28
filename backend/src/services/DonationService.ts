@@ -76,7 +76,7 @@ export class DonationService {
       );
     }
 
-    const providerName = (params.provider || "PAYPAL").toUpperCase();
+    const providerName = PaymentProviderRegistry.normalizeProviderName(params.provider || "PAYPAL");
 
     // Enforce availability: reject disabled payment providers (e.g. Stripe when STRIPE_ENABLED=false)
     if (!PaymentProviderRegistry.isProviderEnabled(providerName)) {
@@ -297,7 +297,7 @@ export class DonationService {
     transactionId?: string;
     sessionId?: string;
   }): Promise<DonationVerificationResult> {
-    const providerName = (provider || "PAYPAL").toUpperCase();
+    const providerName = PaymentProviderRegistry.normalizeProviderName(provider || "PAYPAL");
 
     // Look up target donation record
     const lookupKey = donationId || referenceId || orderId || transactionId || sessionId;

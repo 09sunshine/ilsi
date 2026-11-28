@@ -317,10 +317,12 @@ router.post("/paypal/webhook", async (req: Request, res: Response, next: NextFun
 });
 
 /**
- * POST /api/payments/paym/webhook (also supports /webhook/paym)
+ * POST /api/payments/paym/webhook (also supports /webhook/paym, /moncash/webhook, /natcash/webhook)
  * Pay'm webhook handler with constant-time HMAC-SHA256 signature verification and idempotency protection
  */
-router.post(["/paym/webhook", "/webhook/paym"], async (req: Request, res: Response, next: NextFunction) => {
+router.post(
+  ["/paym/webhook", "/webhook/paym", "/moncash/webhook", "/natcash/webhook"],
+  async (req: Request, res: Response, next: NextFunction) => {
   try {
     const signature = (req.headers["x-webhook-signature"] || req.headers["X-Webhook-Signature"]) as string | undefined;
     const rawPayload = (req as any).rawBody ? (req as any).rawBody.toString("utf8") : JSON.stringify(req.body);

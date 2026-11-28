@@ -64,6 +64,25 @@ describe("Payment Providers Integration & Security Test Suite", () => {
         } as any)
       ).rejects.toThrow(/disabled/i);
     });
+
+    it("seamlessly normalizes MonCash/NatCash provider aliases to PAYM", () => {
+      process.env.PAYM_ENABLED = "true";
+
+      expect(PaymentProviderRegistry.normalizeProviderName("MonCash/NatCash")).toBe("PAYM");
+      expect(PaymentProviderRegistry.normalizeProviderName("moncash")).toBe("PAYM");
+      expect(PaymentProviderRegistry.normalizeProviderName("natcash")).toBe("PAYM");
+      expect(PaymentProviderRegistry.normalizeProviderName("paym")).toBe("PAYM");
+      expect(PaymentProviderRegistry.normalizeProviderName("paypal")).toBe("PAYPAL");
+      expect(PaymentProviderRegistry.normalizeProviderName("stripe")).toBe("STRIPE");
+
+      expect(PaymentProviderRegistry.getProvider("MonCash/NatCash")).toBeInstanceOf(PaymPaymentProvider);
+      expect(PaymentProviderRegistry.getProvider("moncash")).toBeInstanceOf(PaymPaymentProvider);
+      expect(PaymentProviderRegistry.getProvider("natcash")).toBeInstanceOf(PaymPaymentProvider);
+
+      expect(PaymentProviderRegistry.isProviderEnabled("MonCash/NatCash")).toBe(true);
+      expect(PaymentProviderRegistry.isProviderEnabled("moncash")).toBe(true);
+      expect(PaymentProviderRegistry.isProviderEnabled("natcash")).toBe(true);
+    });
   });
 
   // --------------------------------------------------------------------------

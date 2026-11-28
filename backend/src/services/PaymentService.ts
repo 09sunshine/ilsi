@@ -67,7 +67,7 @@ export class PaymentService {
     paymMethod?: string;
     phoneNumber?: string;
   }): Promise<PaymentIntentResult> {
-    const selectedProviderName = (provider || "PAYPAL").toUpperCase();
+    const selectedProviderName = PaymentProviderRegistry.normalizeProviderName(provider || "PAYPAL");
 
     // Enforce provider availability - Reject new checkouts for disabled providers (e.g. Stripe)
     if (!PaymentProviderRegistry.isProviderEnabled(selectedProviderName)) {
@@ -569,7 +569,7 @@ export class PaymentService {
     referenceId?: string;
     transactionId?: string;
   }) {
-    const providerName = (provider || "PAYPAL").toUpperCase();
+    const providerName = PaymentProviderRegistry.normalizeProviderName(provider || "PAYPAL");
     const providerInstance = this.getProvider(providerName);
 
     // Find target payment record
