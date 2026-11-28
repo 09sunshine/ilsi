@@ -8,18 +8,28 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { z } from "zod";
 
-const aboutSearchSchema = z.object({
-  donation: z.string().optional(),
-  donation_id: z.string().optional(),
-  session_id: z.string().optional(),
-  provider: z.string().optional(),
-  token: z.string().optional(),
-  order_id: z.string().optional(),
-  refference_id: z.string().optional(),
-  id_transaction: z.string().optional(),
-  transaction_id: z.string().optional(),
-  status: z.string().optional(),
-});
+const looseParam = z
+  .union([z.string(), z.number()])
+  .transform((val) => String(val))
+  .optional();
+
+const aboutSearchSchema = z
+  .object({
+    donation: looseParam,
+    donation_id: looseParam,
+    session_id: looseParam,
+    provider: looseParam,
+    token: looseParam,
+    order_id: looseParam,
+    refference_id: looseParam,
+    reference_id: looseParam,
+    id_transaction: looseParam,
+    transaction_id: looseParam,
+    status: looseParam,
+    statut: looseParam,
+    montant: looseParam,
+  })
+  .passthrough();
 
 export const Route = createFileRoute("/about")({
   validateSearch: aboutSearchSchema,

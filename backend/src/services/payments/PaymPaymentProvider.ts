@@ -173,11 +173,29 @@ export class PaymPaymentProvider implements PaymentProvider {
       effectiveRate
     );
 
+    const rawUrl = process.env.FRONTEND_URL || env.FRONTEND_URL || "https://www.ilsicampus.org";
+    let frontendUrl = rawUrl.split(",")[0].trim().replace(/\/+$/, "");
+    if (!frontendUrl.startsWith("http://") && !frontendUrl.startsWith("https://")) {
+      frontendUrl = `https://${frontendUrl}`;
+    }
+
+    const isDonation = params.purpose === "donation" || params.metadata?.type === "DONATION";
+    const returnUrl =
+      params.successUrl ||
+      (isDonation
+        ? `${frontendUrl}/about?donation=return&provider=paym&donation_id=${params.paymentId}&refference_id=${merchantReference}`
+        : `${frontendUrl}/track-application?payment=return&provider=paym&payment_id=${params.paymentId}${
+            params.applicationId ? `&id=${params.applicationId}` : ""
+          }&refference_id=${merchantReference}`);
+
     const requestBody: Record<string, any> = {
       client_id: clientId,
       refference_id: merchantReference, // Exact documented parameter spelling
       montant: htgAmount,
       payment_method: paymentMethod,
+      return_url: returnUrl,
+      lien_retour: returnUrl,
+      redirect_url: returnUrl,
     };
 
     if (phoneNumber && (paymentMethod === "moncash_ussd" || paymentMethod === "natcash_ussd")) {

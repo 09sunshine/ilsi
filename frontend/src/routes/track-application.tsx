@@ -31,22 +31,33 @@ import { signIn, useSession } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { PaymentMethodSelector } from "@/components/payment/PaymentMethodSelector";
 
-const searchSchema = z.object({
-  id: z.string().optional(),
-  email: z.string().optional(),
-  payment: z.string().optional(),
-  payment_id: z.string().optional(),
-  session_id: z.string().optional(),
-  provider: z.string().optional(),
-  token: z.string().optional(),
-  order_id: z.string().optional(),
-  PayerID: z.string().optional(),
-  refference_id: z.string().optional(),
-  reference_id: z.string().optional(),
-  id_transaction: z.string().optional(),
-  transaction_id: z.string().optional(),
-  status: z.string().optional(),
-});
+const looseParam = z
+  .union([z.string(), z.number()])
+  .transform((val) => String(val))
+  .optional();
+
+const searchSchema = z
+  .object({
+    id: looseParam,
+    email: looseParam,
+    payment: looseParam,
+    payment_id: looseParam,
+    session_id: looseParam,
+    provider: looseParam,
+    token: looseParam,
+    order_id: looseParam,
+    PayerID: looseParam,
+    payer_id: looseParam,
+    refference_id: looseParam,
+    reference_id: looseParam,
+    id_transaction: looseParam,
+    transaction_id: looseParam,
+    status: looseParam,
+    statut: looseParam,
+    montant: looseParam,
+    method: looseParam,
+  })
+  .passthrough();
 
 export const Route = createFileRoute("/track-application")({
   validateSearch: searchSchema,
@@ -137,6 +148,7 @@ function TrackApplicationPage() {
         search.provider === "moncash" ||
         search.provider === "natcash" ||
         search.payment === "paym_return" ||
+        search.statut === "ok" ||
         Boolean(search.refference_id) ||
         Boolean(search.reference_id) ||
         Boolean(search.id_transaction) ||

@@ -23,6 +23,7 @@ import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ResultsRouteImport } from './routes/results'
+import { Route as RetourRouteImport } from './routes/retour'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as TrackApplicationRouteImport } from './routes/track-application'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
@@ -37,6 +38,8 @@ import { Route as AdminPaymentsRouteImport } from './routes/admin.payments'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminVolunteersRouteImport } from './routes/admin.volunteers'
 import { Route as LearnIndexRouteImport } from './routes/learn.index'
+import { Route as PaymReturnRouteImport } from './routes/paym.return'
+import { Route as PaymentSuccessRouteImport } from './routes/payment.success'
 import { Route as ProgramsIndexRouteImport } from './routes/programs.index'
 import { Route as ProgramsSlugRouteImport } from './routes/programs.$slug'
 import { Route as LearnModuleIdLessonIdRouteImport } from './routes/learn.$moduleId.$lessonId'
@@ -112,6 +115,11 @@ const ResultsRoute = ResultsRouteImport.update({
   path: '/results',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RetourRoute = RetourRouteImport.update({
+  id: '/retour',
+  path: '/retour',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
@@ -182,6 +190,16 @@ const LearnIndexRoute = LearnIndexRouteImport.update({
   path: '/learn/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PaymReturnRoute = PaymReturnRouteImport.update({
+  id: '/paym/return',
+  path: '/paym/return',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PaymentSuccessRoute = PaymentSuccessRouteImport.update({
+  id: '/payment/success',
+  path: '/payment/success',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProgramsIndexRoute = ProgramsIndexRouteImport.update({
   id: '/programs/',
   path: '/programs/',
@@ -218,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/retour': typeof RetourRoute
   '/signup': typeof SignupRoute
   '/track-application': typeof TrackApplicationRoute
   '/admin/applications': typeof AdminApplicationsRoute
@@ -230,6 +249,8 @@ export interface FileRoutesByFullPath {
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/volunteers': typeof AdminVolunteersRoute
+  '/paym/return': typeof PaymReturnRoute
+  '/payment/success': typeof PaymentSuccessRoute
   '/programs/$slug': typeof ProgramsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/learn/': typeof LearnIndexRoute
@@ -252,6 +273,7 @@ export interface FileRoutesByTo {
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/retour': typeof RetourRoute
   '/signup': typeof SignupRoute
   '/track-application': typeof TrackApplicationRoute
   '/admin/applications': typeof AdminApplicationsRoute
@@ -264,6 +286,8 @@ export interface FileRoutesByTo {
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/volunteers': typeof AdminVolunteersRoute
+  '/paym/return': typeof PaymReturnRoute
+  '/payment/success': typeof PaymentSuccessRoute
   '/programs/$slug': typeof ProgramsSlugRoute
   '/admin': typeof AdminIndexRoute
   '/learn': typeof LearnIndexRoute
@@ -287,6 +311,7 @@ export interface FileRoutesById {
   '/profile': typeof ProfileRoute
   '/reset-password': typeof ResetPasswordRoute
   '/results': typeof ResultsRoute
+  '/retour': typeof RetourRoute
   '/signup': typeof SignupRoute
   '/track-application': typeof TrackApplicationRoute
   '/admin/applications': typeof AdminApplicationsRoute
@@ -299,6 +324,8 @@ export interface FileRoutesById {
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/volunteers': typeof AdminVolunteersRoute
+  '/paym/return': typeof PaymReturnRoute
+  '/payment/success': typeof PaymentSuccessRoute
   '/programs/$slug': typeof ProgramsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/learn/': typeof LearnIndexRoute
@@ -323,6 +350,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/reset-password'
     | '/results'
+    | '/retour'
     | '/signup'
     | '/track-application'
     | '/admin/applications'
@@ -335,6 +363,8 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/settings'
     | '/admin/volunteers'
+    | '/paym/return'
+    | '/payment/success'
     | '/programs/$slug'
     | '/admin/'
     | '/learn/'
@@ -357,6 +387,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/reset-password'
     | '/results'
+    | '/retour'
     | '/signup'
     | '/track-application'
     | '/admin/applications'
@@ -369,6 +400,8 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/settings'
     | '/admin/volunteers'
+    | '/paym/return'
+    | '/payment/success'
     | '/programs/$slug'
     | '/admin'
     | '/learn'
@@ -391,6 +424,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/reset-password'
     | '/results'
+    | '/retour'
     | '/signup'
     | '/track-application'
     | '/admin/applications'
@@ -403,6 +437,8 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/settings'
     | '/admin/volunteers'
+    | '/paym/return'
+    | '/payment/success'
     | '/programs/$slug'
     | '/admin/'
     | '/learn/'
@@ -426,6 +462,7 @@ export interface RootRouteChildren {
   ProfileRoute: typeof ProfileRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ResultsRoute: typeof ResultsRoute
+  RetourRoute: typeof RetourRoute
   SignupRoute: typeof SignupRoute
   TrackApplicationRoute: typeof TrackApplicationRoute
   AdminApplicationsRoute: typeof AdminApplicationsRoute
@@ -438,6 +475,8 @@ export interface RootRouteChildren {
   AdminPaymentsRoute: typeof AdminPaymentsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminVolunteersRoute: typeof AdminVolunteersRoute
+  PaymReturnRoute: typeof PaymReturnRoute
+  PaymentSuccessRoute: typeof PaymentSuccessRoute
   ProgramsSlugRoute: typeof ProgramsSlugRoute
   AdminIndexRoute: typeof AdminIndexRoute
   LearnIndexRoute: typeof LearnIndexRoute
@@ -546,6 +585,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResultsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/retour': {
+      id: '/retour'
+      path: '/retour'
+      fullPath: '/retour'
+      preLoaderRoute: typeof RetourRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/signup': {
       id: '/signup'
       path: '/signup'
@@ -644,6 +690,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LearnIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/paym/return': {
+      id: '/paym/return'
+      path: '/paym/return'
+      fullPath: '/paym/return'
+      preLoaderRoute: typeof PaymReturnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/payment/success': {
+      id: '/payment/success'
+      path: '/payment/success'
+      fullPath: '/payment/success'
+      preLoaderRoute: typeof PaymentSuccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/programs/': {
       id: '/programs/'
       path: '/programs'
@@ -690,6 +750,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ResultsRoute: ResultsRoute,
+  RetourRoute: RetourRoute,
   SignupRoute: SignupRoute,
   TrackApplicationRoute: TrackApplicationRoute,
   AdminApplicationsRoute: AdminApplicationsRoute,
@@ -702,6 +763,8 @@ const rootRouteChildren: RootRouteChildren = {
   AdminPaymentsRoute: AdminPaymentsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminVolunteersRoute: AdminVolunteersRoute,
+  PaymReturnRoute: PaymReturnRoute,
+  PaymentSuccessRoute: PaymentSuccessRoute,
   ProgramsSlugRoute: ProgramsSlugRoute,
   AdminIndexRoute: AdminIndexRoute,
   LearnIndexRoute: LearnIndexRoute,

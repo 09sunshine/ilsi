@@ -27,6 +27,7 @@ import { api } from "@/lib/api";
 import { useState, useEffect } from "react";
 import { useI18n, useLocalized } from "@/i18n/LocaleProvider";
 import { resolveMediaUrl } from "@/lib/utils";
+import { z } from "zod";
 
 const programImage: Record<string, string> = {
   "young-leaders": youngLeadersImg,
@@ -34,7 +35,10 @@ const programImage: Record<string, string> = {
   "project-management-essentials": projectManagementImg,
 };
 
+const indexSearchSchema = z.record(z.string(), z.any());
+
 export const Route = createFileRoute("/")({
+  validateSearch: indexSearchSchema,
   head: () => ({
     meta: [
       { title: "ILSI — Cohort-based training that people finish" },
@@ -65,6 +69,29 @@ function HomePage() {
   const { t } = useI18n();
   const L = useLocalized();
   const [programList, setProgramList] = useState<any[]>([]);
+
+  useEffect(() => {
+    // If user returned to root URL from payment gateway with payment return parameters, redirect to tracking page
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isPaym =
+        urlParams.has("id_transaction") ||
+        urlParams.has("refference_id") ||
+        urlParams.has("reference_id") ||
+        urlParams.get("statut") === "ok";
+      const isPayPal =
+        urlParams.has("token") ||
+        urlParams.has("PayerID") ||
+        urlParams.get("provider") === "paypal";
+      const isDonation = urlParams.get("donation") || urlParams.has("donation_id");
+
+      if (isDonation) {
+        window.location.replace(`/about?${urlParams.toString()}`);
+      } else if (isPaym || isPayPal) {
+        window.location.replace(`/track-application?${urlParams.toString()}`);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     async function loadPrograms() {
