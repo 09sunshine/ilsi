@@ -538,7 +538,7 @@ describe("Payment Providers Integration & Security Test Suite", () => {
       try {
         const res = await PaymentService.handleWebhookEvent({
           provider: "PAYM",
-          eventId: "EVT_PENDING_TEST_1",
+          eventId: "EVT_PENDING_TEST_" + Date.now() + "_" + Math.random().toString(36).slice(2),
           eventType: "transaction.created",
           payload: {
             paymentId: "pay_pending_1",

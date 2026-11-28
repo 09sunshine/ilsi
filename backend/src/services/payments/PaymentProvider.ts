@@ -351,17 +351,15 @@ export class PaymentProviderRegistry {
     if (this.isProviderEnabled("PAYM")) {
       methods.push({
         id: "paym",
-        name: "Pay'm",
+        name: "MonCash/NatCash",
         enabled: true,
         currencies: ["HTG", "USD"],
-        descriptionEn: "Haitian mobile money & payments (MonCash, NatCash, Card).",
-        descriptionFr: "Paiement mobile en Haïti et multi-options (MonCash, NatCash, Carte).",
+        descriptionEn: "Haitian mobile money payments (MonCash, NatCash).",
+        descriptionFr: "Paiement mobile en Haïti (MonCash, NatCash).",
         subMethods: [
-          { id: "all", name: "All Pay'm Methods (Tous)" },
+          { id: "all", name: "All (MonCash/NatCash)" },
           { id: "moncash", name: "MonCash" },
           { id: "natcash", name: "Natcash" },
-          { id: "carte", name: "Credit/Debit Card (Square)" },
-          { id: "kashpaw", name: "KashPaw" },
         ],
       });
     }

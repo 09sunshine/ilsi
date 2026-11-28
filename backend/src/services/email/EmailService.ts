@@ -281,7 +281,7 @@ export class EmailService {
           message_text: text,
           payment_link: paymentLink,
           tracking_link: paymentLink,
-          payment_steps: `1. Rendez-vous sur ${paymentLink}\n2. Choisissez votre mode de paiement (Pay'm MonCash/Natcash en HTG ou PayPal/Carte en USD/EUR)\n3. Dès confirmation, activez votre compte étudiant.`,
+          payment_steps: `1. Rendez-vous sur ${paymentLink}\n2. Choisissez votre mode de paiement (MonCash/NatCash en HTG ou PayPal/Carte en USD/EUR)\n3. Dès confirmation, activez votre compte étudiant.`,
         };
 
         const res = await emailjs.send(

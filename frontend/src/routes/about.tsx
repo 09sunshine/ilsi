@@ -135,7 +135,7 @@ function AboutPage() {
           }
         })
         .catch((err: any) => {
-          toast.error(err.message || "Failed to verify donation with Pay'm.");
+          toast.error(err.message || "Failed to verify donation with MonCash/NatCash.");
         })
         .finally(() => {
           setVerifyingDonation(false);

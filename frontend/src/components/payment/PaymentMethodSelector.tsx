@@ -98,17 +98,15 @@ export function PaymentMethodSelector({
             },
             {
               id: "paym",
-              name: "Pay'm",
+              name: "MonCash/NatCash",
               enabled: true,
               currencies: ["HTG", "USD"],
-              descriptionEn: "Haitian mobile money & multi-currency payments (MonCash, NatCash, Card).",
-              descriptionFr: "Paiement mobile en Haïti et multi-options (MonCash, NatCash, Carte).",
+              descriptionEn: "Haitian mobile money payments (MonCash, NatCash).",
+              descriptionFr: "Paiement mobile en Haïti (MonCash, NatCash).",
               subMethods: [
-                { id: "all", name: fr ? "Toutes les options Pay'm" : "All Pay'm Methods" },
+                { id: "all", name: fr ? "Toutes les options" : "All (MonCash/NatCash)" },
                 { id: "moncash", name: "MonCash" },
                 { id: "natcash", name: "Natcash" },
-                { id: "carte", name: "Credit/Debit Card (Square)" },
-                { id: "kashpaw", name: "KashPaw" },
               ],
             },
           ]);
@@ -261,25 +259,24 @@ export function PaymentMethodSelector({
         })}
       </div>
 
-      {/* Pay'm specific options if selected */}
+      {/* MonCash / NatCash specific options if selected */}
       {currentProviderId === "paym" && (
         <div className="p-4 rounded-2xl border bg-muted/30 space-y-3.5 transition-all">
           <div className="flex items-center justify-between">
             <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
               <Smartphone className="size-3.5 text-primary" />
-              {fr ? "Passerelle Pay'm souhaitée" : "Select Pay'm Payment Gateway"}
+              {fr ? "Option MonCash / NatCash souhaitée" : "Select MonCash / NatCash Gateway"}
             </Label>
             <span className="text-[11px] text-muted-foreground">
               {fr ? "Min. 20 HTG garanti" : "Min. 20 HTG required"}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 notranslate" translate="no">
+          <div className="grid grid-cols-3 gap-2 notranslate" translate="no">
             {[
-              { id: "all", name: fr ? "Toutes (All)" : "All Gateways" },
+              { id: "all", name: fr ? "Toutes (All)" : "All (MonCash/NatCash)" },
               { id: "moncash", name: "MonCash" },
               { id: "natcash", name: "Natcash" },
-              { id: "carte", name: "Carte (Square)" },
             ].map((sub) => {
               const isSubSelected = (paymMethod || "all") === sub.id;
               return (
@@ -322,8 +319,8 @@ export function PaymentMethodSelector({
             <ShieldCheck className="size-3.5 text-emerald-600 shrink-0" />
             <span>
               {fr
-                ? "Paiement sécurisé par le réseau Pay'm / KashPaw avec confirmation en temps réel."
-                : "Secure transaction processed via Pay'm / KashPaw network with instant verification."}
+                ? "Paiement sécurisé par le réseau MonCash / NatCash avec confirmation en temps réel."
+                : "Secure transaction processed via MonCash / NatCash network with instant verification."}
             </span>
           </p>
         </div>

@@ -64,7 +64,7 @@ function wrapBaseLayout(title: string, badgeHtml: string, contentHtml: string, t
                 <tr>
                   <td align="center">
                     <div style="font-size: 26px; font-weight: 800; letter-spacing: 1.5px; color: #ffffff; margin-bottom: 4px;">ILSI</div>
-                    <div style="font-size: 13px; font-weight: 500; color: #a7f3d0; text-transform: uppercase; letter-spacing: 0.8px;">Institut de Leadership et des Sciences de l'Ingénierie</div>
+                    <div style="font-size: 13px; font-weight: 500; color: #a7f3d0; text-transform: uppercase; letter-spacing: 0.8px;">Institute for Leadership and Social Impact</div>
                   </td>
                 </tr>
               </table>
@@ -109,7 +109,7 @@ function wrapBaseLayout(title: string, badgeHtml: string, contentHtml: string, t
           <tr>
             <td style="background-color: #f8fafc; padding: 24px 36px; border-top: 1px solid #e2e8f0; text-align: center;">
               <p style="margin: 0 0 8px 0; font-size: 12px; color: #64748b;">
-                Institut de Leadership et des Sciences de l'Ingénierie (ILSI)<br>
+                Institute for Leadership and Social Impact (ILSI)<br>
                 Portail des admissions & formations par cohortes • <a href="${DEFAULT_SITE_URL}" style="color: #047857;">www.ilsicampus.org</a>
               </p>
               <p style="margin: 0; font-size: 11px; color: #94a3b8;">
@@ -215,7 +215,7 @@ export function generateAcceptedEmail(data: EmailTemplateData): GeneratedEmail {
               <td>
                 <div style="font-size: 14px; font-weight: 600; color: #0f172a;">Choisissez votre mode de règlement</div>
                 <div style="font-size: 13px; color: #64748b; line-height: 1.4;">
-                  • <strong>Pay'm (MonCash, Natcash ou Carte locale)</strong> : Paiement direct en Gourdes (HTG) avec validation instantanée par code OTP.<br>
+                  • <strong>MonCash / NatCash</strong> : Paiement direct en Gourdes (HTG) avec validation instantanée par code OTP.<br>
                   • <strong>PayPal / Carte bancaire</strong> : Paiement international sécurisé en USD / EUR.
                 </div>
               </td>
@@ -285,12 +285,12 @@ ${paymentLink}
 ÉTAPES DE RÈGLEMENT :
 1. Cliquez sur le lien ci-dessus avec votre numéro de suivi (${trackingNumber}).
 2. Choisissez votre mode de paiement :
-   - Pay'm (MonCash / Natcash / Carte locale en HTG)
+   - MonCash / NatCash (Paiement direct en Gourdes HTG)
    - PayPal / Carte bancaire internationale (USD / EUR)
 3. Dès validation du paiement, créez votre mot de passe et accédez immédiatement à votre portail étudiant.
 
 Pour toute question, contactez contact@ilsicampus.org
-Institut de Leadership et des Sciences de l'Ingénierie (ILSI) - www.ilsicampus.org`;
+Institute for Leadership and Social Impact (ILSI) - www.ilsicampus.org`;
 
   return {
     subject: `Félicitations ! Votre candidature a été retenue (${trackingNumber.slice(0, 8)}) — ILSI`,
@@ -391,7 +391,7 @@ Email : ${candidateEmail}
 Si une place se libère avant le début de la cohorte, nous vous contacterons immédiatement par email.
 Vous pouvez suivre votre dossier à tout moment : ${trackingLink}
 
-Institut de Leadership et des Sciences de l'Ingénierie (ILSI) - www.ilsicampus.org`;
+Institute for Leadership and Social Impact (ILSI) - www.ilsicampus.org`;
 
   return {
     subject: `Mise à jour concernant votre candidature (Liste d'attente) — ILSI`,
@@ -431,7 +431,7 @@ export function generateRejectedEmail(data: EmailTemplateData): GeneratedEmail {
       Chère/Cher ${candidateName},
     </h1>
     <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #334155;">
-      Nous vous remercions chaleureusement pour l'intérêt et la confiance que vous avez témoignés envers l'Institut de Leadership et des Sciences de l'Ingénierie (ILSI) en soumettant votre candidature pour le programme <strong>${programTitle}</strong>.
+      Nous vous remercions chaleureusement pour l'intérêt et la confiance que vous avez témoignés envers l'Institute for Leadership and Social Impact (ILSI) en soumettant votre candidature pour le programme <strong>${programTitle}</strong>.
     </p>
     <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #334155;">
       Après une étude approfondie de l'ensemble des dossiers reçus par notre comité d'admission, nous avons le regret de vous informer que nous ne sommes pas en mesure de donner une suite favorable à votre candidature pour cette cohorte, le nombre de places étant très strictement restreint.
@@ -489,7 +489,7 @@ Email : ${candidateEmail}
 
 Cette décision ne reflète en rien la qualité de votre potentiel. Nous vous encourageons chaleureusement à postuler de nouveau lors de nos prochaines sessions de formation.
 
-Institut de Leadership et des Sciences de l'Ingénierie (ILSI) - www.ilsicampus.org`;
+Institute for Leadership and Social Impact (ILSI) - www.ilsicampus.org`;
 
   return {
     subject: `Décision relative à votre candidature (${trackingNumber.slice(0, 8)}) — ILSI`,

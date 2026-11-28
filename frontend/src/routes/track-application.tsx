@@ -295,10 +295,9 @@ function TrackApplicationPage() {
       return "Stripe";
     }
     if (p === "paym") {
-      if (paymMethod === "moncash") return "Pay'm (MonCash)";
-      if (paymMethod === "natcash") return "Pay'm (Natcash)";
-      if (paymMethod === "carte") return locale === "fr" ? "Pay'm (Carte)" : "Pay'm (Card)";
-      return "Pay'm";
+      if (paymMethod === "moncash") return "MonCash";
+      if (paymMethod === "natcash") return "Natcash";
+      return "MonCash/NatCash";
     }
     return locale === "fr" ? "Carte bancaire" : "Card";
   };

@@ -186,10 +186,6 @@ function DonationForm({ onDone }: { onDone: () => void }) {
         return "MonCash";
       case "natcash":
         return "Natcash";
-      case "carte":
-        return fr ? "Carte" : "Card";
-      case "kashpaw":
-        return "KashPaw";
       default:
         return "";
     }
@@ -198,8 +194,8 @@ function DonationForm({ onDone }: { onDone: () => void }) {
   const dynamicProviderLabel =
     normProvider === "paym"
       ? paymMethod && paymMethod !== "all"
-        ? `Pay'm (${getSubMethodName(paymMethod)})`
-        : "Pay'm"
+        ? `MonCash/NatCash (${getSubMethodName(paymMethod)})`
+        : "MonCash/NatCash"
       : normProvider === "paypal"
       ? "PayPal"
       : fr
