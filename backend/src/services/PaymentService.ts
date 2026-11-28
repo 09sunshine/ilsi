@@ -105,7 +105,7 @@ export class PaymentService {
     // 2. If applicationId provided, derive cohort, user and customerEmail from application
     if (!targetCohortId && applicationId) {
       const appRes = await pool.query(
-        `SELECT id, cohort_id, program_id, user_id, email, status, payment_status
+        `SELECT id, cohort_id, program_id, email, status, payment_status
          FROM applications
          WHERE id = $1`,
         [applicationId]
@@ -113,8 +113,13 @@ export class PaymentService {
       if (appRes.rows.length > 0) {
         const app = appRes.rows[0];
         targetCohortId = app.cohort_id;
-        targetUserId = targetUserId || app.user_id;
         if (!customerEmail) customerEmail = app.email;
+        if (!targetUserId && app.email) {
+          const userRes = await pool.query(`SELECT id FROM users WHERE email = $1`, [app.email.toLowerCase()]);
+          if (userRes.rows.length > 0) {
+            targetUserId = userRes.rows[0].id;
+          }
+        }
 
         // If the application doesn't have a cohort_id explicitly assigned yet, find the active or upcoming cohort for its program
         if (!targetCohortId && app.program_id) {
@@ -227,40 +232,59 @@ export class PaymentService {
 
     if (existingPayment) {
       const p = existingPayment;
-      const internalRef = p.internal_reference || `ilsi_pay_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
 
-      // Update provider and currency on the existing pending payment if user switched method
+      // ALWAYS generate a fresh merchant reference for each checkout attempt.
+      // Payment providers like Pay'm strictly reject duplicate or already-used reference IDs ("Code de référence non valide").
+      const cleanPaymentId = p.id.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8);
+      const freshInternalRef = `ilsi_${Date.now()}_${cleanPaymentId}_${crypto.randomBytes(3).toString("hex")}`;
+
+      // Archive previous references so webhooks or late callbacks on previous attempts can still be matched
+      const existingMeta = (typeof p.metadata === "object" && p.metadata !== null) ? p.metadata : {};
+      const prevRefs = Array.isArray(existingMeta.previous_references) ? [...existingMeta.previous_references] : [];
+      if (p.internal_reference && !prevRefs.includes(p.internal_reference)) {
+        prevRefs.push(p.internal_reference);
+      }
+      const prevOrders = Array.isArray(existingMeta.previous_order_ids) ? [...existingMeta.previous_order_ids] : [];
+      if (p.provider_order_id && !prevOrders.includes(p.provider_order_id)) {
+        prevOrders.push(p.provider_order_id);
+      }
+
+      const updatedMeta = {
+        ...existingMeta,
+        previous_references: prevRefs,
+        previous_order_ids: prevOrders,
+        lastAttemptAt: new Date().toISOString(),
+        paymentMethod: paymMethod || existingMeta.paymentMethod,
+        phoneNumber: phoneNumber || existingMeta.phoneNumber,
+      };
+
+      // Update provider, currency, internal_reference and metadata on existing pending payment
       await pool.query(
         `UPDATE payments 
-         SET provider = $1, currency = $2, internal_reference = $3, updated_at = NOW()
-         WHERE id = $4`,
-        [selectedProviderName, selectedCurrency, internalRef, p.id]
+         SET provider = $1, currency = $2, internal_reference = $3, metadata = $4, updated_at = NOW()
+         WHERE id = $5`,
+        [selectedProviderName, selectedCurrency, freshInternalRef, JSON.stringify(updatedMeta), p.id]
       );
 
-      let session;
-      try {
-        session = await selectedProvider.createCheckoutSession({
-          paymentId: p.id,
-          enrollmentId: p.enrollment_id || enrollmentId,
-          cohortId: targetCohortId,
-          userId: p.user_id || targetUserId,
-          applicationId: applicationId,
-          customerEmail: resolvedEmail,
-          cohortName: resolvedCohortName,
-          amount: officialAmount,
-          currency: selectedCurrency,
-          metadata: {
-            merchantReference: internalRef,
-            paymentMethod: paymMethod,
-            phoneNumber,
-          },
-        });
+      const session = await selectedProvider.createCheckoutSession({
+        paymentId: p.id,
+        enrollmentId: p.enrollment_id || enrollmentId,
+        cohortId: targetCohortId,
+        userId: p.user_id || targetUserId,
+        applicationId: applicationId,
+        customerEmail: resolvedEmail,
+        cohortName: resolvedCohortName,
+        amount: officialAmount,
+        currency: selectedCurrency,
+        metadata: {
+          merchantReference: freshInternalRef,
+          paymentMethod: paymMethod,
+          phoneNumber,
+        },
+      });
 
-        if (session?.sessionId) {
-          await pool.query(`UPDATE payments SET provider_order_id = $1 WHERE id = $2`, [session.sessionId, p.id]);
-        }
-      } catch (err: any) {
-        console.warn("Could not regenerate session for existing pending payment:", err.message);
+      if (session?.sessionId) {
+        await pool.query(`UPDATE payments SET provider_order_id = $1 WHERE id = $2`, [session.sessionId, p.id]);
       }
 
       return {
@@ -270,9 +294,9 @@ export class PaymentService {
         currency: selectedCurrency,
         cohortId: targetCohortId,
         status: p.status,
-        checkoutUrl: session?.checkoutUrl,
-        sessionId: session?.sessionId || p.provider_order_id,
-        internalReference: internalRef,
+        checkoutUrl: session.checkoutUrl,
+        sessionId: session.sessionId || p.provider_order_id,
+        internalReference: freshInternalRef,
         provider: selectedProviderName,
       };
     }
@@ -307,30 +331,25 @@ export class PaymentService {
     const payment = insertRes.rows[0];
 
     // 5. Generate provider checkout session
-    let checkoutSession;
-    try {
-      checkoutSession = await selectedProvider.createCheckoutSession({
-        paymentId: payment.id,
-        enrollmentId: payment.enrollment_id,
-        cohortId: targetCohortId,
-        userId: targetUserId,
-        applicationId,
-        customerEmail: resolvedEmail,
-        cohortName: resolvedCohortName,
-        amount: officialAmount,
-        currency: selectedCurrency,
-        metadata: {
-          merchantReference: internalReference,
-          paymentMethod: paymMethod,
-          phoneNumber,
-        },
-      });
+    const checkoutSession = await selectedProvider.createCheckoutSession({
+      paymentId: payment.id,
+      enrollmentId: payment.enrollment_id,
+      cohortId: targetCohortId,
+      userId: targetUserId,
+      applicationId,
+      customerEmail: resolvedEmail,
+      cohortName: resolvedCohortName,
+      amount: officialAmount,
+      currency: selectedCurrency,
+      metadata: {
+        merchantReference: internalReference,
+        paymentMethod: paymMethod,
+        phoneNumber,
+      },
+    });
 
-      if (checkoutSession?.sessionId) {
-        await pool.query(`UPDATE payments SET provider_order_id = $1 WHERE id = $2`, [checkoutSession.sessionId, payment.id]);
-      }
-    } catch (err: any) {
-      console.warn("Provider checkout session error:", err.message);
+    if (checkoutSession?.sessionId) {
+      await pool.query(`UPDATE payments SET provider_order_id = $1 WHERE id = $2`, [checkoutSession.sessionId, payment.id]);
     }
 
     return {
@@ -340,8 +359,8 @@ export class PaymentService {
       currency: payment.currency,
       cohortId: targetCohortId,
       status: payment.status,
-      checkoutUrl: checkoutSession?.checkoutUrl,
-      sessionId: checkoutSession?.sessionId,
+      checkoutUrl: checkoutSession.checkoutUrl,
+      sessionId: checkoutSession.sessionId,
       internalReference,
       provider: selectedProviderName,
     };
@@ -362,9 +381,13 @@ export class PaymentService {
 
       // 1. Fetch payment with row lock to avoid race conditions
       const payRes = await client.query(
-        `SELECT id, user_id, enrollment_id, application_id, cohort_id, amount, currency, status, provider, internal_reference, provider_order_id 
+        `SELECT id, user_id, enrollment_id, application_id, cohort_id, amount, currency, status, provider, internal_reference, provider_order_id, metadata 
          FROM payments 
-         WHERE id::text = $1 OR internal_reference = $1 OR provider_order_id = $1
+         WHERE id::text = $1 
+            OR internal_reference = $1 
+            OR provider_order_id = $1
+            OR (metadata IS NOT NULL AND metadata->'previous_references' ? $1)
+            OR (metadata IS NOT NULL AND metadata->'previous_order_ids' ? $1)
          FOR UPDATE`,
         [paymentId]
       );
@@ -579,9 +602,14 @@ export class PaymentService {
     }
 
     const payRes = await pool.query(
-      `SELECT id, application_id, enrollment_id, user_id, amount, currency, status, provider, internal_reference, provider_order_id, provider_payment_id
+      `SELECT id, application_id, enrollment_id, user_id, amount, currency, status, provider, internal_reference, provider_order_id, provider_payment_id, metadata
        FROM payments
-       WHERE id::text = $1 OR internal_reference = $1 OR provider_order_id = $1 OR provider_payment_id = $1
+       WHERE id::text = $1 
+          OR internal_reference = $1 
+          OR provider_order_id = $1 
+          OR provider_payment_id = $1
+          OR (metadata IS NOT NULL AND metadata->'previous_references' ? $1)
+          OR (metadata IS NOT NULL AND metadata->'previous_order_ids' ? $1)
        LIMIT 1`,
       [lookupKey]
     );

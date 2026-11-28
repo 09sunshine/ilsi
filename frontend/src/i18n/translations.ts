@@ -230,6 +230,7 @@ export const dictionaries = {
     "payment.cancelled": "Payment was cancelled. You can complete your enrollment payment whenever you're ready.",
     "payment.failed": "Payment could not be verified. Please try again or contact support.",
     "payment.pending": "Payment pending verification. We are awaiting confirmation from the provider.",
+    "payment.pendingRetry": "Payment was not completed. You can try again below whenever you are ready.",
     "payment.payWith": "Pay with",
 
     "about.title": "About ILSI",
@@ -701,6 +702,7 @@ export const dictionaries = {
     "payment.cancelled": "Le paiement a été annulé. Vous pouvez finaliser votre inscription quand vous le souhaitez.",
     "payment.failed": "Le paiement n'a pas pu être vérifié. Veuillez réessayer ou contacter le support.",
     "payment.pending": "Paiement en attente de vérification. Nous attendons la confirmation du prestataire.",
+    "payment.pendingRetry": "Le paiement n'a pas été finalisé. Vous pouvez réessayer ci-dessous à tout moment.",
     "payment.payWith": "Payer avec",
 
     "about.title": "À propos d'ILSI",

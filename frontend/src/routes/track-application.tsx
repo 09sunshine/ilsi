@@ -156,7 +156,7 @@ function TrackApplicationPage() {
           if (active && (res.status === "PAID" || res.status === "succeeded")) {
             toast.success(t("payment.confirmed"));
           } else if (active && (res.status === "PENDING" || res.status === "processing")) {
-            toast.info(t("payment.pending"));
+            toast.info(t("payment.pendingRetry") || t("payment.pending"));
           }
           const targetLookup = lookup || res.applicationId;
           if (active && targetLookup) {
@@ -193,7 +193,7 @@ function TrackApplicationPage() {
           if (active && (res.status === "PAID" || res.status === "succeeded")) {
             toast.success(t("payment.confirmed"));
           } else if (active && (res.status === "PENDING" || res.status === "processing")) {
-            toast.info(t("payment.pending"));
+            toast.info(t("payment.pendingRetry") || t("payment.pending"));
           }
           const targetLookup = lookup || res.applicationId;
           if (active && targetLookup) {
@@ -338,7 +338,7 @@ function TrackApplicationPage() {
         setPaymentInstructions(res.instructions);
         toast.info("Please follow the instructions below to complete your payment.");
       } else {
-        toast.info(t("payment.pending"));
+        toast.error("Unable to generate payment checkout link. Please try again.");
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to initiate payment. Please try again.");

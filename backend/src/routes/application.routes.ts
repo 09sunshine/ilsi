@@ -276,33 +276,30 @@ router.post(
       if (effectiveStatus === "ACCEPTED" || effectiveStatus === "SELECTED") {
         if (!isPaid && app.cohort_id) {
           try {
-            const defaultProvider = PaymentService.isProviderEnabled("PAYPAL")
-              ? "PAYPAL"
-              : PaymentService.isProviderEnabled("PAYM")
-              ? "PAYM"
-              : "STRIPE";
-            const paymentIntent = await PaymentService.createPaymentIntent({
-              cohortId: app.cohort_id,
-              enrollmentId: enrollment?.id,
-              userId: enrollment?.user_id,
-              applicationId: app.id,
-              customerEmail: app.email,
-              cohortName: app.cohort_name_en || app.program_title_en,
-              currency: officialCurrency,
-              provider: defaultProvider,
-            });
-            paymentInfo.checkoutUrl = paymentIntent.checkoutUrl;
-            paymentInfo.paymentId = paymentIntent.paymentId;
-            paymentInfo.amount = paymentIntent.amount;
-            paymentInfo.feeAmount = paymentIntent.amount;
-            paymentInfo.currency = paymentIntent.currency;
-            paymentInfo.feeCurrency = paymentIntent.currency;
-            paymentInfo.provider = paymentIntent.provider;
-            paymentInfo.cohortId = app.cohort_id;
-            paymentInfo.internalReference = paymentIntent.internalReference;
-            paymentInfo.sessionId = paymentIntent.sessionId;
+            // Check if a pending payment intent already exists for this application
+            const existingPending = await pool.query(
+              `SELECT id, amount, currency, provider, internal_reference, provider_order_id, status
+               FROM payments
+               WHERE (application_id = $1 OR (user_id = $2 AND cohort_id = $3))
+                 AND status = 'PENDING'
+               ORDER BY created_at DESC LIMIT 1`,
+              [app.id, userAccount?.id || null, app.cohort_id]
+            );
+
+            if (existingPending.rows.length > 0) {
+              const ep = existingPending.rows[0];
+              paymentInfo.paymentId = ep.id;
+              paymentInfo.amount = Number(ep.amount);
+              paymentInfo.feeAmount = Number(ep.amount);
+              paymentInfo.currency = ep.currency;
+              paymentInfo.feeCurrency = ep.currency;
+              paymentInfo.provider = ep.provider;
+              paymentInfo.cohortId = app.cohort_id;
+              paymentInfo.internalReference = ep.internal_reference;
+              paymentInfo.sessionId = ep.provider_order_id;
+            }
           } catch (payErr: any) {
-            console.warn("Could not generate checkout session for tracking:", payErr.message);
+            console.warn("Could not load pending payment for tracking:", payErr.message);
           }
         }
       }
